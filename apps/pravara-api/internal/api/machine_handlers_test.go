@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -197,4 +198,220 @@ func TestMachineTypes_Common(t *testing.T) {
 			t.Errorf("type mismatch: got %q, want %q", decoded.Type, machineType)
 		}
 	}
+}
+
+func TestSendCommandRequest_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		request SendCommandRequest
+		valid   bool
+	}{
+		{
+			name: "valid start_job command",
+			request: SendCommandRequest{
+				Command: "start_job",
+			},
+			valid: true,
+		},
+		{
+			name: "valid pause command",
+			request: SendCommandRequest{
+				Command: "pause",
+			},
+			valid: true,
+		},
+		{
+			name: "valid resume command",
+			request: SendCommandRequest{
+				Command: "resume",
+			},
+			valid: true,
+		},
+		{
+			name: "valid stop command",
+			request: SendCommandRequest{
+				Command: "stop",
+			},
+			valid: true,
+		},
+		{
+			name: "valid home command",
+			request: SendCommandRequest{
+				Command: "home",
+			},
+			valid: true,
+		},
+		{
+			name: "valid calibrate command",
+			request: SendCommandRequest{
+				Command: "calibrate",
+			},
+			valid: true,
+		},
+		{
+			name: "valid emergency_stop command",
+			request: SendCommandRequest{
+				Command: "emergency_stop",
+			},
+			valid: true,
+		},
+		{
+			name: "valid preheat command with parameters",
+			request: SendCommandRequest{
+				Command: "preheat",
+				Parameters: map[string]any{
+					"temperature": 200,
+					"bed_temp":    60,
+				},
+			},
+			valid: true,
+		},
+		{
+			name: "valid load_file command with parameters",
+			request: SendCommandRequest{
+				Command: "load_file",
+				Parameters: map[string]any{
+					"file_path": "/gcode/part001.gcode",
+				},
+			},
+			valid: true,
+		},
+		{
+			name: "missing command",
+			request: SendCommandRequest{
+				Command: "",
+			},
+			valid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.request)
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			var decoded SendCommandRequest
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+
+			// Check required field
+			hasCommand := decoded.Command != ""
+			if hasCommand != tt.valid {
+				t.Errorf("validation: got %v, want %v", hasCommand, tt.valid)
+			}
+		})
+	}
+}
+
+func TestValidCommands_AllDefined(t *testing.T) {
+	// All valid command types that should be supported
+	expectedCommands := []string{
+		"start_job",
+		"pause",
+		"resume",
+		"stop",
+		"home",
+		"calibrate",
+		"emergency_stop",
+		"preheat",
+		"cooldown",
+		"load_file",
+		"unload_file",
+		"set_origin",
+		"probe",
+	}
+
+	for _, cmd := range expectedCommands {
+		if _, ok := validCommands[cmd]; !ok {
+			t.Errorf("command %q not found in validCommands map", cmd)
+		}
+	}
+
+	// Check count matches
+	if len(validCommands) != len(expectedCommands) {
+		t.Errorf("validCommands count: got %d, want %d", len(validCommands), len(expectedCommands))
+	}
+}
+
+func TestSendCommandRequest_WithOptionalFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		request SendCommandRequest
+	}{
+		{
+			name: "command with task_id",
+			request: SendCommandRequest{
+				Command: "start_job",
+				TaskID:  ptrUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
+			},
+		},
+		{
+			name: "command with order_id",
+			request: SendCommandRequest{
+				Command: "start_job",
+				OrderID: ptrUUID("550e8400-e29b-41d4-a716-446655440000"),
+			},
+		},
+		{
+			name: "command with both task_id and order_id",
+			request: SendCommandRequest{
+				Command: "start_job",
+				TaskID:  ptrUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
+				OrderID: ptrUUID("550e8400-e29b-41d4-a716-446655440000"),
+			},
+		},
+		{
+			name: "command with complex parameters",
+			request: SendCommandRequest{
+				Command: "preheat",
+				Parameters: map[string]any{
+					"extruder_temp": 215,
+					"bed_temp":      60,
+					"wait":          true,
+					"timeout_secs":  300,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.request)
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			var decoded SendCommandRequest
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+
+			if decoded.Command != tt.request.Command {
+				t.Errorf("Command mismatch: got %q, want %q", decoded.Command, tt.request.Command)
+			}
+
+			// Verify optional fields preserved
+			if tt.request.TaskID != nil && (decoded.TaskID == nil || *decoded.TaskID != *tt.request.TaskID) {
+				t.Error("TaskID not preserved")
+			}
+			if tt.request.OrderID != nil && (decoded.OrderID == nil || *decoded.OrderID != *tt.request.OrderID) {
+				t.Error("OrderID not preserved")
+			}
+			if tt.request.Parameters != nil && decoded.Parameters == nil {
+				t.Error("Parameters not preserved")
+			}
+		})
+	}
+}
+
+// ptrUUID is a helper to create UUID pointer from string
+func ptrUUID(s string) *uuid.UUID {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return nil
+	}
+	return &u
 }
