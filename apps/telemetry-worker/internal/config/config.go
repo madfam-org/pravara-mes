@@ -16,6 +16,12 @@ type Config struct {
 	Database    DatabaseConfig `mapstructure:"database"`
 	Redis       RedisConfig    `mapstructure:"redis"`
 	Worker      WorkerConfig   `mapstructure:"worker"`
+	Command     CommandConfig  `mapstructure:"command"`
+}
+
+// CommandConfig holds command dispatcher configuration.
+type CommandConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // MQTTConfig holds MQTT broker configuration.
@@ -56,6 +62,7 @@ type WorkerConfig struct {
 	NumWorkers    int `mapstructure:"num_workers"`
 	RetryAttempts int `mapstructure:"retry_attempts"`
 	RetryDelay    int `mapstructure:"retry_delay_ms"`
+	DLQMaxItems   int `mapstructure:"dlq_max_items"`
 }
 
 // DSN returns the database connection string.
@@ -117,6 +124,10 @@ func Load() (*Config, error) {
 	v.SetDefault("worker.num_workers", 4)
 	v.SetDefault("worker.retry_attempts", 3)
 	v.SetDefault("worker.retry_delay_ms", 100)
+	v.SetDefault("worker.dlq_max_items", 1000)
+
+	// Command dispatcher defaults
+	v.SetDefault("command.enabled", true)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")

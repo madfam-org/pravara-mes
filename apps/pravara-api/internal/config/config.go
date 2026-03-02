@@ -17,6 +17,8 @@ type Config struct {
 	OIDC       OIDCConfig       `mapstructure:"oidc"`
 	R2         R2Config         `mapstructure:"r2"`
 	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
+	Dhanam     DhanamConfig     `mapstructure:"dhanam"`
+	Cotiza     CotizaConfig     `mapstructure:"cotiza"`
 }
 
 // AppConfig holds application-level settings.
@@ -70,6 +72,22 @@ type CentrifugoConfig struct {
 	APIKey        string `mapstructure:"api_key"`
 	APIURL        string `mapstructure:"api_url"`
 	PublicURL     string `mapstructure:"public_url"`
+}
+
+// DhanamConfig holds Dhanam billing integration settings.
+type DhanamConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	APIURL       string `mapstructure:"api_url"`
+	APIKey       string `mapstructure:"api_key"`
+	SyncInterval int    `mapstructure:"sync_interval"` // Sync interval in minutes
+	RetryCount   int    `mapstructure:"retry_count"`
+	RetryDelay   int    `mapstructure:"retry_delay"` // Retry delay in seconds
+}
+
+// CotizaConfig holds Cotiza webhook integration settings.
+type CotizaConfig struct {
+	WebhookSecret string `mapstructure:"webhook_secret"`
+	Enabled       bool   `mapstructure:"enabled"`
 }
 
 // Load reads configuration from environment variables and config files.
@@ -135,6 +153,16 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("centrifugo.token_ttl", 3600) // 1 hour
 	v.SetDefault("centrifugo.api_url", "http://pravara-gateway:9000")
 	v.SetDefault("centrifugo.public_url", "wss://gateway.pravara.madfam.io")
+
+	// Dhanam defaults
+	v.SetDefault("dhanam.enabled", false)
+	v.SetDefault("dhanam.api_url", "https://api.dhanam.io/v1")
+	v.SetDefault("dhanam.sync_interval", 60)  // 60 minutes
+	v.SetDefault("dhanam.retry_count", 3)
+	v.SetDefault("dhanam.retry_delay", 30) // 30 seconds
+
+	// Cotiza defaults
+	v.SetDefault("cotiza.enabled", false)
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -165,6 +193,16 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("centrifugo.api_key", "CENTRIFUGO_API_KEY")
 	v.BindEnv("centrifugo.api_url", "CENTRIFUGO_API_URL")
 	v.BindEnv("centrifugo.public_url", "CENTRIFUGO_PUBLIC_URL")
+
+	v.BindEnv("dhanam.enabled", "DHANAM_ENABLED")
+	v.BindEnv("dhanam.api_url", "DHANAM_API_URL")
+	v.BindEnv("dhanam.api_key", "DHANAM_API_KEY")
+	v.BindEnv("dhanam.sync_interval", "DHANAM_SYNC_INTERVAL")
+	v.BindEnv("dhanam.retry_count", "DHANAM_RETRY_COUNT")
+	v.BindEnv("dhanam.retry_delay", "DHANAM_RETRY_DELAY")
+
+	v.BindEnv("cotiza.enabled", "COTIZA_ENABLED")
+	v.BindEnv("cotiza.webhook_secret", "COTIZA_WEBHOOK_SECRET")
 }
 
 // IsDevelopment returns true if running in development mode.

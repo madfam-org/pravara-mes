@@ -8,6 +8,7 @@ import {
   RealtimeEvent,
   MachineStatusData,
   MachineHeartbeatData,
+  MachineCommandAckData,
   TelemetryBatchData,
   TaskMoveData,
   TaskAssignData,
@@ -25,6 +26,7 @@ export function subscribeMachines(
   handlers: {
     onStatusChange?: (data: MachineStatusData) => void;
     onHeartbeat?: (data: MachineHeartbeatData) => void;
+    onCommandAck?: (data: MachineCommandAckData) => void;
     onCreate?: (data: EntityCreatedData) => void;
     onUpdate?: (data: EntityUpdatedData) => void;
     onDelete?: (data: EntityDeletedData) => void;
@@ -37,6 +39,9 @@ export function subscribeMachines(
         break;
       case EventTypes.MACHINE_HEARTBEAT:
         handlers.onHeartbeat?.(event.data as MachineHeartbeatData);
+        break;
+      case EventTypes.MACHINE_COMMAND_ACK:
+        handlers.onCommandAck?.(event.data as MachineCommandAckData);
         break;
       case EventTypes.MACHINE_CREATED:
         handlers.onCreate?.(event.data as EntityCreatedData);

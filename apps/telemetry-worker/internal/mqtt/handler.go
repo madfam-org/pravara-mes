@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/dlq"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -39,6 +40,7 @@ type Handler struct {
 	client      mqtt.Client
 	store       TelemetryStore
 	publisher   *EventPublisher
+	dlq         *dlq.DLQ
 	cfg         *config.Config
 	log         *logrus.Logger
 	batch       []types.Telemetry
@@ -70,6 +72,16 @@ func NewHandler(cfg *config.Config, store TelemetryStore, log *logrus.Logger) *H
 // SetPublisher sets the event publisher for real-time updates.
 func (h *Handler) SetPublisher(p *EventPublisher) {
 	h.publisher = p
+}
+
+// SetDLQ sets the dead-letter queue for failed batch recovery.
+func (h *Handler) SetDLQ(d *dlq.DLQ) {
+	h.dlq = d
+}
+
+// GetMQTTClient returns the underlying MQTT client for command dispatch.
+func (h *Handler) GetMQTTClient() mqtt.Client {
+	return h.client
 }
 
 // Connect establishes connection to the MQTT broker.
@@ -341,13 +353,24 @@ func (h *Handler) writeBatchWithRetry(batch []types.Telemetry) {
 		}
 	}
 
-	// All retries exhausted - log error and drop batch
+	// All retries exhausted - write to dead-letter queue for later recovery
 	h.log.WithFields(logrus.Fields{
 		"count":      len(batch),
 		"maxRetries": maxRetries,
-	}).Error("Failed to write telemetry batch after all retries, data lost")
+	}).Error("Failed to write telemetry batch after all retries")
 
-	// TODO: Consider writing to dead letter queue or local file for later recovery
+	// Write to dead-letter queue if available
+	if h.dlq != nil {
+		dlqCtx, dlqCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := h.dlq.Push(dlqCtx, batch, "all retries exhausted after database write failures"); err != nil {
+			h.log.WithError(err).WithField("count", len(batch)).Error("Failed to write batch to DLQ, data lost")
+		} else {
+			h.log.WithField("count", len(batch)).Info("Batch written to dead-letter queue for recovery")
+		}
+		dlqCancel()
+	} else {
+		h.log.WithField("count", len(batch)).Warn("No DLQ configured, data lost")
+	}
 }
 
 // Stop gracefully shuts down the handler.

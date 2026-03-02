@@ -12,8 +12,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/command"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/db"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/dlq"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/mqtt"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/observability"
 )
@@ -66,12 +68,29 @@ func main() {
 		}
 	}
 
+	// Initialize Dead-Letter Queue if Redis is available
+	var deadLetterQueue *dlq.DLQ
+	if publisher != nil {
+		deadLetterQueue = dlq.NewDLQ(
+			publisher.GetRedisClient(),
+			log,
+			"pravara:telemetry:dlq",
+			cfg.Worker.DLQMaxItems,
+		)
+		log.Info("Dead-letter queue initialized")
+	}
+
 	// Initialize MQTT handler
 	handler := mqtt.NewHandler(cfg, store, log)
 
 	// Set event publisher if available
 	if publisher != nil {
 		handler.SetPublisher(publisher)
+	}
+
+	// Set dead-letter queue if available
+	if deadLetterQueue != nil {
+		handler.SetDLQ(deadLetterQueue)
 	}
 
 	// Connect to MQTT broker
@@ -114,6 +133,43 @@ func main() {
 		log.WithError(err).Fatal("Failed to start handler")
 	}
 
+	// Initialize and start command dispatcher if enabled
+	var dispatcher *command.Dispatcher
+	var ackHandler *command.AckHandler
+	if cfg.Command.Enabled && publisher != nil {
+		dispatcher = command.NewDispatcher(
+			publisher.GetRedisClient(),
+			handler.GetMQTTClient(),
+			log,
+		)
+
+		if err := dispatcher.Start(ctx); err != nil {
+			log.WithError(err).Error("Failed to start command dispatcher")
+			// Continue without command dispatch - not fatal
+		} else {
+			log.Info("Command dispatcher started")
+		}
+
+		// Initialize and start ack handler for command acknowledgments
+		ackHandler = command.NewAckHandler(
+			handler.GetMQTTClient(),
+			publisher,
+			log,
+			cfg.MQTT.TopicRoot,
+		)
+
+		if err := ackHandler.Start(ctx); err != nil {
+			log.WithError(err).Error("Failed to start ack handler")
+			// Continue without ack handling - not fatal
+		} else {
+			log.Info("Command ack handler started")
+		}
+	} else if !cfg.Command.Enabled {
+		log.Info("Command dispatch disabled by configuration")
+	} else {
+		log.Warn("Command dispatch disabled - Redis publisher not available")
+	}
+
 	log.Info("Telemetry worker is running")
 
 	// Wait for shutdown signal
@@ -125,6 +181,18 @@ func main() {
 
 	// Cancel context to stop workers
 	cancel()
+
+	// Stop ack handler first
+	if ackHandler != nil {
+		ackHandler.Stop()
+		log.Info("Command ack handler stopped")
+	}
+
+	// Stop command dispatcher (before MQTT handler)
+	if dispatcher != nil {
+		dispatcher.Stop()
+		log.Info("Command dispatcher stopped")
+	}
 
 	// Stop the handler gracefully
 	handler.Stop()

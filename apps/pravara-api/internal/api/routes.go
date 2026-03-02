@@ -50,7 +50,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	taskHandler := NewTaskHandler(taskRepo, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
-	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, "") // TODO: Add cotiza secret from config
+	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
 	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
 
@@ -149,6 +149,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 				inspections.POST("", qualityHandler.CreateInspection)
 				inspections.GET("/:id", qualityHandler.GetInspectionByID)
 				inspections.PATCH("/:id", qualityHandler.UpdateInspection)
+				inspections.DELETE("/:id", qualityHandler.DeleteInspection)
 				inspections.POST("/:id/complete", qualityHandler.CompleteInspection)
 			}
 
@@ -159,6 +160,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 				batches.POST("", qualityHandler.CreateBatchLot)
 				batches.GET("/:id", qualityHandler.GetBatchLotByID)
 				batches.PATCH("/:id", qualityHandler.UpdateBatchLot)
+				batches.DELETE("/:id", qualityHandler.DeleteBatchLot)
 			}
 		}
 

@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -22,13 +21,15 @@ type RedisUsageRecorder struct {
 	eventChannel chan UsageEvent
 	wg           sync.WaitGroup
 	flushTicker  *time.Ticker
+	dhanamClient *DhanamClient
 }
 
 // RecorderConfig contains configuration for the RedisUsageRecorder.
 type RecorderConfig struct {
-	RedisURL     string
-	BufferSize   int           // Size of event channel buffer
+	RedisURL      string
+	BufferSize    int           // Size of event channel buffer
 	FlushInterval time.Duration // Interval for background flush to Dhanam
+	DhanamConfig  *DhanamClientConfig
 }
 
 // NewRedisUsageRecorder creates a new Redis-based usage recorder.
@@ -56,11 +57,17 @@ func NewRedisUsageRecorder(cfg RecorderConfig, log *logrus.Logger) (*RedisUsageR
 		cfg.FlushInterval = 5 * time.Minute // default flush interval
 	}
 
+	var dhanamClient *DhanamClient
+	if cfg.DhanamConfig != nil {
+		dhanamClient = NewDhanamClient(*cfg.DhanamConfig, log)
+	}
+
 	recorder := &RedisUsageRecorder{
 		client:       client,
 		log:          log,
 		eventChannel: make(chan UsageEvent, cfg.BufferSize),
 		flushTicker:  time.NewTicker(cfg.FlushInterval),
+		dhanamClient: dhanamClient,
 	}
 
 	// Start background workers
@@ -232,16 +239,105 @@ func (r *RedisUsageRecorder) periodicFlush() {
 		}
 		r.mu.RUnlock()
 
-		// TODO: Implement actual Dhanam API integration
-		// For now, this is a stub that logs the flush event
-		r.log.Debug("Periodic flush to Dhanam API (stub)")
+		if r.dhanamClient == nil || !r.dhanamClient.IsEnabled() {
+			r.log.Debug("Dhanam integration disabled, skipping flush")
+			continue
+		}
 
-		// Future implementation:
-		// 1. Scan Redis for usage data from previous day
-		// 2. Aggregate by tenant and event type
-		// 3. Send to Dhanam API
-		// 4. On success, delete or archive Redis keys
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		if err := r.flushToDhanam(ctx); err != nil {
+			r.log.WithError(err).Error("Failed to flush usage data to Dhanam")
+		}
+		cancel()
 	}
+}
+
+// flushToDhanam aggregates and sends usage data to Dhanam API.
+func (r *RedisUsageRecorder) flushToDhanam(ctx context.Context) error {
+	// Get yesterday's date for daily aggregation
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	// Scan for all tenant usage keys from yesterday
+	pattern := fmt.Sprintf("usage:*:%s:*", yesterday.Format("2006-01-02"))
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return fmt.Errorf("failed to scan usage keys: %w", err)
+	}
+
+	if len(keys) == 0 {
+		r.log.Debug("No usage data to flush")
+		return nil
+	}
+
+	// Group keys by tenant
+	tenantUsage := make(map[string]map[UsageEventType]int64)
+	for _, key := range keys {
+		// Parse key format: usage:{tenant_id}:{date}:{event_type}
+		var tenantID, dateStr, eventTypeStr string
+		_, err := fmt.Sscanf(key, "usage:%s:%s:%s", &tenantID, &dateStr, &eventTypeStr)
+		if err != nil {
+			r.log.WithField("key", key).Warn("Failed to parse usage key")
+			continue
+		}
+
+		// Get value
+		val, err := r.client.Get(ctx, key).Result()
+		if err != nil {
+			r.log.WithError(err).WithField("key", key).Warn("Failed to get usage value")
+			continue
+		}
+
+		count, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			r.log.WithError(err).WithField("key", key).Warn("Failed to parse usage count")
+			continue
+		}
+
+		// Initialize tenant map if needed
+		if tenantUsage[tenantID] == nil {
+			tenantUsage[tenantID] = make(map[UsageEventType]int64)
+		}
+
+		eventType := UsageEventType(eventTypeStr)
+		tenantUsage[tenantID][eventType] += count
+	}
+
+	// Send reports to Dhanam
+	var reports []DhanamUsageReport
+	for tenantID, usage := range tenantUsage {
+		report := DhanamUsageReport{
+			TenantID:  tenantID,
+			Date:      yesterday.Format("2006-01-02"),
+			UsageData: usage,
+			Metadata: map[string]string{
+				"source":    "pravara-mes",
+				"flush_time": time.Now().UTC().Format(time.RFC3339),
+			},
+		}
+		reports = append(reports, report)
+	}
+
+	if err := r.dhanamClient.SendBatchReports(ctx, reports); err != nil {
+		return fmt.Errorf("failed to send reports to Dhanam: %w", err)
+	}
+
+	// Mark keys as processed (set shorter TTL or delete)
+	pipe := r.client.Pipeline()
+	for _, key := range keys {
+		// Set shorter TTL of 7 days for processed data
+		pipe.Expire(ctx, key, 7*24*time.Hour)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		r.log.WithError(err).Warn("Failed to update TTL on processed usage keys")
+	}
+
+	r.log.WithFields(logrus.Fields{
+		"tenant_count": len(tenantUsage),
+		"key_count":    len(keys),
+		"date":         yesterday.Format("2006-01-02"),
+	}).Info("Successfully flushed usage data to Dhanam")
+
+	return nil
 }
 
 // GetTenantUsage retrieves aggregated usage for a tenant within a time range.
@@ -409,34 +505,3 @@ func (r *RedisUsageRecorder) Close() error {
 	return r.client.Close()
 }
 
-// DhanamClient is a stub for future Dhanam API integration.
-type DhanamClient struct {
-	apiURL string
-	apiKey string
-	log    *logrus.Logger
-}
-
-// DhanamUsageReport represents usage data sent to Dhanam.
-type DhanamUsageReport struct {
-	TenantID  string                       `json:"tenant_id"`
-	Date      string                       `json:"date"`
-	UsageData map[UsageEventType]int64     `json:"usage_data"`
-	Metadata  map[string]string            `json:"metadata,omitempty"`
-}
-
-// SendUsageReport sends usage data to Dhanam API (stub implementation).
-func (dc *DhanamClient) SendUsageReport(ctx context.Context, report DhanamUsageReport) error {
-	// TODO: Implement actual HTTP call to Dhanam API
-	// For now, just log the report
-	data, _ := json.Marshal(report)
-	dc.log.WithField("report", string(data)).Debug("Would send usage report to Dhanam")
-
-	// Future implementation:
-	// 1. Prepare HTTP request with report data
-	// 2. Add authentication headers (API key)
-	// 3. Send POST request to Dhanam billing endpoint
-	// 4. Handle response and errors
-	// 5. Return success/failure
-
-	return nil
-}

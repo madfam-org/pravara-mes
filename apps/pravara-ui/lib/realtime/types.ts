@@ -8,6 +8,8 @@ export const EventTypes = {
   MACHINE_STATUS_CHANGED: "machine.status_changed",
   MACHINE_HEARTBEAT: "machine.heartbeat",
   MACHINE_TELEMETRY_BATCH: "machine.telemetry_batch",
+  MACHINE_COMMAND_SENT: "machine.command_sent",
+  MACHINE_COMMAND_ACK: "machine.command_ack",
   MACHINE_CREATED: "machine.created",
   MACHINE_UPDATED: "machine.updated",
   MACHINE_DELETED: "machine.deleted",
@@ -160,6 +162,27 @@ export interface EntityDeletedData {
   name: string;
   deleted_by: string;
   deleted_at: string;
+}
+
+// Machine command data
+export interface MachineCommandData {
+  command_id: string;
+  machine_id: string;
+  command: string;
+  parameters?: Record<string, unknown>;
+  task_id?: string;
+  order_id?: string;
+  issued_by: string;
+  issued_at: string;
+}
+
+// Machine command acknowledgment data
+export interface MachineCommandAckData {
+  command_id: string;
+  machine_id: string;
+  success: boolean;
+  message?: string;
+  acknowledged_at: string;
 }
 
 // Connection state

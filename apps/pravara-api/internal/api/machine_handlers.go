@@ -538,13 +538,23 @@ func (h *MachineHandler) SendCommand(c *gin.Context) {
 
 	// Publish command event for telemetry-worker to dispatch via MQTT
 	if h.publisher != nil {
+		// Publish to Centrifugo for UI real-time updates
 		if err := h.publisher.PublishMachineCommand(c.Request.Context(), machine.TenantID, commandData); err != nil {
 			h.log.WithError(err).WithFields(logrus.Fields{
 				"machine_id": machine.ID,
 				"command":    req.Command,
-			}).Error("Failed to publish machine command")
+			}).Error("Failed to publish machine command to Centrifugo")
+			// Continue - Centrifugo publish is not critical for command dispatch
+		}
+
+		// Publish to command dispatch channel for telemetry-worker
+		if err := h.publisher.PublishCommandForDispatch(c.Request.Context(), machine.TenantID, commandData); err != nil {
+			h.log.WithError(err).WithFields(logrus.Fields{
+				"machine_id": machine.ID,
+				"command":    req.Command,
+			}).Error("Failed to publish command to dispatch channel")
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "publish_error",
+				"error":   "dispatch_error",
 				"message": "Failed to dispatch command to machine",
 			})
 			return

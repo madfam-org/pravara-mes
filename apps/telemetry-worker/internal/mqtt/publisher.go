@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/command"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -236,4 +237,40 @@ func (p *EventPublisher) HealthCheck(ctx context.Context) error {
 	p.mu.RUnlock()
 
 	return p.client.Ping(ctx).Err()
+}
+
+// GetRedisClient returns the underlying Redis client for command dispatch.
+func (p *EventPublisher) GetRedisClient() *redis.Client {
+	return p.client
+}
+
+// PublishCommandAck publishes a command acknowledgment event to Centrifugo.
+// This method implements the command.AckPublisher interface.
+func (p *EventPublisher) PublishCommandAck(ctx context.Context, tenantID, machineID uuid.UUID, ack command.CommandAckData) error {
+	p.mu.RLock()
+	if p.closed {
+		p.mu.RUnlock()
+		return fmt.Errorf("publisher is closed")
+	}
+	p.mu.RUnlock()
+
+	event := command.CommandAckEvent{
+		ID:        uuid.New().String(),
+		Type:      "machine.command_ack",
+		TenantID:  tenantID,
+		Timestamp: time.Now().UTC(),
+		Data:      ack,
+	}
+
+	if err := p.publishEvent(ctx, "machines", tenantID, event); err != nil {
+		return fmt.Errorf("failed to publish command ack event: %w", err)
+	}
+
+	p.log.WithFields(logrus.Fields{
+		"command_id": ack.CommandID,
+		"machine_id": ack.MachineID,
+		"success":    ack.Success,
+	}).Debug("Command ack event published")
+
+	return nil
 }

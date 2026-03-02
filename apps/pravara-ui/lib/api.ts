@@ -141,6 +141,18 @@ export const machinesAPI = {
       { token }
     ),
 
+  sendCommand: (
+    token: string,
+    id: string,
+    command: MachineCommand,
+    parameters?: Record<string, unknown>
+  ) =>
+    fetchAPI<CommandResponse>(`/v1/machines/${id}/command`, {
+      method: "POST",
+      body: JSON.stringify({ command, parameters }),
+      token,
+    }),
+
   delete: (token: string, id: string) =>
     fetchAPI<{ message: string }>(`/v1/machines/${id}`, {
       method: "DELETE",
@@ -321,4 +333,29 @@ export interface Telemetry {
   unit: string;
   metadata?: Record<string, unknown>;
   created_at: string;
+}
+
+// Machine command types
+export type MachineCommand =
+  | "start_job"
+  | "pause"
+  | "resume"
+  | "stop"
+  | "home"
+  | "calibrate"
+  | "emergency_stop"
+  | "preheat"
+  | "cooldown"
+  | "load_file"
+  | "unload_file"
+  | "set_origin"
+  | "probe";
+
+export interface CommandResponse {
+  command_id: string;
+  machine_id: string;
+  command: MachineCommand;
+  status: "pending" | "sent" | "acknowledged" | "failed";
+  issued_at: string;
+  message?: string;
 }

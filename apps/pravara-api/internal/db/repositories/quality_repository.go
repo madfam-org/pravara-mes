@@ -541,6 +541,23 @@ func (r *InspectionRepository) Update(ctx context.Context, inspection *types.Ins
 	return nil
 }
 
+// Delete removes an inspection.
+func (r *InspectionRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM inspections WHERE id = $1`
+
+	result, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete inspection: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("inspection not found")
+	}
+
+	return nil
+}
+
 // scanInspection is a helper to scan an inspection from a row.
 func scanInspection(scanner interface {
 	Scan(dest ...interface{}) error
@@ -799,6 +816,23 @@ func (r *BatchLotRepository) Update(ctx context.Context, lot *types.BatchLot) er
 	}
 	if err != nil {
 		return fmt.Errorf("failed to update batch lot: %w", err)
+	}
+
+	return nil
+}
+
+// Delete removes a batch lot.
+func (r *BatchLotRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM batch_lots WHERE id = $1`
+
+	result, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete batch lot: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("batch lot not found")
 	}
 
 	return nil

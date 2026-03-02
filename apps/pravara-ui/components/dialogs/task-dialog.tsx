@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { type Task, type TaskStatus, ordersAPI, machinesAPI } from "@/lib/api";
 import { createTaskSchema, updateTaskSchema, type CreateTaskInput, type UpdateTaskInput } from "@/lib/validations/task";
 import { useCreateTask, useUpdateTask } from "@/lib/mutations/use-task-mutations";
@@ -325,6 +326,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
+                {isLoading && <Spinner size="sm" className="mr-2" />}
                 {isLoading
                   ? "Saving..."
                   : isEditMode

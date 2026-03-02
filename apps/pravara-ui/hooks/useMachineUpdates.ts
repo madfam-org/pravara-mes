@@ -9,6 +9,7 @@ import { subscribeMachines } from "@/lib/realtime/channels";
 import type {
   MachineStatusData,
   MachineHeartbeatData,
+  MachineCommandAckData,
   EntityCreatedData,
   EntityUpdatedData,
   EntityDeletedData,
@@ -21,6 +22,8 @@ interface UseMachineUpdatesOptions {
   onStatusChange?: (data: MachineStatusData) => void;
   /** Called when a machine heartbeat is received */
   onHeartbeat?: (data: MachineHeartbeatData) => void;
+  /** Called when a command acknowledgment is received */
+  onCommandAck?: (data: MachineCommandAckData) => void;
   /** Called when a new machine is created */
   onCreate?: (data: EntityCreatedData) => void;
   /** Called when a machine is updated */
@@ -125,6 +128,15 @@ export function useMachineUpdates(options: UseMachineUpdatesOptions = {}) {
     [queryClient, options]
   );
 
+  // Handle command ack event
+  const handleCommandAck = useCallback(
+    (data: MachineCommandAckData) => {
+      // Just pass through to callback - the control panel handles display
+      options.onCommandAck?.(data);
+    },
+    [options]
+  );
+
   // Subscribe to machine events
   useEffect(() => {
     if (!isConnected) return;
@@ -132,6 +144,7 @@ export function useMachineUpdates(options: UseMachineUpdatesOptions = {}) {
     const unsubscribe = subscribeMachines({
       onStatusChange: handleStatusChange,
       onHeartbeat: handleHeartbeat,
+      onCommandAck: handleCommandAck,
       onCreate: handleCreate,
       onUpdate: handleUpdate,
       onDelete: handleDelete,
@@ -144,6 +157,7 @@ export function useMachineUpdates(options: UseMachineUpdatesOptions = {}) {
     isConnected,
     handleStatusChange,
     handleHeartbeat,
+    handleCommandAck,
     handleCreate,
     handleUpdate,
     handleDelete,

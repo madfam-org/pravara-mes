@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useState } from "react";
 
 interface ConfirmDialogProps {
@@ -60,6 +61,7 @@ export function ConfirmDialog({
             onClick={handleConfirm}
             disabled={isLoading}
           >
+            {isLoading && <Spinner size="sm" className="mr-2" />}
             {isLoading ? "Confirming..." : "Confirm"}
           </Button>
         </DialogFooter>

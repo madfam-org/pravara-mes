@@ -652,6 +652,39 @@ func (h *QualityHandler) UpdateInspection(c *gin.Context) {
 	c.JSON(http.StatusOK, inspection)
 }
 
+// DeleteInspection removes an inspection.
+func (h *QualityHandler) DeleteInspection(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_id",
+			"message": "Invalid inspection ID format",
+		})
+		return
+	}
+
+	if err := h.inspectionRepo.Delete(c.Request.Context(), id); err != nil {
+		if err.Error() == "inspection not found" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not_found",
+				"message": "Inspection not found",
+			})
+			return
+		}
+		h.log.WithError(err).Error("Failed to delete inspection")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to delete inspection",
+		})
+		return
+	}
+
+	h.log.WithField("inspection_id", id).Info("Inspection deleted")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Inspection deleted successfully",
+	})
+}
+
 // CompleteInspection marks an inspection as complete with a result.
 func (h *QualityHandler) CompleteInspection(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -990,4 +1023,37 @@ func (h *QualityHandler) UpdateBatchLot(c *gin.Context) {
 
 	h.log.WithField("batch_lot_id", batchLot.ID).Info("Batch lot updated")
 	c.JSON(http.StatusOK, batchLot)
+}
+
+// DeleteBatchLot removes a batch lot.
+func (h *QualityHandler) DeleteBatchLot(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_id",
+			"message": "Invalid batch lot ID format",
+		})
+		return
+	}
+
+	if err := h.batchLotRepo.Delete(c.Request.Context(), id); err != nil {
+		if err.Error() == "batch lot not found" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not_found",
+				"message": "Batch lot not found",
+			})
+			return
+		}
+		h.log.WithError(err).Error("Failed to delete batch lot")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to delete batch lot",
+		})
+		return
+	}
+
+	h.log.WithField("batch_lot_id", id).Info("Batch lot deleted")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Batch lot deleted successfully",
+	})
 }

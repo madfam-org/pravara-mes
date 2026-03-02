@@ -227,6 +227,64 @@ func (p *Publisher) PublishEntityDeleted(ctx context.Context, namespace ChannelN
 	return p.Publish(ctx, namespace, tenantID, event)
 }
 
+// PublishCommandForDispatch publishes a machine command to the worker dispatch channel.
+// This is separate from Centrifugo - it goes to telemetry-worker for MQTT dispatch.
+func (p *Publisher) PublishCommandForDispatch(ctx context.Context, tenantID uuid.UUID, data MachineCommandData) error {
+	p.mu.RLock()
+	if p.closed {
+		p.mu.RUnlock()
+		return fmt.Errorf("publisher is closed")
+	}
+	p.mu.RUnlock()
+
+	// Build the dispatch channel name
+	channel := fmt.Sprintf("pravara.commands.%s", tenantID.String())
+
+	// Create the command payload for the worker
+	cmdPayload := map[string]interface{}{
+		"command_id": data.CommandID.String(),
+		"machine_id": data.MachineID.String(),
+		"mqtt_topic": data.MQTTTopic,
+		"command":    string(data.Command),
+		"parameters": data.Parameters,
+		"issued_by":  data.IssuedBy.String(),
+		"issued_at":  data.IssuedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	if data.TaskID != nil {
+		cmdPayload["task_id"] = data.TaskID.String()
+	}
+	if data.OrderID != nil {
+		cmdPayload["order_id"] = data.OrderID.String()
+	}
+
+	// Serialize the command
+	cmdData, err := json.Marshal(cmdPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal command: %w", err)
+	}
+
+	// Publish directly to the command channel (not through Centrifugo)
+	if err := p.client.Publish(ctx, channel, cmdData).Err(); err != nil {
+		p.log.WithError(err).WithFields(logrus.Fields{
+			"channel":    channel,
+			"command_id": data.CommandID,
+			"machine_id": data.MachineID,
+			"command":    data.Command,
+		}).Error("Failed to publish command to dispatch channel")
+		return fmt.Errorf("failed to publish command: %w", err)
+	}
+
+	p.log.WithFields(logrus.Fields{
+		"channel":    channel,
+		"command_id": data.CommandID,
+		"machine_id": data.MachineID,
+		"command":    data.Command,
+	}).Debug("Command published to dispatch channel")
+
+	return nil
+}
+
 // HealthCheck performs a health check on the Redis connection.
 func (p *Publisher) HealthCheck(ctx context.Context) error {
 	p.mu.RLock()

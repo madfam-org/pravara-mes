@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { type Order, type OrderStatus } from "@/lib/api";
 import { createOrderSchema, updateOrderSchema, type CreateOrderInput, type UpdateOrderInput } from "@/lib/validations/order";
 import { useCreateOrder, useUpdateOrder } from "@/lib/mutations/use-order-mutations";
@@ -302,6 +303,7 @@ export function OrderDialog({ open, onOpenChange, order }: OrderDialogProps) {
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
+                {isLoading && <Spinner size="sm" className="mr-2" />}
                 {isLoading
                   ? "Saving..."
                   : isEditMode

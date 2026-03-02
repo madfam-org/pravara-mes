@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { type Machine, type MachineStatus } from "@/lib/api";
 import { createMachineSchema, updateMachineSchema, type CreateMachineInput, type UpdateMachineInput } from "@/lib/validations/machine";
 import { useCreateMachine, useUpdateMachine } from "@/lib/mutations/use-machine-mutations";
@@ -297,6 +298,7 @@ export function MachineDialog({ open, onOpenChange, machine }: MachineDialogProp
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
+                {isLoading && <Spinner size="sm" className="mr-2" />}
                 {isLoading
                   ? "Saving..."
                   : isEditMode
