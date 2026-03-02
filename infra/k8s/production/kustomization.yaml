@@ -74,10 +74,10 @@ images:
   newTag: 16-alpine
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
-  newTag: main-a493297
+  newTag: main-6273b91
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
-  newTag: main-05ce00c
+  newTag: main-6273b91
 - name: redis
   newTag: 7-alpine
 - name: telemetry-worker
