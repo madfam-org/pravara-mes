@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Visualization Engine (Go)
+  # =============================================================================
+  visualization-engine:
+    build:
+      context: ./apps/visualization-engine
+      dockerfile: Dockerfile
+    container_name: pravara-visualization
+    restart: unless-stopped
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=pravara
+      - DB_PASSWORD=pravara_dev
+      - DB_NAME=pravara_dev
+      - REDIS_URL=redis://redis:6379
+      - PORT=4205
+    ports:
+      - "4205:4205"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - pravara-network
+
+  # =============================================================================
+  # Video Streaming Service (Go)
+  # =============================================================================
+  video-streaming:
+    build:
+      context: ./apps/video-streaming
+      dockerfile: Dockerfile
+    container_name: pravara-streaming
+    restart: unless-stopped
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=pravara
+      - DB_PASSWORD=pravara_dev
+      - DB_NAME=pravara_dev
+      - REDIS_URL=redis://redis:6379
+      - PORT=4206
+      - STUN_SERVER=stun:stun.l.google.com:19302
+    ports:
+      - "4206:4206"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - pravara-network
+
+  # =============================================================================
+  # ML Orchestrator (Python)
+  # =============================================================================
+  ml-orchestrator:
+    build:
+      context: ./apps/ml-orchestrator
+      dockerfile: Dockerfile
+    container_name: pravara-ml
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://pravara:pravara_dev@postgres:5432/pravara_dev
+      - REDIS_URL=redis://redis:6379
+      - PORT=4207
+      - MODEL_PATH=/app/models
+    ports:
+      - "4207:4207"
+    volumes:
+      - ml_models:/app/models
+      - ml_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - pravara-network
+
+  # =============================================================================
+  # Luban Bridge Service (Node.js)
+  # =============================================================================
+  luban-bridge:
+    build:
+      context: ./apps/luban-bridge
+      dockerfile: Dockerfile
+    container_name: pravara-luban-bridge
+    restart: unless-stopped
+    ports:
+      - "4507:4507"
+    environment:
+      - NODE_ENV=production
+      - PORT=4507
+      - LOG_LEVEL=info
+      - PRAVARA_API_URL=http://pravara-api:4200
+      - PRAVARA_API_KEY=${PRAVARA_API_KEY:-default_dev_key}
+      - TELEMETRY_URL=http://telemetry-worker:4204
+      - MQTT_URL=mqtt://emqx:1883
+    volumes:
+      # For serial port access (Linux only)
+      - /dev:/dev
+      # For persistent storage
+      - luban_workspace:/app/luban-workspace
+      - luban_uploads:/app/uploads
+      - luban_logs:/app/logs
+    networks:
+      - pravara-network
+    # Required for serial port access
+    privileged: true
+    depends_on:
+      - emqx
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4507/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # OctoPrint Connector (Python)
+  # =============================================================================
+  octoprint-connector:
+    build:
+      context: ./apps/octoprint-connector
+      dockerfile: Dockerfile
+    container_name: pravara-octoprint
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://pravara:pravara_dev@postgres:5432/pravara_dev
+      - REDIS_URL=redis://redis:6379
+      - MQTT_URL=mqtt://emqx:1883
+      - PORT=4508
+    ports:
+      - "4508:4508"
+    depends_on:
+      - postgres
+      - redis
+      - emqx
+    networks:
+      - pravara-network
+
+volumes:
+  ml_models:
+  ml_data:
+  luban_workspace:
+  luban_uploads:
+  luban_logs:
+
+networks:
+  pravara-network:
+    external: true

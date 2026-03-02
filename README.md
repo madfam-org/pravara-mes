@@ -25,6 +25,9 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 - **Video Streaming** - WebRTC-based live camera feeds with recording capabilities
 - **AI/ML Orchestration** - Predictive maintenance, anomaly detection, quality prediction
 - **Process Optimization** - AI-driven parameter optimization for efficiency gains
+- **Snapmaker/Luban Integration** - Native support for Snapmaker 3D printers with Luban slicing
+- **OctoPrint Connectivity** - Full integration with OctoPrint-managed 3D printers
+- **FullControl GCODE** - Advanced G-code visualization with material physics simulation
 
 ## Architecture
 
@@ -135,6 +138,11 @@ PRAVARA_REDIS_PORT=6379
 | pravara-ui | 4501 | Web Dashboard (Next.js) |
 | telemetry-worker | 4502 | MQTT Telemetry Processor |
 | pravara-gateway | 8000 | Real-Time WebSocket Gateway (Centrifugo) |
+| visualization-engine | 4205 | 3D Factory Visualization (Go) |
+| video-streaming | 4206 | WebRTC Video Streaming (Go) |
+| ml-orchestrator | 4207 | ML/AI Pipeline (Python/FastAPI) |
+| luban-bridge | 4507 | Snapmaker/Luban Integration (Node.js) |
+| octoprint-connector | 4508 | OctoPrint Manager (Python/FastAPI) |
 
 ## Project Structure
 
@@ -397,6 +405,30 @@ POST /v1/machines/:id/command
 |--------|----------|-------------|
 | GET | `/v1/billing/usage` | Get tenant usage summary |
 | GET | `/v1/billing/usage/daily` | Get daily usage breakdown |
+
+### 3D Printing APIs
+
+#### Luban Bridge API (Port 4507)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/project/import` | Import Luban project file |
+| POST | `/api/project/slice` | Slice STL to G-code |
+| POST | `/api/machine/discover` | Discover Snapmaker machines |
+| POST | `/api/machine/:id/connect` | Connect to Snapmaker printer |
+| POST | `/api/machine/:id/command` | Send G-code command |
+| POST | `/api/gcode/analyze` | Analyze G-code file |
+| WS | `/ws?machineId=<id>` | Real-time machine telemetry |
+
+#### OctoPrint Connector API (Port 4508)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/instances` | Add OctoPrint instance |
+| GET | `/instances/:id/status` | Get printer status |
+| POST | `/instances/:id/print/start` | Start print |
+| POST | `/instances/:id/print/pause` | Pause print |
+| WS | `/ws/:instance_id` | Real-time status updates |
 
 ## MQTT Topics (Unified Namespace)
 

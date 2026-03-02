@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Box,
+  FileCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { useState } from "react";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Factory Floor", href: "/factory", icon: Box },
+  { name: "G-Code Viewer", href: "/gcode", icon: FileCode },
   { name: "Kanban Board", href: "/kanban", icon: Kanban },
   { name: "Orders", href: "/orders", icon: Package },
   { name: "Machines", href: "/machines", icon: Factory },

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  luban-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pravara-luban-bridge
+    restart: unless-stopped
+    ports:
+      - "4507:4507"
+    environment:
+      - NODE_ENV=production
+      - PORT=4507
+      - LOG_LEVEL=info
+      - PRAVARA_API_URL=http://pravara-api:4200
+      - PRAVARA_API_KEY=${PRAVARA_API_KEY}
+      - TELEMETRY_URL=http://telemetry-worker:4204
+      # Optional: Path to Luban executable if running in container with Luban
+      # - LUBAN_PATH=/usr/local/bin/luban
+    volumes:
+      # For serial port access (Linux only)
+      - /dev:/dev
+      # For persistent storage
+      - luban-workspace:/app/luban-workspace
+      - luban-uploads:/app/uploads
+      - luban-logs:/app/logs
+    networks:
+      - pravara-network
+    # Required for serial port access
+    privileged: true
+    devices:
+      # Map USB devices for serial communication
+      - /dev/ttyUSB0:/dev/ttyUSB0
+      - /dev/ttyACM0:/dev/ttyACM0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.luban-bridge.rule=PathPrefix(`/luban`)"
+      - "traefik.http.routers.luban-bridge.entrypoints=web"
+      - "traefik.http.services.luban-bridge.loadbalancer.server.port=4507"
+      - "traefik.http.routers.luban-bridge-ws.rule=PathPrefix(`/luban/ws`)"
+      - "traefik.http.routers.luban-bridge-ws.entrypoints=web"
+
+volumes:
+  luban-workspace:
+  luban-uploads:
+  luban-logs:
+
+networks:
+  pravara-network:
+    external: true
