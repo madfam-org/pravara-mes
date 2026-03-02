@@ -1,12 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Factory, Activity, Wifi, WifiOff } from "lucide-react";
+import { Plus, Factory, Activity, Wifi, WifiOff, MoreVertical, Edit, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { machinesAPI, type Machine, type MachineStatus } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
+import { MachineDialog } from "@/components/dialogs/machine-dialog";
+import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { useDeleteMachine } from "@/lib/mutations/use-machine-mutations";
 
 const statusConfig: Record<MachineStatus, { color: string; icon: typeof Wifi }> = {
   offline: { color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400", icon: WifiOff },
@@ -20,6 +30,12 @@ const statusConfig: Record<MachineStatus, { color: string; icon: typeof Wifi }> 
 export default function MachinesPage() {
   const { data: session } = useSession();
   const token = (session?.user as any)?.accessToken;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState<Machine | undefined>();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [machineToDelete, setMachineToDelete] = useState<Machine | undefined>();
+
+  const deleteMutation = useDeleteMachine();
 
   const { data, isLoading } = useQuery({
     queryKey: ["machines"],
@@ -33,6 +49,27 @@ export default function MachinesPage() {
     (m) => m.status === "online" || m.status === "running"
   ).length;
 
+  const handleNewMachine = () => {
+    setSelectedMachine(undefined);
+    setDialogOpen(true);
+  };
+
+  const handleEditMachine = (machine: Machine) => {
+    setSelectedMachine(machine);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteClick = (machine: Machine) => {
+    setMachineToDelete(machine);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!token || !machineToDelete) return;
+    await deleteMutation.mutateAsync({ token, id: machineToDelete.id });
+    setMachineToDelete(undefined);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -42,7 +79,7 @@ export default function MachinesPage() {
             {onlineMachines} of {machines.length} machines online
           </p>
         </div>
-        <Button size="sm">
+        <Button size="sm" onClick={handleNewMachine}>
           <Plus className="mr-2 h-4 w-4" />
           Register Machine
         </Button>
@@ -72,7 +109,7 @@ export default function MachinesPage() {
             <p className="text-muted-foreground">
               Register your first machine to start monitoring
             </p>
-            <Button className="mt-4">
+            <Button className="mt-4" onClick={handleNewMachine}>
               <Plus className="mr-2 h-4 w-4" />
               Register Machine
             </Button>
@@ -85,7 +122,7 @@ export default function MachinesPage() {
             const StatusIcon = config.icon;
 
             return (
-              <Card key={machine.id} className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card key={machine.id} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div>
@@ -94,12 +131,34 @@ export default function MachinesPage() {
                         {machine.code}
                       </p>
                     </div>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.color}`}
-                    >
-                      <StatusIcon className="h-3 w-3" />
-                      {machine.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.color}`}
+                      >
+                        <StatusIcon className="h-3 w-3" />
+                        {machine.status}
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditMachine(machine)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteClick(machine)}
+                            className="text-destructive"
+                          >
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -137,6 +196,21 @@ export default function MachinesPage() {
           })}
         </div>
       )}
+
+      <MachineDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        machine={selectedMachine}
+      />
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Machine"
+        description={`Are you sure you want to delete ${machineToDelete?.name}? This action cannot be undone.`}
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }

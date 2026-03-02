@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: telemetry-worker
+  namespace: pravara-mes
+  labels:
+    app: telemetry-worker
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: telemetry-worker
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+  namespaceSelector:
+    matchNames:
+      - pravara-mes

@@ -1,12 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Edit, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ordersAPI, type Order, type OrderStatus } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { OrderDialog } from "@/components/dialogs/order-dialog";
+import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { useDeleteOrder } from "@/lib/mutations/use-order-mutations";
 
 const statusColors: Record<OrderStatus, string> = {
   received: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -22,6 +32,12 @@ const statusColors: Record<OrderStatus, string> = {
 export default function OrdersPage() {
   const { data: session } = useSession();
   const token = (session?.user as any)?.accessToken;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | undefined>();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | undefined>();
+
+  const deleteMutation = useDeleteOrder();
 
   const { data, isLoading } = useQuery({
     queryKey: ["orders"],
@@ -30,6 +46,27 @@ export default function OrdersPage() {
   });
 
   const orders = data?.data || [];
+
+  const handleNewOrder = () => {
+    setSelectedOrder(undefined);
+    setDialogOpen(true);
+  };
+
+  const handleEditOrder = (order: Order) => {
+    setSelectedOrder(order);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteClick = (order: Order) => {
+    setOrderToDelete(order);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!token || !orderToDelete) return;
+    await deleteMutation.mutateAsync({ token, id: orderToDelete.id });
+    setOrderToDelete(undefined);
+  };
 
   return (
     <div className="space-y-6">
@@ -45,7 +82,7 @@ export default function OrdersPage() {
             <Filter className="mr-2 h-4 w-4" />
             Filter
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={handleNewOrder}>
             <Plus className="mr-2 h-4 w-4" />
             New Order
           </Button>
@@ -76,7 +113,7 @@ export default function OrdersPage() {
             <p className="text-muted-foreground">
               Create your first order to get started
             </p>
-            <Button className="mt-4">
+            <Button className="mt-4" onClick={handleNewOrder}>
               <Plus className="mr-2 h-4 w-4" />
               Create Order
             </Button>
@@ -85,17 +122,39 @@ export default function OrdersPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {orders.map((order) => (
-            <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow">
+            <Card key={order.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-lg">{order.customer_name}</CardTitle>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      statusColors[order.status]
-                    }`}
-                  >
-                    {order.status.replace("_", " ")}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        statusColors[order.status]
+                      }`}
+                    >
+                      {order.status.replace("_", " ")}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditOrder(order)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteClick(order)}
+                          className="text-destructive"
+                        >
+                          <Trash className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 {order.external_id && (
                   <p className="text-sm text-muted-foreground">
@@ -138,6 +197,21 @@ export default function OrdersPage() {
           ))}
         </div>
       )}
+
+      <OrderDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        order={selectedOrder}
+      />
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Order"
+        description={`Are you sure you want to delete the order for ${orderToDelete?.customer_name}? This action cannot be undone.`}
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }

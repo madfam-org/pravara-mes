@@ -1,0 +1,261 @@
+# =============================================================================
+# PR Validation Workflow
+# Runs comprehensive validation on all pull requests
+# =============================================================================
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
+  DATABASE_URL: 'postgres://pravara:test@localhost:5432/pravara_test?sslmode=disable'
+  REDIS_URL: 'redis://localhost:6379'
+
+jobs:
+  # ===========================================================================
+  # Go Linting
+  # ===========================================================================
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            apps/pravara-api/go.sum
+            apps/telemetry-worker/go.sum
+            packages/sdk-go/go.sum
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: .
+
+  # ===========================================================================
+  # Go Testing with Database
+  # ===========================================================================
+  go-test:
+    name: Go Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pravara
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: pravara_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            apps/pravara-api/go.sum
+            apps/telemetry-worker/go.sum
+            packages/sdk-go/go.sum
+
+      - name: Run tests
+        run: go test ./... -v -race -cover -coverprofile=coverage.out
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          REDIS_URL: ${{ env.REDIS_URL }}
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: go
+          fail_ci_if_error: false
+
+  # ===========================================================================
+  # Go Formatting Check
+  # ===========================================================================
+  go-fmt:
+    name: Go Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            apps/pravara-api/go.sum
+            apps/telemetry-worker/go.sum
+            packages/sdk-go/go.sum
+
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # UI Linting
+  # ===========================================================================
+  ui-lint:
+    name: UI Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pravara-ui
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/pravara-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript check
+        run: npx tsc --noEmit
+
+  # ===========================================================================
+  # UI Build Verification
+  # ===========================================================================
+  ui-build:
+    name: UI Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pravara-ui
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/pravara-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.pravara.madfam.io
+          NEXT_PUBLIC_JANUA_URL: https://auth.madfam.io
+
+  # ===========================================================================
+  # Kubernetes Manifest Validation
+  # ===========================================================================
+  k8s-validate:
+    name: K8s Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Build Kustomize manifests
+        run: kustomize build infra/k8s/production > manifests.yaml
+
+      - name: Validate with kubeconform
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          args: -summary -output json manifests.yaml
+
+  # ===========================================================================
+  # PR Status Gate
+  # ===========================================================================
+  pr-status:
+    name: PR Status Check
+    runs-on: ubuntu-latest
+    needs:
+      - go-lint
+      - go-test
+      - go-fmt
+      - ui-lint
+      - ui-build
+      - k8s-validate
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" == "true" ]; then
+            echo "One or more validation checks failed"
+            exit 1
+          fi
+          if [ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]; then
+            echo "One or more validation checks were cancelled"
+            exit 1
+          fi
+          echo "All validation checks passed"
+
+      - name: PR validation summary
+        run: |
+          echo "## PR Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Lint | ${{ needs.go-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Tests | ${{ needs.go-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Format | ${{ needs.go-fmt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Lint | ${{ needs.ui-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Build | ${{ needs.ui-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| K8s Validation | ${{ needs.k8s-validate.result }} |" >> $GITHUB_STEP_SUMMARY

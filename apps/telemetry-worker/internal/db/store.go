@@ -43,6 +43,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Stats returns database connection pool statistics.
+func (s *Store) Stats() sql.DBStats {
+	return s.db.Stats()
+}
+
 // CreateBatch inserts multiple telemetry records efficiently.
 func (s *Store) CreateBatch(ctx context.Context, records []types.Telemetry) error {
 	if len(records) == 0 {

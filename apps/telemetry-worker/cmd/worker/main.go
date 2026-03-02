@@ -3,15 +3,19 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/mqtt"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/observability"
 )
 
 func main() {
@@ -79,6 +83,32 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start HTTP server for metrics and health checks
+	metricsAddr := ":4502"
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	metricsServer := &http.Server{
+		Addr:         metricsAddr,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		log.WithField("addr", metricsAddr).Info("Metrics server listening")
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.WithError(err).Error("Metrics server error")
+		}
+	}()
+
+	// Start background goroutine to collect database stats
+	go collectDBStats(ctx, store, log)
+
 	// Start processing messages
 	if err := handler.Start(ctx); err != nil {
 		log.WithError(err).Fatal("Failed to start handler")
@@ -99,5 +129,29 @@ func main() {
 	// Stop the handler gracefully
 	handler.Stop()
 
+	// Shutdown metrics server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+		log.WithError(err).Error("Metrics server shutdown error")
+	}
+
 	log.Info("Telemetry worker stopped")
+}
+
+// collectDBStats periodically collects and reports database connection pool statistics.
+func collectDBStats(ctx context.Context, store *db.Store, log *logrus.Logger) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stats := store.Stats()
+			observability.DBConnectionsOpen.Set(float64(stats.OpenConnections))
+			observability.DBConnectionsInUse.Set(float64(stats.InUse))
+		}
+	}
 }

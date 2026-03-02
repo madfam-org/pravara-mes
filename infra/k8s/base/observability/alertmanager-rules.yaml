@@ -1,0 +1,178 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pravara-mes-alerts
+  namespace: pravara-mes
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: pravara-api
+      interval: 30s
+      rules:
+        # Critical Alerts
+        - alert: PravaraAPIHighErrorRate
+          expr: |
+            (
+              sum(rate(pravara_api_http_requests_total{status=~"5.."}[5m]))
+              /
+              sum(rate(pravara_api_http_requests_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: pravara-api
+          annotations:
+            summary: "High 5xx error rate on PravaraMES API"
+            description: "API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/api-high-error-rate"
+
+        - alert: PravaraAPIDown
+          expr: |
+            up{job="pravara-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: pravara-api
+          annotations:
+            summary: "PravaraMES API is down"
+            description: "API instance {{ $labels.pod }} is unreachable"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/api-down"
+
+        # Warning Alerts
+        - alert: PravaraAPIHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(pravara_api_http_request_duration_seconds_bucket[5m])) by (le, method, path)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: pravara-api
+          annotations:
+            summary: "High API latency detected"
+            description: "P95 latency for {{ $labels.method }} {{ $labels.path }} is {{ $value }}s (threshold: 2s)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/api-high-latency"
+
+        - alert: PravaraAPIHighDBConnectionUsage
+          expr: |
+            (
+              pravara_api_db_connections_in_use
+              /
+              pravara_api_db_connections_open
+            ) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            component: pravara-api
+          annotations:
+            summary: "High database connection usage"
+            description: "Database connection pool usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/db-connection-saturation"
+
+    - name: telemetry-worker
+      interval: 30s
+      rules:
+        # Critical Alerts
+        - alert: TelemetryWorkerMQTTDisconnected
+          expr: |
+            pravara_telemetry_mqtt_connection_status == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: telemetry-worker
+          annotations:
+            summary: "Telemetry worker MQTT disconnected"
+            description: "MQTT connection has been down for 2 minutes"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/mqtt-disconnected"
+
+        - alert: TelemetryWorkerBatchWriteFailures
+          expr: |
+            rate(pravara_telemetry_batch_write_failures_total[5m]) > 0.1
+          for: 2m
+          labels:
+            severity: critical
+            component: telemetry-worker
+          annotations:
+            summary: "Telemetry worker experiencing batch write failures"
+            description: "Batch write failure rate is {{ $value | humanize }} per second"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/batch-write-failures"
+
+        - alert: TelemetryWorkerDown
+          expr: |
+            up{job="telemetry-worker"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: telemetry-worker
+          annotations:
+            summary: "Telemetry worker is down"
+            description: "Worker instance {{ $labels.pod }} is unreachable"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/worker-down"
+
+        # Warning Alerts
+        - alert: TelemetryWorkerQueueBacklog
+          expr: |
+            pravara_telemetry_worker_queue_length > 1000
+          for: 5m
+          labels:
+            severity: warning
+            component: telemetry-worker
+          annotations:
+            summary: "Telemetry worker queue backlog detected"
+            description: "Worker queue length is {{ $value }} messages (threshold: 1000)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/worker-queue-backlog"
+
+        - alert: TelemetryWorkerHighMessageDropRate
+          expr: |
+            rate(pravara_telemetry_mqtt_messages_dropped_total[5m]) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+            component: telemetry-worker
+          annotations:
+            summary: "High message drop rate detected"
+            description: "Message drop rate is {{ $value | humanize }} per second by reason: {{ $labels.reason }}"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/message-drops"
+
+        - alert: TelemetryWorkerBatchWriteLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(pravara_telemetry_batch_write_duration_seconds_bucket[5m])) by (le)
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            component: telemetry-worker
+          annotations:
+            summary: "High batch write latency"
+            description: "P95 batch write latency is {{ $value }}s (threshold: 1s)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/batch-write-latency"
+
+    - name: centrifugo
+      interval: 30s
+      rules:
+        - alert: CentrifugoDown
+          expr: |
+            up{job="centrifugo"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: centrifugo
+          annotations:
+            summary: "Centrifugo real-time server is down"
+            description: "Centrifugo instance {{ $labels.pod }} is unreachable"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/centrifugo-down"
+
+        - alert: CentrifugoHighConnectionCount
+          expr: |
+            centrifugo_node_num_clients > 10000
+          for: 5m
+          labels:
+            severity: warning
+            component: centrifugo
+          annotations:
+            summary: "High number of Centrifugo connections"
+            description: "Current connection count is {{ $value }} (threshold: 10000)"
+            runbook_url: "https://docs.pravara-mes.com/runbooks/centrifugo-high-connections"

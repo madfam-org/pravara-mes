@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ordersAPI, machinesAPI, tasksAPI } from "@/lib/api";
+import { ordersAPI, machinesAPI, tasksAPI, Task, TaskStatus } from "@/lib/api";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -37,7 +37,7 @@ export default function DashboardPage() {
 
   const orders = ordersData?.data || [];
   const machines = machinesData?.data || [];
-  const board = boardData?.columns || {};
+  const board: Partial<Record<TaskStatus, Task[]>> = boardData?.columns || {};
 
   const inProgressTasks = board["in_progress"]?.length || 0;
   const completedTasks = board["completed"]?.length || 0;

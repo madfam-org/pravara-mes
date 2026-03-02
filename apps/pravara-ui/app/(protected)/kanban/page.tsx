@@ -1,16 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KanbanBoard } from "@/components/kanban/board";
+import { TaskDialog } from "@/components/dialogs/task-dialog";
 import { tasksAPI, type Task, type TaskStatus } from "@/lib/api";
 
 export default function KanbanPage() {
   const { data: session } = useSession();
   const token = (session?.user as any)?.accessToken;
   const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | undefined>();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["kanban-board"],
@@ -80,8 +84,13 @@ export default function KanbanPage() {
   };
 
   const handleTaskClick = (task: Task) => {
-    // TODO: Open task detail modal
-    console.log("Task clicked:", task);
+    setSelectedTask(task);
+    setDialogOpen(true);
+  };
+
+  const handleNewTask = () => {
+    setSelectedTask(undefined);
+    setDialogOpen(true);
   };
 
   if (isLoading) {
@@ -115,7 +124,7 @@ export default function KanbanPage() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={handleNewTask}>
             <Plus className="mr-2 h-4 w-4" />
             New Task
           </Button>
@@ -129,6 +138,12 @@ export default function KanbanPage() {
           onTaskClick={handleTaskClick}
         />
       </div>
+
+      <TaskDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        task={selectedTask}
+      />
     </div>
   );
 }

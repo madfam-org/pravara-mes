@@ -1,0 +1,371 @@
+# =============================================================================
+# Build and Deploy Workflow
+# Builds Docker images and deploys to enclii GitOps platform
+# =============================================================================
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
+  REGISTRY: ghcr.io
+  REGISTRY_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  # ===========================================================================
+  # Detect Changes
+  # ===========================================================================
+  changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      pravara-api: ${{ steps.filter.outputs.pravara-api }}
+      pravara-ui: ${{ steps.filter.outputs.pravara-ui }}
+      pravara-gateway: ${{ steps.filter.outputs.pravara-gateway }}
+      telemetry-worker: ${{ steps.filter.outputs.telemetry-worker }}
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check path filters
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pravara-api:
+              - 'apps/pravara-api/**'
+              - 'packages/sdk-go/**'
+              - 'go.work'
+              - 'go.work.sum'
+            pravara-ui:
+              - 'apps/pravara-ui/**'
+              - 'packages/ui-components/**'
+            pravara-gateway:
+              - 'apps/pravara-gateway/**'
+            telemetry-worker:
+              - 'apps/telemetry-worker/**'
+              - 'packages/sdk-go/**'
+              - 'go.work'
+              - 'go.work.sum'
+
+  # ===========================================================================
+  # Build Go Services
+  # ===========================================================================
+  build-go:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      needs.changes.outputs.pravara-api == 'true' ||
+      needs.changes.outputs.telemetry-worker == 'true'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: pravara-api
+            context: .
+            dockerfile: apps/pravara-api/Dockerfile
+            image: pravara-api
+            enabled: ${{ needs.changes.outputs.pravara-api }}
+          - service: telemetry-worker
+            context: .
+            dockerfile: apps/telemetry-worker/Dockerfile
+            image: telemetry-worker
+            enabled: ${{ needs.changes.outputs.telemetry-worker }}
+
+    steps:
+      - name: Skip if not changed
+        if: matrix.enabled != 'true'
+        run: |
+          echo "Service ${{ matrix.service }} has no changes, skipping build"
+          exit 0
+
+      - name: Checkout code
+        if: matrix.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        if: matrix.enabled == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: matrix.enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        if: matrix.enabled == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_PREFIX }}/${{ matrix.image }}
+          tags: |
+            type=sha,prefix={{branch}}-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service }}
+            org.opencontainers.image.description=PravaraMES ${{ matrix.service }}
+
+      - name: Build and push Docker image
+        if: matrix.enabled == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+          platforms: linux/amd64
+
+      - name: Output image digest
+        if: matrix.enabled == 'true'
+        run: echo "Image digest ${{ steps.build.outputs.digest }}"
+
+  # ===========================================================================
+  # Build UI Service
+  # ===========================================================================
+  build-ui:
+    name: Build pravara-ui
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pravara-ui == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-ui
+          tags: |
+            type=sha,prefix={{branch}}-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=pravara-ui
+            org.opencontainers.image.description=PravaraMES UI Application
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/pravara-ui
+          file: apps/pravara-ui/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.pravara.madfam.io
+            NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+          platforms: linux/amd64
+
+  # ===========================================================================
+  # Build Gateway Service
+  # ===========================================================================
+  build-gateway:
+    name: Build pravara-gateway
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pravara-gateway == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-gateway
+          tags: |
+            type=sha,prefix={{branch}}-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=pravara-gateway
+            org.opencontainers.image.description=PravaraMES API Gateway
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/pravara-gateway
+          file: apps/pravara-gateway/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+          platforms: linux/amd64
+
+  # ===========================================================================
+  # Update Kustomization
+  # ===========================================================================
+  update-kustomization:
+    name: Update Kustomization Images
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - build-go
+      - build-ui
+      - build-gateway
+    if: always() && needs.changes.outputs.services != '[]'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Update image tags
+        run: |
+          cd infra/k8s/production
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+
+          if [ "${{ needs.changes.outputs.pravara-api }}" == "true" ]; then
+            kustomize edit set image pravara-api=${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-api:main-$SHORT_SHA
+          fi
+
+          if [ "${{ needs.changes.outputs.pravara-ui }}" == "true" ]; then
+            kustomize edit set image pravara-ui=${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-ui:main-$SHORT_SHA
+          fi
+
+          if [ "${{ needs.changes.outputs.pravara-gateway }}" == "true" ]; then
+            kustomize edit set image pravara-gateway=${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-gateway:main-$SHORT_SHA
+          fi
+
+          if [ "${{ needs.changes.outputs.telemetry-worker }}" == "true" ]; then
+            kustomize edit set image telemetry-worker=${{ env.REGISTRY_IMAGE_PREFIX }}/telemetry-worker:main-$SHORT_SHA
+          fi
+
+      - name: Commit kustomization changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/production/kustomization.yaml
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update image tags to ${{ github.sha }}"
+            git push
+          fi
+
+  # ===========================================================================
+  # Deploy to enclii
+  # ===========================================================================
+  deploy:
+    name: Deploy ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - build-go
+      - build-ui
+      - build-gateway
+      - update-kustomization
+    if: always() && needs.update-kustomization.result == 'success'
+    strategy:
+      matrix:
+        service:
+          - pravara-api
+          - pravara-ui
+          - pravara-gateway
+          - telemetry-worker
+    steps:
+      - name: Check if service changed
+        id: check
+        run: |
+          SERVICE="${{ matrix.service }}"
+          CHANGED="false"
+
+          if [ "${{ needs.changes.outputs.pravara-api }}" == "true" ] && [ "$SERVICE" == "pravara-api" ]; then
+            CHANGED="true"
+          elif [ "${{ needs.changes.outputs.pravara-ui }}" == "true" ] && [ "$SERVICE" == "pravara-ui" ]; then
+            CHANGED="true"
+          elif [ "${{ needs.changes.outputs.pravara-gateway }}" == "true" ] && [ "$SERVICE" == "pravara-gateway" ]; then
+            CHANGED="true"
+          elif [ "${{ needs.changes.outputs.telemetry-worker }}" == "true" ] && [ "$SERVICE" == "telemetry-worker" ]; then
+            CHANGED="true"
+          fi
+
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Trigger enclii deployment
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          curl -X POST "${{ secrets.ENCLII_API_URL }}/deployments" \
+            -H "Authorization: Bearer ${{ secrets.ENCLII_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "service": "${{ matrix.service }}",
+              "commit": "${{ github.sha }}",
+              "branch": "${{ github.ref_name }}",
+              "repository": "${{ github.repository }}"
+            }'
+
+      - name: Deployment summary
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          echo "## Deployment Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY

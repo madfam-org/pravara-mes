@@ -5,6 +5,7 @@ import * as ToastPrimitives from "@radix-ui/react-toast";
 import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast as useToastHook } from "@/lib/hooks/use-toast";
 
 const ToastProvider = ToastPrimitives.Provider;
 
@@ -31,6 +32,8 @@ const toastVariants = cva(
         default: "border bg-background text-foreground",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
+        success:
+          "border-green-500 bg-green-50 text-green-900 dark:border-green-700 dark:bg-green-950 dark:text-green-100",
       },
     },
     defaultVariants: {
@@ -115,8 +118,24 @@ type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>;
 type ToastActionElement = React.ReactElement<typeof ToastAction>;
 
 export function Toaster() {
+  const { toasts } = useToastHook();
+
   return (
     <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, variant, ...props }) {
+        return (
+          <Toast key={id} variant={variant} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && (
+                <ToastDescription>{description}</ToastDescription>
+              )}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        );
+      })}
       <ToastViewport />
     </ToastProvider>
   );

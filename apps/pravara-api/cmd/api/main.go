@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/api"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/observability"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
@@ -79,9 +82,18 @@ func main() {
 	// Add middleware
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(log))
+	router.Use(middleware.Metrics())
+
+	// Add Prometheus metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Register routes with optional publisher
 	api.RegisterRoutesWithPublisher(router, database, cfg, log, publisher)
+
+	// Start background goroutine to collect database stats
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go collectDBStats(ctx, database, log)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -106,15 +118,40 @@ func main() {
 
 	log.Info("Shutting down server...")
 
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
-	defer cancel()
+	// Cancel background tasks
+	cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.WithError(err).Error("Server forced to shutdown")
 	}
 
 	log.Info("Server exited")
+}
+
+// collectDBStats periodically collects and reports database connection pool statistics.
+func collectDBStats(ctx context.Context, database *db.DB, log *logrus.Logger) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stats := database.Stats()
+			observability.DBConnectionsOpen.Set(float64(stats.OpenConnections))
+			observability.DBConnectionsInUse.Set(float64(stats.InUse))
+			observability.DBConnectionsIdle.Set(float64(stats.Idle))
+			observability.DBConnectionsWaitCount.Add(float64(stats.WaitCount))
+			observability.DBConnectionsWaitDuration.Add(stats.WaitDuration.Seconds())
+			observability.DBConnectionsMaxIdleClosed.Add(float64(stats.MaxIdleClosed))
+			observability.DBConnectionsMaxLifetimeClosed.Add(float64(stats.MaxLifetimeClosed))
+		}
+	}
 }
 
 // requestLogger returns a Gin middleware for structured request logging.

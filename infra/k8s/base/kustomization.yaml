@@ -12,6 +12,7 @@ resources:
   - emqx.yaml
   - centrifugo.yaml
   - ingress.yaml
+  - observability/
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
