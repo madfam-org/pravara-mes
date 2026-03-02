@@ -1,3 +1,4 @@
+// Package repositories provides database access layer implementations.
 package repositories
 
 import (
@@ -30,7 +31,10 @@ type MachineFilter struct {
 	Offset int
 }
 
-// List retrieves machines with optional filtering.
+// List retrieves machines matching the given filter with pagination.
+// Results are ordered alphabetically by machine name.
+// Returns the list of machines, total count (for pagination), and any error encountered.
+// An empty filter returns all machines. Use filter.Limit and filter.Offset for pagination.
 func (r *MachineRepository) List(ctx context.Context, filter MachineFilter) ([]types.Machine, int, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
@@ -96,7 +100,9 @@ func (r *MachineRepository) List(ctx context.Context, filter MachineFilter) ([]t
 	return machines, total, nil
 }
 
-// GetByID retrieves a machine by ID.
+// GetByID retrieves a machine by its unique identifier.
+// Returns nil, nil if the machine is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *MachineRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
@@ -118,7 +124,9 @@ func (r *MachineRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.M
 	return machine, nil
 }
 
-// GetByCode retrieves a machine by its unique code.
+// GetByCode retrieves a machine by its unique human-readable code.
+// Machine codes are used for identification in MQTT topics and shop floor displays.
+// Returns nil, nil if the machine is not found (not an error condition).
 func (r *MachineRepository) GetByCode(ctx context.Context, code string) (*types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
@@ -140,7 +148,10 @@ func (r *MachineRepository) GetByCode(ctx context.Context, code string) (*types.
 	return machine, nil
 }
 
-// Create inserts a new machine.
+// Create inserts a new machine into the database.
+// If machine.ID is nil, a new UUID is generated automatically.
+// The machine.CreatedAt and machine.UpdatedAt fields are populated from the database
+// after successful insertion.
 func (r *MachineRepository) Create(ctx context.Context, machine *types.Machine) error {
 	query := `
 		INSERT INTO machines (
@@ -181,7 +192,10 @@ func (r *MachineRepository) Create(ctx context.Context, machine *types.Machine) 
 	return nil
 }
 
-// Update modifies an existing machine.
+// Update modifies an existing machine's mutable fields.
+// The machine.ID must exist in the database. The machine.UpdatedAt field
+// is refreshed from the database after successful update.
+// Returns an error if the machine is not found.
 func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) error {
 	query := `
 		UPDATE machines SET
@@ -228,7 +242,10 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 	return nil
 }
 
-// UpdateStatus updates only the machine status.
+// UpdateStatus updates only the status field of a machine.
+// This is more efficient than a full Update when only the status changes.
+// Valid statuses include: online, offline, busy, error, maintenance.
+// Returns an error if the machine is not found.
 func (r *MachineRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status types.MachineStatus) error {
 	query := `UPDATE machines SET status = $2 WHERE id = $1`
 
@@ -245,7 +262,10 @@ func (r *MachineRepository) UpdateStatus(ctx context.Context, id uuid.UUID, stat
 	return nil
 }
 
-// UpdateHeartbeat updates the last heartbeat timestamp.
+// UpdateHeartbeat updates the last heartbeat timestamp and sets status to 'online'.
+// This should be called when a machine sends a heartbeat via MQTT.
+// The heartbeat mechanism is used to detect offline machines.
+// Returns an error if the machine is not found.
 func (r *MachineRepository) UpdateHeartbeat(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE machines SET last_heartbeat = $2, status = 'online' WHERE id = $1`
 
@@ -262,7 +282,9 @@ func (r *MachineRepository) UpdateHeartbeat(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
-// Delete removes a machine.
+// Delete permanently removes a machine from the database.
+// This is a hard delete - the machine record is not recoverable.
+// Returns an error if the machine is not found.
 func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM machines WHERE id = $1`
 
@@ -280,6 +302,10 @@ func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // GetOfflineMachines returns machines that haven't sent a heartbeat recently.
+// Only machines currently marked as 'online' are checked.
+// The threshold parameter specifies how long since the last heartbeat before
+// a machine is considered offline (e.g., 5 minutes).
+// Used by the health check worker to detect stale connections.
 func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold time.Duration) ([]types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,

@@ -1,3 +1,4 @@
+// Package repositories provides database access layer implementations.
 package repositories
 
 import (
@@ -11,6 +12,9 @@ import (
 )
 
 // TaskCommand represents a command dispatched from a task to a machine.
+// Commands enable the control system to orchestrate machine operations by
+// sending job control instructions (start, pause, stop) with parameters.
+// Each command is tracked through its lifecycle: pending → sent → acknowledged → completed/failed.
 type TaskCommand struct {
 	ID           uuid.UUID
 	TenantID     uuid.UUID
@@ -30,16 +34,25 @@ type TaskCommand struct {
 }
 
 // TaskCommandRepository handles task_commands database operations.
+// This repository manages the command queue between tasks and machines,
+// providing command dispatch tracking and status management for machine control.
 type TaskCommandRepository struct {
 	db *sql.DB
 }
 
 // NewTaskCommandRepository creates a new task command repository.
+// The returned repository is ready to perform database operations
+// for task command management and tracking.
 func NewTaskCommandRepository(db *sql.DB) *TaskCommandRepository {
 	return &TaskCommandRepository{db: db}
 }
 
-// Create inserts a new task command record.
+// Create inserts a new task command record into the database.
+// If cmd.ID is nil, a new UUID is generated automatically.
+// The command status should initially be 'pending' and will transition through
+// the states: pending → sent → acknowledged → completed/failed.
+// Parameters are marshaled to JSON for storage. Empty parameters default to {}.
+// Returns an error if the insertion fails.
 func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) error {
 	query := `
 		INSERT INTO task_commands (
@@ -71,6 +84,14 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 }
 
 // UpdateStatus updates the status of a command by its command_id.
+// Valid status transitions:
+//   - pending → sent: Command dispatched to MQTT
+//   - sent → acknowledged: Machine received the command
+//   - acknowledged → completed: Command executed successfully
+//   - any → failed: Command execution failed
+// Automatically sets acked_at timestamp when status is 'acknowledged',
+// and completed_at when status is 'completed' or 'failed'.
+// Returns an error if the command is not found or update fails.
 func (r *TaskCommandRepository) UpdateStatus(ctx context.Context, commandID uuid.UUID, status, errorMsg string) error {
 	query := `
 		UPDATE task_commands
@@ -94,7 +115,10 @@ func (r *TaskCommandRepository) UpdateStatus(ctx context.Context, commandID uuid
 	return nil
 }
 
-// GetByCommandID retrieves a task command by its command_id.
+// GetByCommandID retrieves a task command by its unique command_id.
+// The command_id is used for correlation between the API and machine responses.
+// Returns nil, nil if the command is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *TaskCommandRepository) GetByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommand, error) {
 	query := `
 		SELECT id, tenant_id, task_id, machine_id, command_id, command_type,
@@ -117,6 +141,11 @@ func (r *TaskCommandRepository) GetByCommandID(ctx context.Context, commandID uu
 }
 
 // GetActiveByTaskID retrieves the most recent active command for a task.
+// Active commands are those with status: 'pending', 'sent', or 'acknowledged'.
+// This is useful for checking if a task already has a command in progress
+// before issuing a new command.
+// Returns nil, nil if no active command exists.
+// Results are ordered by creation time, most recent first.
 func (r *TaskCommandRepository) GetActiveByTaskID(ctx context.Context, taskID uuid.UUID) (*TaskCommand, error) {
 	query := `
 		SELECT id, tenant_id, task_id, machine_id, command_id, command_type,
@@ -141,6 +170,11 @@ func (r *TaskCommandRepository) GetActiveByTaskID(ctx context.Context, taskID uu
 }
 
 // GetActiveByMachineID retrieves all active commands for a machine.
+// Active commands are those with status: 'pending', 'sent', or 'acknowledged'.
+// This enables the system to track all pending operations for a specific machine
+// and manage command queue depth.
+// Returns an empty slice if no active commands exist.
+// Results are ordered by creation time, most recent first.
 func (r *TaskCommandRepository) GetActiveByMachineID(ctx context.Context, machineID uuid.UUID) ([]TaskCommand, error) {
 	query := `
 		SELECT id, tenant_id, task_id, machine_id, command_id, command_type,
@@ -169,7 +203,13 @@ func (r *TaskCommandRepository) GetActiveByMachineID(ctx context.Context, machin
 	return commands, nil
 }
 
-// GetByTaskID retrieves all commands for a task (command history).
+// GetByTaskID retrieves the complete command history for a task.
+// This includes all commands regardless of status, useful for:
+//   - Auditing task execution history
+//   - Debugging command failures
+//   - Analyzing task-machine interaction patterns
+// Returns an empty slice if no commands exist for the task.
+// Results are ordered by creation time, most recent first.
 func (r *TaskCommandRepository) GetByTaskID(ctx context.Context, taskID uuid.UUID) ([]TaskCommand, error) {
 	query := `
 		SELECT id, tenant_id, task_id, machine_id, command_id, command_type,
@@ -198,7 +238,9 @@ func (r *TaskCommandRepository) GetByTaskID(ctx context.Context, taskID uuid.UUI
 	return commands, nil
 }
 
-// Helper: scan a single row
+// scanTaskCommandRow is a helper that scans a single database row into a TaskCommand.
+// Handles nullable fields (IssuedBy, AckedAt, CompletedAt, ErrorMessage) and
+// unmarshals the JSON parameters field.
 func (r *TaskCommandRepository) scanTaskCommandRow(row *sql.Row) (*TaskCommand, error) {
 	var cmd TaskCommand
 	var issuedBy sql.NullString
@@ -235,7 +277,9 @@ func (r *TaskCommandRepository) scanTaskCommandRow(row *sql.Row) (*TaskCommand, 
 	return &cmd, nil
 }
 
-// Helper: scan from rows
+// scanTaskCommand is a helper that scans from sql.Rows into a TaskCommand.
+// Handles nullable fields and unmarshals JSON parameters.
+// Used for queries returning multiple rows.
 func (r *TaskCommandRepository) scanTaskCommand(rows *sql.Rows) (*TaskCommand, error) {
 	var cmd TaskCommand
 	var issuedBy sql.NullString

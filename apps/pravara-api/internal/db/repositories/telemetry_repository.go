@@ -1,3 +1,4 @@
+// Package repositories provides database access layer implementations.
 package repositories
 
 import (
@@ -31,7 +32,10 @@ type TelemetryFilter struct {
 	Limit      int
 }
 
-// List retrieves telemetry with filtering.
+// List retrieves telemetry records matching the given filter.
+// Results are ordered by timestamp descending (most recent first).
+// Use filter.MachineID and filter.MetricType to narrow results.
+// Time range filtering is supported via filter.FromTime and filter.ToTime.
 func (r *TelemetryRepository) List(ctx context.Context, filter TelemetryFilter) ([]types.Telemetry, error) {
 	query := `
 		SELECT id, tenant_id, machine_id, timestamp, metric_type, value, unit, metadata, created_at
@@ -91,7 +95,9 @@ func (r *TelemetryRepository) List(ctx context.Context, filter TelemetryFilter) 
 	return telemetry, nil
 }
 
-// Create inserts a new telemetry record.
+// Create inserts a new telemetry record into the database.
+// If telemetry.ID is nil, a new UUID is generated automatically.
+// The telemetry.CreatedAt field is populated from the database after insertion.
 func (r *TelemetryRepository) Create(ctx context.Context, telemetry *types.Telemetry) error {
 	query := `
 		INSERT INTO telemetry (
@@ -119,7 +125,10 @@ func (r *TelemetryRepository) Create(ctx context.Context, telemetry *types.Telem
 	return nil
 }
 
-// CreateBatch inserts multiple telemetry records efficiently.
+// CreateBatch inserts multiple telemetry records efficiently within a transaction.
+// This is the preferred method for high-throughput telemetry ingestion from MQTT.
+// Uses prepared statements for optimal performance.
+// If any record fails to insert, the entire batch is rolled back.
 func (r *TelemetryRepository) CreateBatch(ctx context.Context, records []types.Telemetry) error {
 	if len(records) == 0 {
 		return nil
@@ -160,7 +169,9 @@ func (r *TelemetryRepository) CreateBatch(ctx context.Context, records []types.T
 	return tx.Commit()
 }
 
-// GetLatest retrieves the most recent telemetry for a machine by metric type.
+// GetLatest retrieves the most recent telemetry record for a specific machine and metric type.
+// Returns nil, nil if no telemetry exists for this combination (not an error condition).
+// Useful for displaying current machine state (e.g., current temperature, progress).
 func (r *TelemetryRepository) GetLatest(ctx context.Context, machineID uuid.UUID, metricType string) (*types.Telemetry, error) {
 	query := `
 		SELECT id, tenant_id, machine_id, timestamp, metric_type, value, unit, metadata, created_at
@@ -182,7 +193,11 @@ func (r *TelemetryRepository) GetLatest(ctx context.Context, machineID uuid.UUID
 	return t, nil
 }
 
-// GetAggregated retrieves aggregated telemetry data.
+// GetAggregated retrieves aggregated telemetry data for charting and analytics.
+// Groups telemetry by time buckets and calculates avg, min, max, and count.
+// The interval parameter accepts: "minute", "hour", or "day".
+// Returns a slice of maps containing: timestamp, avg, min, max, count.
+// Useful for rendering time-series charts without transferring raw data points.
 func (r *TelemetryRepository) GetAggregated(ctx context.Context, machineID uuid.UUID, metricType string, fromTime, toTime time.Time, interval string) ([]map[string]interface{}, error) {
 	// Determine the time bucket based on interval
 	var timeBucket string
@@ -240,6 +255,8 @@ func (r *TelemetryRepository) GetAggregated(ctx context.Context, machineID uuid.
 }
 
 // DeleteOlderThan removes telemetry records older than the specified time.
+// Returns the number of deleted rows. Used for data retention/cleanup jobs.
+// Should be run periodically to prevent unbounded table growth.
 func (r *TelemetryRepository) DeleteOlderThan(ctx context.Context, before time.Time) (int64, error) {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM telemetry WHERE timestamp < $1`, before)
 	if err != nil {

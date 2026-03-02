@@ -1,3 +1,4 @@
+// Package repositories provides database access layer implementations.
 package repositories
 
 import (
@@ -21,7 +22,9 @@ func NewOrderItemRepository(db *sql.DB) *OrderItemRepository {
 	return &OrderItemRepository{db: db}
 }
 
-// List retrieves all items for an order.
+// List retrieves all items belonging to a specific order.
+// Results are ordered by created_at ascending (oldest first).
+// Returns an empty slice if the order has no items.
 func (r *OrderItemRepository) List(ctx context.Context, orderID uuid.UUID) ([]types.OrderItem, error) {
 	query := `
 		SELECT id, order_id, product_name, product_sku, quantity, unit_price,
@@ -72,7 +75,9 @@ func (r *OrderItemRepository) List(ctx context.Context, orderID uuid.UUID) ([]ty
 	return items, nil
 }
 
-// GetByID retrieves an order item by ID.
+// GetByID retrieves an order item by its unique identifier.
+// Returns nil, nil if the item is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *OrderItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.OrderItem, error) {
 	query := `
 		SELECT id, order_id, product_name, product_sku, quantity, unit_price,
@@ -114,7 +119,9 @@ func (r *OrderItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*types
 	return &item, nil
 }
 
-// Create inserts a new order item.
+// Create inserts a new order item into the database.
+// If item.ID is nil, a new UUID is generated automatically.
+// The item.CreatedAt field is populated from the database after insertion.
 func (r *OrderItemRepository) Create(ctx context.Context, item *types.OrderItem) error {
 	query := `
 		INSERT INTO order_items (
@@ -155,7 +162,9 @@ func (r *OrderItemRepository) Create(ctx context.Context, item *types.OrderItem)
 	return nil
 }
 
-// Update modifies an existing order item.
+// Update modifies an existing order item's mutable fields.
+// The item.ID must exist in the database.
+// Returns an error if the item is not found.
 func (r *OrderItemRepository) Update(ctx context.Context, item *types.OrderItem) error {
 	query := `
 		UPDATE order_items SET
@@ -199,7 +208,9 @@ func (r *OrderItemRepository) Update(ctx context.Context, item *types.OrderItem)
 	return nil
 }
 
-// Delete removes an order item.
+// Delete permanently removes an order item from the database.
+// This is a hard delete - the item record is not recoverable.
+// Returns an error if the item is not found.
 func (r *OrderItemRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE id = $1`, id)
 	if err != nil {
@@ -214,7 +225,9 @@ func (r *OrderItemRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// DeleteByOrderID removes all items for an order.
+// DeleteByOrderID removes all items belonging to a specific order.
+// This is typically used when deleting an order to clean up related items.
+// Does not return an error if the order has no items.
 func (r *OrderItemRepository) DeleteByOrderID(ctx context.Context, orderID uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE order_id = $1`, orderID)
 	if err != nil {
@@ -223,7 +236,9 @@ func (r *OrderItemRepository) DeleteByOrderID(ctx context.Context, orderID uuid.
 	return nil
 }
 
-// Count returns the number of items for an order.
+// Count returns the number of items belonging to a specific order.
+// Returns 0 if the order has no items (not an error condition).
+// Useful for pagination or validation before order submission.
 func (r *OrderItemRepository) Count(ctx context.Context, orderID uuid.UUID) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM order_items WHERE order_id = $1`, orderID).Scan(&count)

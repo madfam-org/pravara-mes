@@ -35,7 +35,10 @@ type OrderFilter struct {
 	Offset     int
 }
 
-// List retrieves orders with optional filtering.
+// List retrieves orders matching the given filter with pagination.
+// Results are ordered by created_at descending. Returns the list of orders,
+// total count (for pagination), and any error encountered.
+// An empty filter returns all orders. Use filter.Limit and filter.Offset for pagination.
 func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types.Order, int, error) {
 	// Build query with filters
 	query := `
@@ -144,7 +147,9 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 	return orders, total, nil
 }
 
-// GetByID retrieves an order by ID.
+// GetByID retrieves an order by its unique identifier.
+// Returns nil, nil if the order is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Order, error) {
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
@@ -192,7 +197,10 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 	return &order, nil
 }
 
-// Create inserts a new order.
+// Create inserts a new order into the database.
+// If order.ID is nil, a new UUID is generated automatically.
+// The order.CreatedAt and order.UpdatedAt fields are populated from the database
+// after successful insertion.
 func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error {
 	query := `
 		INSERT INTO orders (
@@ -229,7 +237,10 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 	return nil
 }
 
-// Update modifies an existing order.
+// Update modifies an existing order's mutable fields.
+// The order.ID must exist in the database. The order.UpdatedAt field
+// is refreshed from the database after successful update.
+// Returns an error if the order is not found.
 func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error {
 	query := `
 		UPDATE orders SET
@@ -268,7 +279,9 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 	return nil
 }
 
-// UpdateStatus updates only the order status.
+// UpdateStatus updates only the status field of an order.
+// This is more efficient than a full Update when only the status changes.
+// Returns an error if the order is not found.
 func (r *OrderRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status types.OrderStatus) error {
 	query := `UPDATE orders SET status = $2 WHERE id = $1`
 
@@ -285,12 +298,16 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	return nil
 }
 
-// Delete removes an order (soft delete by setting status to cancelled).
+// Delete performs a soft delete by setting the order status to cancelled.
+// The order record is preserved for audit purposes.
+// Returns an error if the order is not found.
 func (r *OrderRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.UpdateStatus(ctx, id, types.OrderStatusCancelled)
 }
 
 // GetByExternalID retrieves an order by its external (Cotiza) ID.
+// This is used for integration with external order management systems.
+// Returns nil, nil if the order is not found (not an error condition).
 func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string) (*types.Order, error) {
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
