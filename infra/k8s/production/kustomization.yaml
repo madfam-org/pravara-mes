@@ -74,7 +74,7 @@ images:
   newTag: 16-alpine
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
-  newTag: main-533b0dc
+  newTag: main-bc92305
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
   newTag: main-533b0dc
