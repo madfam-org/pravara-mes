@@ -43,6 +43,13 @@ type ComponentHealth struct {
 }
 
 // Health performs a comprehensive health check.
+// @Summary Comprehensive health check
+// @Description Returns detailed health status including database connection and runtime metrics
+// @Tags health
+// @Produce json
+// @Success 200 {object} HealthResponse "System healthy"
+// @Success 503 {object} HealthResponse "System degraded"
+// @Router /health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
 	response := HealthResponse{
 		Status:     "healthy",
@@ -95,6 +102,12 @@ func (h *HealthHandler) Health(c *gin.Context) {
 
 // Liveness returns a simple liveness probe response.
 // This is used by Kubernetes to determine if the container should be restarted.
+// @Summary Kubernetes liveness probe
+// @Description Returns alive status for container health check
+// @Tags health
+// @Produce json
+// @Success 200 {object} map[string]string "alive"
+// @Router /health/live [get]
 func (h *HealthHandler) Liveness(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "alive",
@@ -103,6 +116,13 @@ func (h *HealthHandler) Liveness(c *gin.Context) {
 
 // Readiness returns a readiness probe response.
 // This is used by Kubernetes to determine if the container can receive traffic.
+// @Summary Kubernetes readiness probe
+// @Description Returns ready status when database connection is healthy
+// @Tags health
+// @Produce json
+// @Success 200 {object} map[string]string "ready"
+// @Failure 503 {object} map[string]string "not ready"
+// @Router /health/ready [get]
 func (h *HealthHandler) Readiness(c *gin.Context) {
 	// Check if we can connect to the database
 	if h.db == nil {

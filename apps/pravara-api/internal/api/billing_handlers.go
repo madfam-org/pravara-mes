@@ -26,7 +26,18 @@ func NewBillingHandler(recorder billing.UsageRecorder, log *logrus.Logger) *Bill
 }
 
 // GetUsage returns the current tenant's usage summary for a specified period.
-// GET /v1/billing/usage?from=2024-01-01&to=2024-01-31
+// @Summary Get tenant usage summary
+// @Description Returns aggregated usage metrics for the current tenant within a date range
+// @Tags billing
+// @Produce json
+// @Param from query string false "Start date (YYYY-MM-DD), defaults to current month start"
+// @Param to query string false "End date (YYYY-MM-DD), defaults to today"
+// @Success 200 {object} map[string]interface{} "Usage summary"
+// @Failure 400 {object} map[string]string "Invalid date format or range"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /billing/usage [get]
 func (h *BillingHandler) GetUsage(c *gin.Context) {
 	tenantID, ok := middleware.GetTenantID(c)
 	if !ok {
@@ -105,7 +116,18 @@ func (h *BillingHandler) GetUsage(c *gin.Context) {
 }
 
 // GetDailyUsage returns daily breakdown of usage for the current tenant.
-// GET /v1/billing/usage/daily?from=2024-01-01&to=2024-01-31
+// @Summary Get daily usage breakdown
+// @Description Returns day-by-day usage metrics for the current tenant
+// @Tags billing
+// @Produce json
+// @Param from query string false "Start date (YYYY-MM-DD), defaults to current month start"
+// @Param to query string false "End date (YYYY-MM-DD), defaults to today"
+// @Success 200 {object} map[string]interface{} "Daily usage breakdown"
+// @Failure 400 {object} map[string]string "Invalid date format or range"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /billing/usage/daily [get]
 func (h *BillingHandler) GetDailyUsage(c *gin.Context) {
 	tenantID, ok := middleware.GetTenantID(c)
 	if !ok {
@@ -189,7 +211,19 @@ func (h *BillingHandler) GetDailyUsage(c *gin.Context) {
 }
 
 // GetTenantUsageAdmin returns usage summary for a specific tenant (admin only).
-// GET /v1/admin/billing/tenants/:id/usage?from=2024-01-01&to=2024-01-31
+// @Summary Get tenant usage (admin)
+// @Description Returns usage summary for a specific tenant, admin access required
+// @Tags billing
+// @Produce json
+// @Param id path string true "Tenant ID (UUID)"
+// @Param from query string false "Start date (YYYY-MM-DD), defaults to current month start"
+// @Param to query string false "End date (YYYY-MM-DD), defaults to today"
+// @Success 200 {object} map[string]interface{} "Usage summary"
+// @Failure 400 {object} map[string]string "Invalid date format or range"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /admin/billing/tenants/{id}/usage [get]
 func (h *BillingHandler) GetTenantUsageAdmin(c *gin.Context) {
 	targetTenantID := c.Param("id")
 	if targetTenantID == "" {

@@ -1,0 +1,4966 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Cloud-native Manufacturing Execution System API for phygital fabrication.\nProvides endpoints for order management, task/Kanban board operations,\nmachine control, telemetry, quality management, and real-time updates.",
+        "title": "PravaraMES API",
+        "contact": {
+            "name": "PravaraMES Team",
+            "url": "https://github.com/madfam-org/pravara-mes",
+            "email": "support@pravara.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0.0"
+    },
+    "host": "localhost:4500",
+    "basePath": "/v1",
+    "paths": {
+        "/admin/billing/tenants/{id}/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns usage summary for a specific tenant, admin access required",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "billing"
+                ],
+                "summary": "Get tenant usage (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD), defaults to current month start",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD), defaults to today",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Usage summary",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date format or range",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/billing/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns aggregated usage metrics for the current tenant within a date range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "billing"
+                ],
+                "summary": "Get tenant usage summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD), defaults to current month start",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD), defaults to today",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Usage summary",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date format or range",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/billing/usage/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns day-by-day usage metrics for the current tenant",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "billing"
+                ],
+                "summary": "Get daily usage breakdown",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD), defaults to current month start",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD), defaults to today",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Daily usage breakdown",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date format or range",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns detailed health status including database connection and runtime metrics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Comprehensive health check",
+                "responses": {
+                    "200": {
+                        "description": "System healthy",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.HealthResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "System degraded",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health/live": {
+            "get": {
+                "description": "Returns alive status for container health check",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Kubernetes liveness probe",
+                "responses": {
+                    "200": {
+                        "description": "alive",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health/ready": {
+            "get": {
+                "description": "Returns ready status when database connection is healthy",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Kubernetes readiness probe",
+                "responses": {
+                    "200": {
+                        "description": "ready",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "not ready",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/machines": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of machines with optional filtering by status and type",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "List machines",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "online",
+                            "offline",
+                            "busy",
+                            "maintenance",
+                            "error"
+                        ],
+                        "type": "string",
+                        "description": "Filter by machine status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine type",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated machine list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new machine in offline status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Create a new machine",
+                "parameters": [
+                    {
+                        "description": "Machine creation data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateMachineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created machine",
+                        "schema": {
+                            "$ref": "#/definitions/types.Machine"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate machine code",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/machines/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single machine with all details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Get machine by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Machine details",
+                        "schema": {
+                            "$ref": "#/definitions/types.Machine"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates machine configuration and status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Update a machine",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Machine update data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateMachineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated machine",
+                        "schema": {
+                            "$ref": "#/definitions/types.Machine"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate machine code",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes a machine",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Delete a machine",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Machine deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/machines/{id}/command": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Dispatches a control command to a machine via MQTT",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Send command to machine",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Command to send",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SendCommandRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Command dispatched",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid command or machine not configured",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Machine in error state",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Dispatch failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/machines/{id}/heartbeat": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the last heartbeat timestamp for a machine",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Record machine heartbeat",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Heartbeat recorded",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/machines/{id}/telemetry": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns telemetry data for a specific machine with optional time range and metric filtering",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "machines"
+                ],
+                "summary": "Get machine telemetry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Maximum records to return",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by metric type",
+                        "name": "metric_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339 format)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339 format)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Telemetry data",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Machine not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of orders with optional filtering by status, priority, and date range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "List orders",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "received",
+                            "processing",
+                            "quality_check",
+                            "ready",
+                            "shipped",
+                            "delivered",
+                            "cancelled"
+                        ],
+                        "type": "string",
+                        "description": "Filter by order status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by priority level",
+                        "name": "priority",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (RFC3339 format)",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (RFC3339 format)",
+                        "name": "to_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated order list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new order in received status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Create a new order",
+                "parameters": [
+                    {
+                        "description": "Order creation data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created order",
+                        "schema": {
+                            "$ref": "#/definitions/types.Order"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single order with all details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Get order by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Order details",
+                        "schema": {
+                            "$ref": "#/definitions/types.Order"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates order fields including status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Update an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Order update data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated order",
+                        "schema": {
+                            "$ref": "#/definitions/types.Order"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancels an order (soft delete)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Cancel an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Order cancelled successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all items for a specific order",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "List order items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Order items list",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a new line item to an existing order",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Add item to order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Order item data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateOrderItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created order item",
+                        "schema": {
+                            "$ref": "#/definitions/types.OrderItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/batch-lots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated list of batch lots with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "List batch lots",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order ID (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by product code",
+                        "name": "product_code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (RFC3339)",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (RFC3339)",
+                        "name": "to_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of batch lots",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new batch lot for material traceability",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Create batch lot",
+                "parameters": [
+                    {
+                        "description": "Batch lot data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateBatchLotRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created batch lot",
+                        "schema": {
+                            "$ref": "#/definitions/types.BatchLot"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/batch-lots/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single batch lot by its unique identifier",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Get batch lot by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch Lot ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Batch lot details",
+                        "schema": {
+                            "$ref": "#/definitions/types.BatchLot"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Batch lot not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Modifies an existing batch lot record",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Update batch lot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch Lot ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated batch lot data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateBatchLotRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated batch lot",
+                        "schema": {
+                            "$ref": "#/definitions/types.BatchLot"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Batch lot not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a batch lot record from the system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Delete batch lot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch Lot ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Batch lot not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/certificates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated list of quality certificates with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "List quality certificates",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by certificate type",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order ID (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task ID (UUID)",
+                        "name": "task_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by batch lot ID (UUID)",
+                        "name": "batch_lot_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (RFC3339)",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (RFC3339)",
+                        "name": "to_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of certificates",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new quality certificate for tracking compliance and quality assurance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Create quality certificate",
+                "parameters": [
+                    {
+                        "description": "Certificate data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateCertificateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created certificate",
+                        "schema": {
+                            "$ref": "#/definitions/types.QualityCertificate"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/certificates/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single quality certificate by its unique identifier",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Get quality certificate by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Certificate ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Certificate details",
+                        "schema": {
+                            "$ref": "#/definitions/types.QualityCertificate"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Certificate not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Modifies an existing quality certificate, tracks approval for billing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Update quality certificate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Certificate ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated certificate data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateCertificateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated certificate",
+                        "schema": {
+                            "$ref": "#/definitions/types.QualityCertificate"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Certificate not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a quality certificate from the system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Delete quality certificate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Certificate ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Certificate not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/inspections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated list of inspections with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "List inspections",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by inspection type",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by result (pass, fail, pending)",
+                        "name": "result",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order ID (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task ID (UUID)",
+                        "name": "task_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (RFC3339)",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (RFC3339)",
+                        "name": "to_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of inspections",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new inspection record for quality assurance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Create inspection",
+                "parameters": [
+                    {
+                        "description": "Inspection data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateInspectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created inspection",
+                        "schema": {
+                            "$ref": "#/definitions/types.Inspection"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/inspections/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single inspection by its unique identifier",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Get inspection by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inspection ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Inspection details",
+                        "schema": {
+                            "$ref": "#/definitions/types.Inspection"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inspection not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Modifies an existing inspection record",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Update inspection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inspection ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated inspection data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateInspectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated inspection",
+                        "schema": {
+                            "$ref": "#/definitions/types.Inspection"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inspection not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes an inspection record from the system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Delete inspection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inspection ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inspection not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/quality/inspections/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks an inspection as complete with pass/fail result",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quality"
+                ],
+                "summary": "Complete inspection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inspection ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Completion data with result",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CompleteInspectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Completed inspection",
+                        "schema": {
+                            "$ref": "#/definitions/types.Inspection"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inspection not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of tasks with optional filtering by status, machine, order, or user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "List tasks",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "backlog",
+                            "queued",
+                            "in_progress",
+                            "quality_check",
+                            "completed",
+                            "blocked"
+                        ],
+                        "type": "string",
+                        "description": "Filter by task status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order ID (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by assigned user ID (UUID)",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated task list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new task in backlog status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Create a new task",
+                "parameters": [
+                    {
+                        "description": "Task creation data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created task",
+                        "schema": {
+                            "$ref": "#/definitions/types.Task"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/board": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all tasks grouped by status columns for the Kanban board UI",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Get Kanban board",
+                "responses": {
+                    "200": {
+                        "description": "Kanban board columns with tasks",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single task with all details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Get task by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task details",
+                        "schema": {
+                            "$ref": "#/definitions/types.Task"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates task fields including status transitions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Update a task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Task update data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated task",
+                        "schema": {
+                            "$ref": "#/definitions/types.Task"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes a task",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Delete a task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/{id}/assign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assigns task to a user and/or machine for processing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Assign task to user/machine",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Assignment data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.AssignTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task assigned successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/{id}/move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes task status and position, triggers automation for machine jobs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Move task on Kanban board",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Move request with target status and position",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.MoveTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task moved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid status or position",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/telemetry": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns telemetry data with filtering by machine, metric type, and time range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "telemetry"
+                ],
+                "summary": "List telemetry data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by metric type (temperature, pressure, etc.)",
+                        "name": "metric_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from time (RFC3339)",
+                        "name": "from_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to time (RFC3339)",
+                        "name": "to_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of records to return (default 100, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Telemetry data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.TelemetryQueryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameter format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/telemetry/aggregated": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns aggregated telemetry data (min, max, avg) for a machine and metric",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "telemetry"
+                ],
+                "summary": "Get aggregated telemetry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric type (temperature, pressure, etc.)",
+                        "name": "metric_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "From time (RFC3339), defaults to 24h ago",
+                        "name": "from_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "To time (RFC3339), defaults to now",
+                        "name": "to_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Aggregation interval (hour, day), default hour",
+                        "name": "interval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Aggregated telemetry data",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/telemetry/batch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Inserts multiple telemetry records in a single request (max 1000)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "telemetry"
+                ],
+                "summary": "Batch insert telemetry",
+                "parameters": [
+                    {
+                        "description": "Batch of telemetry records",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.BatchTelemetryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Insertion confirmation with count",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or empty batch",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/telemetry/latest": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the most recent telemetry record for a machine and metric type",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "telemetry"
+                ],
+                "summary": "Get latest telemetry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric type (temperature, pressure, etc.)",
+                        "name": "metric_type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Latest telemetry record",
+                        "schema": {
+                            "$ref": "#/definitions/types.Telemetry"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No telemetry found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/realtime/auth": {
+            "post": {
+                "description": "Called by Centrifugo to validate connection tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "Authenticate real-time connection (internal)",
+                "parameters": [
+                    {
+                        "description": "Connect request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ConnectAuthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ConnectAuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/realtime/subscribe": {
+            "post": {
+                "description": "Called by Centrifugo to validate channel subscription requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "Authorize channel subscription (internal)",
+                "parameters": [
+                    {
+                        "description": "Subscribe request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SubscribeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SubscribeResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/realtime/token": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a JWT token for connecting to the real-time WebSocket gateway",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "Get real-time connection token",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.TokenResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/cotiza": {
+            "post": {
+                "description": "Processes order events from Cotiza Studio (created, updated, cancelled)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Receive Cotiza webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "HMAC-SHA256 signature for payload verification",
+                        "name": "X-Cotiza-Signature",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Webhook payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CotizaWebhookPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid signature",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Processing error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "internal_api.AssignTaskRequest": {
+            "type": "object",
+            "properties": {
+                "machine_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.BatchTelemetryRequest": {
+            "type": "object",
+            "required": [
+                "records"
+            ],
+            "properties": {
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.TelemetryRecord"
+                    }
+                }
+            }
+        },
+        "internal_api.CompleteInspectionRequest": {
+            "type": "object",
+            "required": [
+                "result"
+            ],
+            "properties": {
+                "certificate_id": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/types.InspectionResult"
+                }
+            }
+        },
+        "internal_api.ComponentHealth": {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ConnectAuthRequest": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "encoding": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "transport": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ConnectAuthResponse": {
+            "type": "object",
+            "properties": {
+                "result": {
+                    "$ref": "#/definitions/internal_api.ConnectAuthResult"
+                }
+            }
+        },
+        "internal_api.ConnectAuthResult": {
+            "type": "object",
+            "properties": {
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expire_at": {
+                    "type": "integer"
+                },
+                "info": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "user": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CotizaItemData": {
+            "type": "object",
+            "required": [
+                "product_name",
+                "quantity"
+            ],
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_sku": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.CotizaOrderData": {
+            "type": "object",
+            "required": [
+                "customer_name",
+                "id"
+            ],
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.CotizaItemData"
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.CotizaWebhookPayload": {
+            "type": "object",
+            "required": [
+                "event",
+                "order"
+            ],
+            "properties": {
+                "event": {
+                    "type": "string"
+                },
+                "order": {
+                    "$ref": "#/definitions/internal_api.CotizaOrderData"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateBatchLotRequest": {
+            "type": "object",
+            "required": [
+                "lot_number",
+                "product_name",
+                "quantity",
+                "unit"
+            ],
+            "properties": {
+                "expiry_date": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "manufactured_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "purchase_order": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "received_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_lot_number": {
+                    "type": "string"
+                },
+                "supplier_name": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateCertificateRequest": {
+            "type": "object",
+            "required": [
+                "certificate_number",
+                "title",
+                "type"
+            ],
+            "properties": {
+                "batch_lot_id": {
+                    "type": "string"
+                },
+                "certificate_number": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "document_url": {
+                    "type": "string"
+                },
+                "expiry_date": {
+                    "type": "string"
+                },
+                "issued_by": {
+                    "type": "string"
+                },
+                "issued_date": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.QualityCertStatus"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.QualityCertType"
+                }
+            }
+        },
+        "internal_api.CreateInspectionRequest": {
+            "type": "object",
+            "required": [
+                "inspection_number",
+                "type"
+            ],
+            "properties": {
+                "checklist": {
+                    "type": "array",
+                    "items": {}
+                },
+                "inspection_number": {
+                    "type": "string"
+                },
+                "inspector_id": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateMachineRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "name",
+                "type"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "mqtt_topic": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateOrderItemRequest": {
+            "type": "object",
+            "required": [
+                "product_name",
+                "quantity"
+            ],
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_sku": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.CreateOrderRequest": {
+            "type": "object",
+            "required": [
+                "customer_name"
+            ],
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.CreateTaskRequest": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "assigned_user_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "estimated_minutes": {
+                    "type": "integer"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "components": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/internal_api.ComponentHealth"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "uptime": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.MoveTaskRequest": {
+            "type": "object",
+            "required": [
+                "position",
+                "status"
+            ],
+            "properties": {
+                "position": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.SendCommandRequest": {
+            "type": "object",
+            "required": [
+                "command"
+            ],
+            "properties": {
+                "command": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.SubscribeOverride": {
+            "type": "object",
+            "properties": {
+                "join_leave": {
+                    "type": "boolean"
+                },
+                "position": {
+                    "type": "boolean"
+                },
+                "presence": {
+                    "type": "boolean"
+                },
+                "recover": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_api.SubscribeRequest": {
+            "type": "object",
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "client": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "encoding": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "transport": {
+                    "type": "string"
+                },
+                "user": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.SubscribeResponse": {
+            "type": "object",
+            "properties": {
+                "result": {
+                    "$ref": "#/definitions/internal_api.SubscribeResult"
+                }
+            }
+        },
+        "internal_api.SubscribeResult": {
+            "type": "object",
+            "properties": {
+                "expire_at": {
+                    "type": "integer"
+                },
+                "info": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "override": {
+                    "$ref": "#/definitions/internal_api.SubscribeOverride"
+                }
+            }
+        },
+        "internal_api.TelemetryQueryResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.Telemetry"
+                    }
+                },
+                "from_time": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metric_type": {
+                    "type": "string"
+                },
+                "to_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.TelemetryRecord": {
+            "type": "object",
+            "required": [
+                "machine_id",
+                "metric_type",
+                "value"
+            ],
+            "properties": {
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "metric_type": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "integer"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateBatchLotRequest": {
+            "type": "object",
+            "properties": {
+                "expiry_date": {
+                    "type": "string"
+                },
+                "manufactured_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "purchase_order": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "received_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_lot_number": {
+                    "type": "string"
+                },
+                "supplier_name": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateCertificateRequest": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "approved_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "document_url": {
+                    "type": "string"
+                },
+                "expiry_date": {
+                    "type": "string"
+                },
+                "issued_by": {
+                    "type": "string"
+                },
+                "issued_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "status": {
+                    "$ref": "#/definitions/types.QualityCertStatus"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateInspectionRequest": {
+            "type": "object",
+            "properties": {
+                "certificate_id": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {}
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "inspector_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/types.InspectionResult"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateMachineRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "mqtt_topic": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateOrderRequest": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.UpdateTaskRequest": {
+            "type": "object",
+            "properties": {
+                "actual_minutes": {
+                    "type": "integer"
+                },
+                "assigned_user_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "estimated_minutes": {
+                    "type": "integer"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.BatchLot": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expiry_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "manufactured_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "purchase_order": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "received_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_lot_number": {
+                    "type": "string"
+                },
+                "supplier_name": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.Inspection": {
+            "type": "object",
+            "properties": {
+                "certificate_id": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {}
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inspection_number": {
+                    "type": "string"
+                },
+                "inspector_id": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/types.InspectionResult"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.InspectionResult": {
+            "type": "string",
+            "enum": [
+                "pass",
+                "fail",
+                "conditional",
+                "pending"
+            ],
+            "x-enum-varnames": [
+                "InspectionResultPass",
+                "InspectionResultFail",
+                "InspectionResultConditional",
+                "InspectionResultPending"
+            ]
+        },
+        "types.Machine": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_heartbeat": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "mqtt_topic": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "status": {
+                    "$ref": "#/definitions/types.MachineStatus"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.MachineStatus": {
+            "type": "string",
+            "enum": [
+                "offline",
+                "online",
+                "idle",
+                "running",
+                "setup",
+                "maintenance",
+                "error"
+            ],
+            "x-enum-varnames": [
+                "MachineStatusOffline",
+                "MachineStatusOnline",
+                "MachineStatusIdle",
+                "MachineStatusRunning",
+                "MachineStatusSetup",
+                "MachineStatusMaintenance",
+                "MachineStatusError"
+            ]
+        },
+        "types.Order": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.OrderStatus"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.OrderItem": {
+            "type": "object",
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_sku": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "specifications": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "types.OrderStatus": {
+            "type": "string",
+            "enum": [
+                "received",
+                "confirmed",
+                "in_production",
+                "quality_check",
+                "ready",
+                "shipped",
+                "delivered",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "OrderStatusReceived",
+                "OrderStatusConfirmed",
+                "OrderStatusInProduction",
+                "OrderStatusQualityCheck",
+                "OrderStatusReady",
+                "OrderStatusShipped",
+                "OrderStatusDelivered",
+                "OrderStatusCancelled"
+            ]
+        },
+        "types.QualityCertStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "pending_review",
+                "approved",
+                "rejected",
+                "expired"
+            ],
+            "x-enum-varnames": [
+                "QualityCertStatusDraft",
+                "QualityCertStatusPendingReview",
+                "QualityCertStatusApproved",
+                "QualityCertStatusRejected",
+                "QualityCertStatusExpired"
+            ]
+        },
+        "types.QualityCertType": {
+            "type": "string",
+            "enum": [
+                "coc",
+                "coa",
+                "inspection",
+                "test_report",
+                "calibration"
+            ],
+            "x-enum-varnames": [
+                "QualityCertTypeCOC",
+                "QualityCertTypeCOA",
+                "QualityCertTypeInspection",
+                "QualityCertTypeTestReport",
+                "QualityCertTypeCalibration"
+            ]
+        },
+        "types.QualityCertificate": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "approved_by": {
+                    "type": "string"
+                },
+                "batch_lot_id": {
+                    "type": "string"
+                },
+                "certificate_number": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "document_url": {
+                    "type": "string"
+                },
+                "expiry_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issued_by": {
+                    "type": "string"
+                },
+                "issued_date": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.QualityCertStatus"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.QualityCertType"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.Task": {
+            "type": "object",
+            "properties": {
+                "actual_minutes": {
+                    "type": "integer"
+                },
+                "assigned_user_id": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "estimated_minutes": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kanban_position": {
+                    "type": "integer"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.TaskStatus"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.TaskStatus": {
+            "type": "string",
+            "enum": [
+                "backlog",
+                "queued",
+                "in_progress",
+                "quality_check",
+                "completed",
+                "blocked"
+            ],
+            "x-enum-varnames": [
+                "TaskStatusBacklog",
+                "TaskStatusQueued",
+                "TaskStatusInProgress",
+                "TaskStatusQualityCheck",
+                "TaskStatusCompleted",
+                "TaskStatusBlocked"
+            ]
+        },
+        "types.Telemetry": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "metric_type": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "JWT Bearer token from OIDC provider (format: \"Bearer \u003ctoken\u003e\")",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

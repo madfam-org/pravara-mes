@@ -54,6 +54,20 @@ type TelemetryRecord struct {
 }
 
 // List returns telemetry data with filtering.
+// @Summary List telemetry data
+// @Description Returns telemetry data with filtering by machine, metric type, and time range
+// @Tags telemetry
+// @Produce json
+// @Param machine_id query string false "Filter by machine ID (UUID)"
+// @Param metric_type query string false "Filter by metric type (temperature, pressure, etc.)"
+// @Param from_time query string false "Filter from time (RFC3339)"
+// @Param to_time query string false "Filter to time (RFC3339)"
+// @Param limit query int false "Number of records to return (default 100, max 1000)"
+// @Success 200 {object} TelemetryQueryResponse "Telemetry data"
+// @Failure 400 {object} map[string]string "Invalid parameter format"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /telemetry [get]
 func (h *TelemetryHandler) List(c *gin.Context) {
 	filter := repositories.TelemetryFilter{
 		Limit: 100, // default
@@ -142,6 +156,20 @@ func (h *TelemetryHandler) List(c *gin.Context) {
 }
 
 // GetAggregated returns aggregated telemetry data.
+// @Summary Get aggregated telemetry
+// @Description Returns aggregated telemetry data (min, max, avg) for a machine and metric
+// @Tags telemetry
+// @Produce json
+// @Param machine_id query string true "Machine ID (UUID)"
+// @Param metric_type query string true "Metric type (temperature, pressure, etc.)"
+// @Param from_time query string false "From time (RFC3339), defaults to 24h ago"
+// @Param to_time query string false "To time (RFC3339), defaults to now"
+// @Param interval query string false "Aggregation interval (hour, day), default hour"
+// @Success 200 {object} map[string]interface{} "Aggregated telemetry data"
+// @Failure 400 {object} map[string]string "Missing required parameters"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /telemetry/aggregated [get]
 func (h *TelemetryHandler) GetAggregated(c *gin.Context) {
 	machineIDStr := c.Query("machine_id")
 	if machineIDStr == "" {
@@ -208,6 +236,18 @@ func (h *TelemetryHandler) GetAggregated(c *gin.Context) {
 }
 
 // BatchInsert handles bulk telemetry insertion.
+// @Summary Batch insert telemetry
+// @Description Inserts multiple telemetry records in a single request (max 1000)
+// @Tags telemetry
+// @Accept json
+// @Produce json
+// @Param body body BatchTelemetryRequest true "Batch of telemetry records"
+// @Success 201 {object} map[string]interface{} "Insertion confirmation with count"
+// @Failure 400 {object} map[string]string "Validation error or empty batch"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /telemetry/batch [post]
 func (h *TelemetryHandler) BatchInsert(c *gin.Context) {
 	var req BatchTelemetryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -297,6 +337,18 @@ func (h *TelemetryHandler) BatchInsert(c *gin.Context) {
 }
 
 // GetLatest returns the most recent telemetry for a machine.
+// @Summary Get latest telemetry
+// @Description Returns the most recent telemetry record for a machine and metric type
+// @Tags telemetry
+// @Produce json
+// @Param machine_id query string true "Machine ID (UUID)"
+// @Param metric_type query string true "Metric type (temperature, pressure, etc.)"
+// @Success 200 {object} types.Telemetry "Latest telemetry record"
+// @Failure 400 {object} map[string]string "Missing required parameters"
+// @Failure 404 {object} map[string]string "No telemetry found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /telemetry/latest [get]
 func (h *TelemetryHandler) GetLatest(c *gin.Context) {
 	machineIDStr := c.Query("machine_id")
 	if machineIDStr == "" {

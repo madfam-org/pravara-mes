@@ -79,6 +79,24 @@ type UpdateCertificateRequest struct {
 }
 
 // ListCertificates returns a paginated list of quality certificates.
+// @Summary List quality certificates
+// @Description Returns paginated list of quality certificates with optional filters
+// @Tags quality
+// @Produce json
+// @Param limit query int false "Number of items per page (default 20)"
+// @Param offset query int false "Pagination offset (default 0)"
+// @Param type query string false "Filter by certificate type"
+// @Param status query string false "Filter by status"
+// @Param order_id query string false "Filter by order ID (UUID)"
+// @Param task_id query string false "Filter by task ID (UUID)"
+// @Param machine_id query string false "Filter by machine ID (UUID)"
+// @Param batch_lot_id query string false "Filter by batch lot ID (UUID)"
+// @Param from_date query string false "Filter from date (RFC3339)"
+// @Param to_date query string false "Filter to date (RFC3339)"
+// @Success 200 {object} ListResponse "List of certificates"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/certificates [get]
 func (h *QualityHandler) ListCertificates(c *gin.Context) {
 	filter := repositories.QualityCertificateFilter{
 		Limit:  20,
@@ -157,6 +175,17 @@ func (h *QualityHandler) ListCertificates(c *gin.Context) {
 }
 
 // GetCertificateByID returns a single quality certificate by ID.
+// @Summary Get quality certificate by ID
+// @Description Returns a single quality certificate by its unique identifier
+// @Tags quality
+// @Produce json
+// @Param id path string true "Certificate ID (UUID)"
+// @Success 200 {object} types.QualityCertificate "Certificate details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Certificate not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/certificates/{id} [get]
 func (h *QualityHandler) GetCertificateByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -189,6 +218,18 @@ func (h *QualityHandler) GetCertificateByID(c *gin.Context) {
 }
 
 // CreateCertificate creates a new quality certificate.
+// @Summary Create quality certificate
+// @Description Creates a new quality certificate for tracking compliance and quality assurance
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param body body CreateCertificateRequest true "Certificate data"
+// @Success 201 {object} types.QualityCertificate "Created certificate"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/certificates [post]
 func (h *QualityHandler) CreateCertificate(c *gin.Context) {
 	var req CreateCertificateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -246,6 +287,19 @@ func (h *QualityHandler) CreateCertificate(c *gin.Context) {
 }
 
 // UpdateCertificate modifies an existing quality certificate.
+// @Summary Update quality certificate
+// @Description Modifies an existing quality certificate, tracks approval for billing
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param id path string true "Certificate ID (UUID)"
+// @Param body body UpdateCertificateRequest true "Updated certificate data"
+// @Success 200 {object} types.QualityCertificate "Updated certificate"
+// @Failure 400 {object} map[string]string "Invalid ID or validation error"
+// @Failure 404 {object} map[string]string "Certificate not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/certificates/{id} [put]
 func (h *QualityHandler) UpdateCertificate(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -354,6 +408,17 @@ func (h *QualityHandler) UpdateCertificate(c *gin.Context) {
 }
 
 // DeleteCertificate removes a quality certificate.
+// @Summary Delete quality certificate
+// @Description Removes a quality certificate from the system
+// @Tags quality
+// @Produce json
+// @Param id path string true "Certificate ID (UUID)"
+// @Success 200 {object} map[string]string "Deletion confirmation"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Certificate not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/certificates/{id} [delete]
 func (h *QualityHandler) DeleteCertificate(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -423,6 +488,23 @@ type CompleteInspectionRequest struct {
 }
 
 // ListInspections returns a paginated list of inspections.
+// @Summary List inspections
+// @Description Returns paginated list of inspections with optional filters
+// @Tags quality
+// @Produce json
+// @Param limit query int false "Number of items per page (default 20)"
+// @Param offset query int false "Pagination offset (default 0)"
+// @Param type query string false "Filter by inspection type"
+// @Param result query string false "Filter by result (pass, fail, pending)"
+// @Param order_id query string false "Filter by order ID (UUID)"
+// @Param task_id query string false "Filter by task ID (UUID)"
+// @Param machine_id query string false "Filter by machine ID (UUID)"
+// @Param from_date query string false "Filter from date (RFC3339)"
+// @Param to_date query string false "Filter to date (RFC3339)"
+// @Success 200 {object} ListResponse "List of inspections"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections [get]
 func (h *QualityHandler) ListInspections(c *gin.Context) {
 	filter := repositories.InspectionFilter{
 		Limit:  20,
@@ -494,6 +576,17 @@ func (h *QualityHandler) ListInspections(c *gin.Context) {
 }
 
 // GetInspectionByID returns a single inspection by ID.
+// @Summary Get inspection by ID
+// @Description Returns a single inspection by its unique identifier
+// @Tags quality
+// @Produce json
+// @Param id path string true "Inspection ID (UUID)"
+// @Success 200 {object} types.Inspection "Inspection details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections/{id} [get]
 func (h *QualityHandler) GetInspectionByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -526,6 +619,18 @@ func (h *QualityHandler) GetInspectionByID(c *gin.Context) {
 }
 
 // CreateInspection creates a new inspection.
+// @Summary Create inspection
+// @Description Creates a new inspection record for quality assurance
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param body body CreateInspectionRequest true "Inspection data"
+// @Success 201 {object} types.Inspection "Created inspection"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections [post]
 func (h *QualityHandler) CreateInspection(c *gin.Context) {
 	var req CreateInspectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -576,6 +681,19 @@ func (h *QualityHandler) CreateInspection(c *gin.Context) {
 }
 
 // UpdateInspection modifies an existing inspection.
+// @Summary Update inspection
+// @Description Modifies an existing inspection record
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param id path string true "Inspection ID (UUID)"
+// @Param body body UpdateInspectionRequest true "Updated inspection data"
+// @Success 200 {object} types.Inspection "Updated inspection"
+// @Failure 400 {object} map[string]string "Invalid ID or validation error"
+// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections/{id} [put]
 func (h *QualityHandler) UpdateInspection(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -653,6 +771,17 @@ func (h *QualityHandler) UpdateInspection(c *gin.Context) {
 }
 
 // DeleteInspection removes an inspection.
+// @Summary Delete inspection
+// @Description Removes an inspection record from the system
+// @Tags quality
+// @Produce json
+// @Param id path string true "Inspection ID (UUID)"
+// @Success 200 {object} map[string]string "Deletion confirmation"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections/{id} [delete]
 func (h *QualityHandler) DeleteInspection(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -686,6 +815,19 @@ func (h *QualityHandler) DeleteInspection(c *gin.Context) {
 }
 
 // CompleteInspection marks an inspection as complete with a result.
+// @Summary Complete inspection
+// @Description Marks an inspection as complete with pass/fail result
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param id path string true "Inspection ID (UUID)"
+// @Param body body CompleteInspectionRequest true "Completion data with result"
+// @Success 200 {object} types.Inspection "Completed inspection"
+// @Failure 400 {object} map[string]string "Invalid ID or validation error"
+// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/inspections/{id}/complete [post]
 func (h *QualityHandler) CompleteInspection(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -790,6 +932,21 @@ type UpdateBatchLotRequest struct {
 }
 
 // ListBatchLots returns a paginated list of batch lots.
+// @Summary List batch lots
+// @Description Returns paginated list of batch lots with optional filters
+// @Tags quality
+// @Produce json
+// @Param limit query int false "Number of items per page (default 20)"
+// @Param offset query int false "Pagination offset (default 0)"
+// @Param status query string false "Filter by status"
+// @Param order_id query string false "Filter by order ID (UUID)"
+// @Param product_code query string false "Filter by product code"
+// @Param from_date query string false "Filter from date (RFC3339)"
+// @Param to_date query string false "Filter to date (RFC3339)"
+// @Success 200 {object} ListResponse "List of batch lots"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batch-lots [get]
 func (h *QualityHandler) ListBatchLots(c *gin.Context) {
 	filter := repositories.BatchLotFilter{
 		Limit:  20,
@@ -848,6 +1005,17 @@ func (h *QualityHandler) ListBatchLots(c *gin.Context) {
 }
 
 // GetBatchLotByID returns a single batch lot by ID.
+// @Summary Get batch lot by ID
+// @Description Returns a single batch lot by its unique identifier
+// @Tags quality
+// @Produce json
+// @Param id path string true "Batch Lot ID (UUID)"
+// @Success 200 {object} types.BatchLot "Batch lot details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Batch lot not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batch-lots/{id} [get]
 func (h *QualityHandler) GetBatchLotByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -880,6 +1048,18 @@ func (h *QualityHandler) GetBatchLotByID(c *gin.Context) {
 }
 
 // CreateBatchLot creates a new batch lot.
+// @Summary Create batch lot
+// @Description Creates a new batch lot for material traceability
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param body body CreateBatchLotRequest true "Batch lot data"
+// @Success 201 {object} types.BatchLot "Created batch lot"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batch-lots [post]
 func (h *QualityHandler) CreateBatchLot(c *gin.Context) {
 	var req CreateBatchLotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -937,6 +1117,19 @@ func (h *QualityHandler) CreateBatchLot(c *gin.Context) {
 }
 
 // UpdateBatchLot modifies an existing batch lot.
+// @Summary Update batch lot
+// @Description Modifies an existing batch lot record
+// @Tags quality
+// @Accept json
+// @Produce json
+// @Param id path string true "Batch Lot ID (UUID)"
+// @Param body body UpdateBatchLotRequest true "Updated batch lot data"
+// @Success 200 {object} types.BatchLot "Updated batch lot"
+// @Failure 400 {object} map[string]string "Invalid ID or validation error"
+// @Failure 404 {object} map[string]string "Batch lot not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batch-lots/{id} [put]
 func (h *QualityHandler) UpdateBatchLot(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -1026,6 +1219,17 @@ func (h *QualityHandler) UpdateBatchLot(c *gin.Context) {
 }
 
 // DeleteBatchLot removes a batch lot.
+// @Summary Delete batch lot
+// @Description Removes a batch lot record from the system
+// @Tags quality
+// @Produce json
+// @Param id path string true "Batch Lot ID (UUID)"
+// @Success 200 {object} map[string]string "Deletion confirmation"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Batch lot not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batch-lots/{id} [delete]
 func (h *QualityHandler) DeleteBatchLot(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

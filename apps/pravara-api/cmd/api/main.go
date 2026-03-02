@@ -1,4 +1,44 @@
 // Package main is the entry point for the PravaraMES API server.
+//
+// @title PravaraMES API
+// @version 1.0.0
+// @description Cloud-native Manufacturing Execution System API for phygital fabrication.
+// @description Provides endpoints for order management, task/Kanban board operations,
+// @description machine control, telemetry, quality management, and real-time updates.
+//
+// @contact.name PravaraMES Team
+// @contact.url https://github.com/madfam-org/pravara-mes
+// @contact.email support@pravara.io
+//
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+//
+// @host localhost:4500
+// @BasePath /v1
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT Bearer token from OIDC provider (format: "Bearer <token>")
+//
+// @tag.name health
+// @tag.description Health check and readiness endpoints
+// @tag.name orders
+// @tag.description Order management endpoints
+// @tag.name tasks
+// @tag.description Task and Kanban board operations
+// @tag.name machines
+// @tag.description Machine management and control
+// @tag.name telemetry
+// @tag.description Machine telemetry data endpoints
+// @tag.name quality
+// @tag.description Quality certificates, inspections, and batch lots
+// @tag.name billing
+// @tag.description Usage tracking and billing endpoints
+// @tag.name realtime
+// @tag.description WebSocket connection authentication
+// @tag.name webhooks
+// @tag.description External webhook endpoints
 package main
 
 import (

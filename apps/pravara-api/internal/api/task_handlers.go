@@ -83,6 +83,21 @@ type AssignTaskRequest struct {
 }
 
 // List returns a paginated list of tasks.
+// @Summary List tasks
+// @Description Returns a paginated list of tasks with optional filtering by status, machine, order, or user
+// @Tags tasks
+// @Produce json
+// @Param limit query int false "Number of results per page" default(50)
+// @Param offset query int false "Offset for pagination" default(0)
+// @Param status query string false "Filter by task status" Enums(backlog, queued, in_progress, quality_check, completed, blocked)
+// @Param machine_id query string false "Filter by machine ID (UUID)"
+// @Param order_id query string false "Filter by order ID (UUID)"
+// @Param user_id query string false "Filter by assigned user ID (UUID)"
+// @Success 200 {object} ListResponse "Paginated task list"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks [get]
 func (h *TaskHandler) List(c *gin.Context) {
 	filter := repositories.TaskFilter{
 		Limit:  50,
@@ -138,6 +153,17 @@ func (h *TaskHandler) List(c *gin.Context) {
 }
 
 // GetByID returns a single task by ID.
+// @Summary Get task by ID
+// @Description Returns a single task with all details
+// @Tags tasks
+// @Produce json
+// @Param id path string true "Task ID (UUID)"
+// @Success 200 {object} types.Task "Task details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/{id} [get]
 func (h *TaskHandler) GetByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -170,6 +196,18 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 }
 
 // Create creates a new task.
+// @Summary Create a new task
+// @Description Creates a new task in backlog status
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param body body CreateTaskRequest true "Task creation data"
+// @Success 201 {object} types.Task "Created task"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks [post]
 func (h *TaskHandler) Create(c *gin.Context) {
 	var req CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -223,6 +261,19 @@ func (h *TaskHandler) Create(c *gin.Context) {
 }
 
 // Update modifies an existing task.
+// @Summary Update a task
+// @Description Updates task fields including status transitions
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param id path string true "Task ID (UUID)"
+// @Param body body UpdateTaskRequest true "Task update data"
+// @Success 200 {object} types.Task "Updated task"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/{id} [put]
 func (h *TaskHandler) Update(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -321,6 +372,19 @@ func (h *TaskHandler) Update(c *gin.Context) {
 }
 
 // Move changes a task's status and/or position on the Kanban board.
+// @Summary Move task on Kanban board
+// @Description Changes task status and position, triggers automation for machine jobs
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param id path string true "Task ID (UUID)"
+// @Param body body MoveTaskRequest true "Move request with target status and position"
+// @Success 200 {object} map[string]string "Task moved successfully"
+// @Failure 400 {object} map[string]string "Invalid status or position"
+// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/{id}/move [post]
 func (h *TaskHandler) Move(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -444,6 +508,19 @@ func (h *TaskHandler) Move(c *gin.Context) {
 }
 
 // Assign assigns a task to a user and/or machine.
+// @Summary Assign task to user/machine
+// @Description Assigns task to a user and/or machine for processing
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param id path string true "Task ID (UUID)"
+// @Param body body AssignTaskRequest true "Assignment data"
+// @Success 200 {object} map[string]string "Task assigned successfully"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/{id}/assign [post]
 func (h *TaskHandler) Assign(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -491,6 +568,17 @@ func (h *TaskHandler) Assign(c *gin.Context) {
 }
 
 // Delete removes a task.
+// @Summary Delete a task
+// @Description Permanently deletes a task
+// @Tags tasks
+// @Produce json
+// @Param id path string true "Task ID (UUID)"
+// @Success 200 {object} map[string]string "Task deleted successfully"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/{id} [delete]
 func (h *TaskHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -524,6 +612,15 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 }
 
 // GetKanbanBoard returns all tasks grouped by status for the Kanban board view.
+// @Summary Get Kanban board
+// @Description Returns all tasks grouped by status columns for the Kanban board UI
+// @Tags tasks
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Kanban board columns with tasks"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /tasks/board [get]
 func (h *TaskHandler) GetKanbanBoard(c *gin.Context) {
 	board, err := h.repo.GetKanbanBoard(c.Request.Context())
 	if err != nil {

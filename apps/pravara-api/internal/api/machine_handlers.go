@@ -71,6 +71,19 @@ type SendCommandRequest struct {
 }
 
 // List returns a paginated list of machines.
+// @Summary List machines
+// @Description Returns a paginated list of machines with optional filtering by status and type
+// @Tags machines
+// @Produce json
+// @Param limit query int false "Number of results per page" default(50)
+// @Param offset query int false "Offset for pagination" default(0)
+// @Param status query string false "Filter by machine status" Enums(online, offline, busy, maintenance, error)
+// @Param type query string false "Filter by machine type"
+// @Success 200 {object} ListResponse "Paginated machine list"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines [get]
 func (h *MachineHandler) List(c *gin.Context) {
 	filter := repositories.MachineFilter{
 		Limit:  50,
@@ -112,6 +125,17 @@ func (h *MachineHandler) List(c *gin.Context) {
 }
 
 // GetByID returns a single machine by ID.
+// @Summary Get machine by ID
+// @Description Returns a single machine with all details
+// @Tags machines
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Success 200 {object} types.Machine "Machine details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines/{id} [get]
 func (h *MachineHandler) GetByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -144,6 +168,19 @@ func (h *MachineHandler) GetByID(c *gin.Context) {
 }
 
 // Create creates a new machine.
+// @Summary Create a new machine
+// @Description Creates a new machine in offline status
+// @Tags machines
+// @Accept json
+// @Produce json
+// @Param body body CreateMachineRequest true "Machine creation data"
+// @Success 201 {object} types.Machine "Created machine"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 409 {object} map[string]string "Duplicate machine code"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines [post]
 func (h *MachineHandler) Create(c *gin.Context) {
 	var req CreateMachineRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -202,6 +239,20 @@ func (h *MachineHandler) Create(c *gin.Context) {
 }
 
 // Update modifies an existing machine.
+// @Summary Update a machine
+// @Description Updates machine configuration and status
+// @Tags machines
+// @Accept json
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Param body body UpdateMachineRequest true "Machine update data"
+// @Success 200 {object} types.Machine "Updated machine"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 409 {object} map[string]string "Duplicate machine code"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines/{id} [put]
 func (h *MachineHandler) Update(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -291,6 +342,17 @@ func (h *MachineHandler) Update(c *gin.Context) {
 }
 
 // Delete removes a machine.
+// @Summary Delete a machine
+// @Description Permanently deletes a machine
+// @Tags machines
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Success 200 {object} map[string]string "Machine deleted successfully"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines/{id} [delete]
 func (h *MachineHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -324,6 +386,21 @@ func (h *MachineHandler) Delete(c *gin.Context) {
 }
 
 // GetTelemetry returns telemetry data for a machine.
+// @Summary Get machine telemetry
+// @Description Returns telemetry data for a specific machine with optional time range and metric filtering
+// @Tags machines
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Param limit query int false "Maximum records to return" default(100)
+// @Param metric_type query string false "Filter by metric type"
+// @Param from query string false "Start time (RFC3339 format)"
+// @Param to query string false "End time (RFC3339 format)"
+// @Success 200 {object} map[string]interface{} "Telemetry data"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines/{id}/telemetry [get]
 func (h *MachineHandler) GetTelemetry(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -396,6 +473,17 @@ func (h *MachineHandler) GetTelemetry(c *gin.Context) {
 }
 
 // Heartbeat handles machine heartbeat updates.
+// @Summary Record machine heartbeat
+// @Description Updates the last heartbeat timestamp for a machine
+// @Tags machines
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Success 200 {object} map[string]string "Heartbeat recorded"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /machines/{id}/heartbeat [post]
 func (h *MachineHandler) Heartbeat(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -446,6 +534,20 @@ var validCommands = map[string]pubsub.MachineCommandType{
 
 // SendCommand sends a control command to a machine.
 // The command is published via Redis for the telemetry-worker to dispatch via MQTT.
+// @Summary Send command to machine
+// @Description Dispatches a control command to a machine via MQTT
+// @Tags machines
+// @Accept json
+// @Produce json
+// @Param id path string true "Machine ID (UUID)"
+// @Param body body SendCommandRequest true "Command to send"
+// @Success 202 {object} map[string]interface{} "Command dispatched"
+// @Failure 400 {object} map[string]string "Invalid command or machine not configured"
+// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 409 {object} map[string]string "Machine in error state"
+// @Failure 500 {object} map[string]string "Dispatch failed"
+// @Security BearerAuth
+// @Router /machines/{id}/command [post]
 func (h *MachineHandler) SendCommand(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

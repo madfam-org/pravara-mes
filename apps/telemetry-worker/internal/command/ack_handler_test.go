@@ -41,6 +41,19 @@ func (m *MockAckStore) UpdateCommandStatus(ctx context.Context, commandID uuid.U
 	return args.Error(0)
 }
 
+func (m *MockAckStore) GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error) {
+	args := m.Called(ctx, commandID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*TaskCommandInfo), args.Error(1)
+}
+
+func (m *MockAckStore) UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error {
+	args := m.Called(ctx, taskID, newStatus, completedAt)
+	return args.Error(0)
+}
+
 func TestBuildAckTopic(t *testing.T) {
 	tests := []struct {
 		name      string

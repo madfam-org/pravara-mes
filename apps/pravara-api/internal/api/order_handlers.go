@@ -77,6 +77,21 @@ type ListResponse struct {
 }
 
 // List returns a paginated list of orders.
+// @Summary List orders
+// @Description Returns a paginated list of orders with optional filtering by status, priority, and date range
+// @Tags orders
+// @Produce json
+// @Param limit query int false "Number of results per page" default(20)
+// @Param offset query int false "Offset for pagination" default(0)
+// @Param status query string false "Filter by order status" Enums(received, processing, quality_check, ready, shipped, delivered, cancelled)
+// @Param priority query int false "Filter by priority level"
+// @Param from_date query string false "Filter from date (RFC3339 format)"
+// @Param to_date query string false "Filter to date (RFC3339 format)"
+// @Success 200 {object} ListResponse "Paginated order list"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders [get]
 func (h *OrderHandler) List(c *gin.Context) {
 	// Parse query parameters
 	filter := repositories.OrderFilter{
@@ -131,6 +146,17 @@ func (h *OrderHandler) List(c *gin.Context) {
 }
 
 // GetByID returns a single order by ID.
+// @Summary Get order by ID
+// @Description Returns a single order with all details
+// @Tags orders
+// @Produce json
+// @Param id path string true "Order ID (UUID)"
+// @Success 200 {object} types.Order "Order details"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Order not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders/{id} [get]
 func (h *OrderHandler) GetByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -163,6 +189,18 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 }
 
 // Create creates a new order.
+// @Summary Create a new order
+// @Description Creates a new order in received status
+// @Tags orders
+// @Accept json
+// @Produce json
+// @Param body body CreateOrderRequest true "Order creation data"
+// @Success 201 {object} types.Order "Created order"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders [post]
 func (h *OrderHandler) Create(c *gin.Context) {
 	var req CreateOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -237,6 +275,19 @@ func (h *OrderHandler) Create(c *gin.Context) {
 }
 
 // Update modifies an existing order.
+// @Summary Update an order
+// @Description Updates order fields including status
+// @Tags orders
+// @Accept json
+// @Produce json
+// @Param id path string true "Order ID (UUID)"
+// @Param body body UpdateOrderRequest true "Order update data"
+// @Success 200 {object} types.Order "Updated order"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 404 {object} map[string]string "Order not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders/{id} [put]
 func (h *OrderHandler) Update(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -315,6 +366,17 @@ func (h *OrderHandler) Update(c *gin.Context) {
 }
 
 // Delete cancels an order.
+// @Summary Cancel an order
+// @Description Cancels an order (soft delete)
+// @Tags orders
+// @Produce json
+// @Param id path string true "Order ID (UUID)"
+// @Success 200 {object} map[string]string "Order cancelled successfully"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Order not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders/{id} [delete]
 func (h *OrderHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -358,6 +420,17 @@ type CreateOrderItemRequest struct {
 }
 
 // ListItems returns all items for an order.
+// @Summary List order items
+// @Description Returns all items for a specific order
+// @Tags orders
+// @Produce json
+// @Param id path string true "Order ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Order items list"
+// @Failure 400 {object} map[string]string "Invalid ID format"
+// @Failure 404 {object} map[string]string "Order not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders/{id}/items [get]
 func (h *OrderHandler) ListItems(c *gin.Context) {
 	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -404,6 +477,19 @@ func (h *OrderHandler) ListItems(c *gin.Context) {
 }
 
 // AddItem adds an item to an order.
+// @Summary Add item to order
+// @Description Adds a new line item to an existing order
+// @Tags orders
+// @Accept json
+// @Produce json
+// @Param id path string true "Order ID (UUID)"
+// @Param body body CreateOrderItemRequest true "Order item data"
+// @Success 201 {object} types.OrderItem "Created order item"
+// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 404 {object} map[string]string "Order not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /orders/{id}/items [post]
 func (h *OrderHandler) AddItem(c *gin.Context) {
 	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {

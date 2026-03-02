@@ -65,6 +65,18 @@ type CotizaItemData struct {
 }
 
 // CotizaWebhook handles incoming webhooks from Cotiza Studio.
+// @Summary Receive Cotiza webhook
+// @Description Processes order events from Cotiza Studio (created, updated, cancelled)
+// @Tags webhooks
+// @Accept json
+// @Produce json
+// @Param X-Cotiza-Signature header string false "HMAC-SHA256 signature for payload verification"
+// @Param body body CotizaWebhookPayload true "Webhook payload"
+// @Success 200 {object} map[string]string "Webhook processed successfully"
+// @Failure 400 {object} map[string]string "Invalid payload"
+// @Failure 401 {object} map[string]string "Invalid signature"
+// @Failure 500 {object} map[string]string "Processing error"
+// @Router /webhooks/cotiza [post]
 func (h *WebhookHandler) CotizaWebhook(c *gin.Context) {
 	// Verify webhook signature if secret is configured
 	if h.cotizaSecret != "" {

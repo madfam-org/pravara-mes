@@ -1,0 +1,287 @@
+# PravaraMES Cursor Rules
+# Code patterns and conventions for AI-assisted development
+
+## Project Overview
+PravaraMES is a cloud-native Manufacturing Execution System built with Go (backend) and Next.js (frontend). Multi-tenant architecture with PostgreSQL RLS, real-time updates via Centrifugo, and MQTT telemetry ingestion.
+
+## Language Standards
+
+### Go (1.24+)
+- Use standard library where possible
+- Error handling: Always wrap errors with context using `fmt.Errorf("context: %w", err)`
+- Logging: Use logrus with structured fields
+- Prefer interfaces for testability
+
+### TypeScript (Strict Mode)
+- Enable strict mode in tsconfig.json
+- Prefer type inference where clear
+- Use interfaces for object shapes
+- Avoid `any` - use `unknown` if necessary
+
+### React (19+)
+- Use Server Components by default
+- Add "use client" only when needed (hooks, events, browser APIs)
+- Prefer function components with hooks
+
+## Code Conventions
+
+### Go Package Naming
+- Package names: lowercase, single word (e.g., `api`, `db`, `pubsub`)
+- Avoid stuttering: `order.Order` not `order.OrderStruct`
+- Internal packages under `internal/` for encapsulation
+
+### Go Error Handling
+```go
+// Always wrap errors with context
+if err != nil {
+    return fmt.Errorf("failed to get task: %w", err)
+}
+
+// Use custom error types for domain errors
+type NotFoundError struct {
+    Entity string
+    ID     uuid.UUID
+}
+```
+
+### Go Logging
+```go
+// Use structured logging
+h.log.WithFields(logrus.Fields{
+    "task_id":   taskID,
+    "tenant_id": tenantID,
+    "status":    newStatus,
+}).Info("Task moved")
+```
+
+### TypeScript Component Patterns
+```typescript
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+interface TaskCardProps {
+  task: Task;
+  onMove?: (status: TaskStatus) => void;
+}
+
+export function TaskCard({ task, onMove }: TaskCardProps) {
+  // Component implementation
+}
+```
+
+### TypeScript Import Order
+1. React/Next.js imports
+2. Third-party libraries
+3. Components (`@/components/`)
+4. Hooks (`@/hooks/`)
+5. Utilities (`@/lib/`)
+6. Types (`@/types/`)
+
+## Architecture Rules
+
+### Multi-Tenancy (CRITICAL)
+- ALL database queries MUST include tenant_id filter
+- Tenant ID is extracted from JWT claims in middleware
+- Never trust client-provided tenant_id
+- RLS policies enforce isolation at database level
+
+```go
+// Correct: tenant_id from context
+tenantID := c.MustGet("tenant_id").(uuid.UUID)
+tasks, err := h.repo.ListByTenant(ctx, tenantID, filter)
+
+// WRONG: tenant_id from request body
+// tasks, err := h.repo.List(ctx, req.TenantID) // NEVER DO THIS
+```
+
+### Repository Pattern
+- All database access through repository interfaces
+- Handlers never import `database/sql` directly
+- Repositories handle SQL, handlers handle HTTP
+
+```go
+// Repository interface
+type TaskRepository interface {
+    Create(ctx context.Context, task *types.Task) error
+    GetByID(ctx context.Context, id uuid.UUID) (*types.Task, error)
+    List(ctx context.Context, filter TaskFilter) ([]types.Task, error)
+}
+
+// Handler uses interface
+type TaskHandler struct {
+    repo TaskRepository  // Interface, not concrete type
+    log  *logrus.Logger
+}
+```
+
+### Event Publishing
+- Publish events via `pubsub.Publisher`, never direct Redis
+- Events trigger real-time UI updates via Centrifugo
+- Use standard event types from `pubsub/events.go`
+
+```go
+// Correct: use Publisher
+h.publisher.PublishTaskMoved(ctx, tenantID, taskID, newStatus)
+
+// WRONG: direct Redis
+// redis.Publish(ctx, "task.moved", data) // Use Publisher instead
+```
+
+## File Organization
+
+### Go API Structure
+```
+apps/pravara-api/
+├── cmd/api/main.go           # Entry point
+└── internal/
+    ├── api/                  # HTTP handlers
+    │   ├── routes.go         # Route registration
+    │   ├── task_handlers.go  # Handler per entity
+    │   └── types.go          # Request/response types
+    ├── db/
+    │   ├── db.go             # Connection setup
+    │   ├── migrations/       # SQL migrations
+    │   └── repositories/     # Data access
+    ├── middleware/           # HTTP middleware
+    ├── pubsub/               # Event publishing
+    └── services/             # Business logic
+```
+
+### React UI Structure
+```
+apps/pravara-ui/
+├── app/                      # Next.js App Router
+│   ├── (protected)/          # Auth-required pages
+│   │   ├── kanban/
+│   │   ├── orders/
+│   │   └── machines/
+│   └── login/
+├── components/
+│   ├── ui/                   # shadcn/ui primitives
+│   ├── kanban/               # Feature components
+│   ├── machines/
+│   └── dialogs/
+├── hooks/                    # Custom hooks
+├── lib/
+│   ├── api.ts                # API client
+│   └── realtime/             # WebSocket client
+└── stores/                   # Zustand stores
+```
+
+## Testing Patterns
+
+### Go Table-Driven Tests
+```go
+func TestTaskHandler_Move(t *testing.T) {
+    tests := []struct {
+        name       string
+        taskID     uuid.UUID
+        newStatus  types.TaskStatus
+        wantStatus int
+        wantError  bool
+    }{
+        {
+            name:       "move to in_progress",
+            taskID:     uuid.New(),
+            newStatus:  types.TaskStatusInProgress,
+            wantStatus: http.StatusOK,
+        },
+        // More test cases...
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // Test implementation
+        })
+    }
+}
+```
+
+### Go Mock Repositories
+```go
+type MockTaskRepository struct {
+    tasks map[uuid.UUID]*types.Task
+}
+
+func (m *MockTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Task, error) {
+    if task, ok := m.tasks[id]; ok {
+        return task, nil
+    }
+    return nil, sql.ErrNoRows
+}
+```
+
+### React Component Testing
+```typescript
+// Use React Testing Library
+import { render, screen } from "@testing-library/react";
+import { TaskCard } from "./task-card";
+
+test("renders task title", () => {
+  render(<TaskCard task={mockTask} />);
+  expect(screen.getByText("Test Task")).toBeInTheDocument();
+});
+```
+
+## Security Rules
+
+### Authentication
+- JWT validation via Janua OIDC
+- Token verification in auth middleware
+- Never trust client-side auth checks alone
+
+### Authorization
+- Tenant isolation is mandatory
+- Role-based access where applicable
+- Validate permissions in handlers
+
+### Input Validation
+- Validate all request bodies
+- Use strong types, not string everywhere
+- Sanitize user input before display
+
+### Rate Limiting
+- Applied per IP and per tenant
+- Configured in middleware
+- Returns 429 Too Many Requests
+
+## Performance Guidelines
+
+### Database
+- Use prepared statements (handled by repository)
+- Implement pagination for list endpoints
+- Index frequently queried columns
+
+### Caching
+- Use Redis for session/cache data
+- Cache expensive computations
+- Invalidate on writes
+
+### Real-Time
+- Use WebSocket for live updates
+- Batch telemetry inserts
+- Debounce high-frequency events
+
+## Common Pitfalls to Avoid
+
+1. **Forgetting tenant_id** - Always include in queries
+2. **Direct SQL in handlers** - Use repositories
+3. **Blocking WebSocket** - Don't do heavy work in handlers
+4. **Missing error wrapping** - Always add context
+5. **Client-side only validation** - Validate server-side too
+6. **Hardcoded config** - Use environment variables
+7. **Mixing client/server components** - Be explicit with "use client"
+
+## AI Agent Instructions
+
+When generating code for PravaraMES:
+
+1. **Check existing patterns** - Look at similar files first
+2. **Follow tenant isolation** - Always include tenant_id
+3. **Use existing types** - Import from sdk-go/pkg/types
+4. **Match import style** - Follow established ordering
+5. **Add error handling** - Wrap errors with context
+6. **Include logging** - Use structured logrus fields
+7. **Write tests** - Table-driven for Go, RTL for React

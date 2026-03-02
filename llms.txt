@@ -1,0 +1,192 @@
+# PravaraMES
+
+> Cloud-native Manufacturing Execution System for phygital fabrication workflows
+
+PravaraMES is MADFAM's next-generation MES built on a Unified Namespace (UNS) architecture, replacing traditional ISA-95 hierarchical systems with a real-time, event-driven platform.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        PravaraMES                               │
+├─────────────────────────────────────────────────────────────────┤
+│  pravara-ui (Next.js 15)     │  Real-time dashboard            │
+│  Port: 4501                  │  React 19, Tailwind, Radix UI   │
+├──────────────────────────────┼──────────────────────────────────┤
+│  pravara-api (Go/Gin)        │  REST API + WebSocket auth      │
+│  Port: 4500                  │  PostgreSQL, Redis, OIDC        │
+├──────────────────────────────┼──────────────────────────────────┤
+│  pravara-gateway (Centrifugo)│  WebSocket multiplexing         │
+│  Port: 8000                  │  Real-time event broadcasting   │
+├──────────────────────────────┼──────────────────────────────────┤
+│  telemetry-worker (Go)       │  MQTT telemetry processor       │
+│  Port: 4502                  │  EMQX integration, batch insert │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Key Patterns
+
+### Multi-Tenancy
+- Pooled model with PostgreSQL Row-Level Security (RLS)
+- Tenant ID extracted from JWT claims via Janua SSO
+- All database queries automatically scoped to tenant
+
+### Event-Driven Architecture
+- Redis Pub/Sub for internal events
+- Centrifugo for WebSocket broadcasting to UI
+- MQTT (EMQX) for machine telemetry ingestion
+
+### Repository Pattern
+- All database access through repository interfaces
+- Handlers never access DB directly
+- Promotes testability and separation of concerns
+
+### React Query + Zustand
+- React Query for server state (API data)
+- Zustand for client state (UI state)
+- Real-time updates via WebSocket hooks
+
+## Directory Structure
+
+```
+pravara-mes/
+├── apps/
+│   ├── pravara-api/          # Go REST API
+│   │   ├── cmd/api/main.go   # Entry point
+│   │   └── internal/
+│   │       ├── api/          # HTTP handlers
+│   │       ├── auth/         # OIDC verification
+│   │       ├── db/           # Repositories + migrations
+│   │       ├── middleware/   # Auth, rate-limit, metrics
+│   │       ├── pubsub/       # Redis event publishing
+│   │       ├── services/     # Business logic
+│   │       └── billing/      # Usage tracking
+│   ├── pravara-ui/           # Next.js dashboard
+│   │   ├── app/              # App Router pages
+│   │   ├── components/       # React components
+│   │   ├── hooks/            # Custom hooks
+│   │   └── lib/              # API client, realtime
+│   ├── telemetry-worker/     # MQTT processor
+│   │   ├── cmd/worker/       # Entry point
+│   │   └── internal/
+│   │       ├── mqtt/         # MQTT handler
+│   │       ├── db/           # Telemetry storage
+│   │       └── command/      # Machine commands
+│   └── pravara-gateway/      # Centrifugo config
+├── packages/
+│   └── sdk-go/               # Shared Go types
+├── infra/k8s/                # Kubernetes manifests
+└── docs/                     # Generated documentation
+```
+
+## Core Entities
+
+| Entity | Description | Key Fields |
+|--------|-------------|------------|
+| **Order** | Manufacturing order | status, priority, due_date, total_amount |
+| **Task** | Kanban work item | status, machine_id, kanban_position |
+| **Machine** | Equipment registry | status, mqtt_topic, capabilities |
+| **Telemetry** | Time-series data | timestamp, metric_type, value, unit |
+| **QualityCertificate** | COC/COA documents | type, status, document_url |
+
+## API Endpoints
+
+### Health
+- `GET /health` - Full health check
+- `GET /health/live` - Liveness probe
+- `GET /health/ready` - Readiness probe
+
+### Orders
+- `GET /v1/orders` - List orders
+- `POST /v1/orders` - Create order
+- `GET /v1/orders/:id` - Get order
+- `PUT /v1/orders/:id` - Update order
+- `DELETE /v1/orders/:id` - Delete order
+
+### Tasks (Kanban)
+- `GET /v1/tasks` - List tasks
+- `POST /v1/tasks` - Create task
+- `GET /v1/tasks/board` - Get Kanban board
+- `PATCH /v1/tasks/:id/move` - Move task
+- `PATCH /v1/tasks/:id/assign` - Assign task
+
+### Machines
+- `GET /v1/machines` - List machines
+- `POST /v1/machines` - Create machine
+- `POST /v1/machines/:id/command` - Send command
+- `GET /v1/machines/:id/telemetry` - Get telemetry
+
+### Quality
+- `GET /v1/quality/certificates` - List certificates
+- `POST /v1/quality/inspections` - Create inspection
+- `GET /v1/quality/batches` - List batch lots
+
+## WebSocket Channels (Centrifugo)
+
+| Channel Pattern | Events |
+|-----------------|--------|
+| `machines:{tenant_id}` | Machine status, heartbeat |
+| `tasks:{tenant_id}` | Task movements, assignments |
+| `orders:{tenant_id}` | Order status changes |
+| `telemetry:{tenant_id}` | Live telemetry batches |
+
+## MQTT Topics (UNS Pattern)
+
+```
+{tenant}/{site}/{area}/{line}/{machine}/{metric}
+```
+
+Example: `madfam/hq/fab/line1/printer-001/temperature`
+
+## Documentation
+
+- [README.md](README.md) - Full project overview
+- [PRD.md](PRD.md) - Product requirements
+- [ROADMAP.md](ROADMAP.md) - Development phases
+- [docs/openapi.yaml](docs/openapi.yaml) - OpenAPI specification
+
+## Entry Points for Development
+
+### Backend API
+```bash
+cd apps/pravara-api
+go run cmd/api/main.go
+```
+
+### Frontend UI
+```bash
+cd apps/pravara-ui
+pnpm dev
+```
+
+### Telemetry Worker
+```bash
+cd apps/telemetry-worker
+go run cmd/worker/main.go
+```
+
+## Environment Variables
+
+See `.env.example` for required configuration:
+- `DATABASE_URL` - PostgreSQL connection
+- `REDIS_URL` - Redis connection
+- `OIDC_ISSUER_URL` - Janua SSO issuer
+- `MQTT_BROKER_URL` - EMQX broker
+- `CENTRIFUGO_API_URL` - Centrifugo API
+
+## Testing
+
+```bash
+# Go tests
+go test ./apps/pravara-api/...
+go test ./apps/telemetry-worker/...
+
+# TypeScript type check
+cd apps/pravara-ui && pnpm typecheck
+```
+
+## Deployment
+
+- GitOps via enclii platform
+- Kubernetes on Hetzner k3s cluster
+- Container registry: GitHub Container Registry (GHCR)
