@@ -77,7 +77,7 @@ images:
   newTag: main-a493297
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
-  newTag: main-a493297
+  newTag: main-05ce00c
 - name: redis
   newTag: 7-alpine
 - name: telemetry-worker
