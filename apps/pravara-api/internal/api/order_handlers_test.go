@@ -51,7 +51,7 @@ func TestOrderHandler_CreateOrderRequest_Validation(t *testing.T) {
 
 			log := logrus.New()
 			log.SetLevel(logrus.PanicLevel)
-			handler := NewOrderHandler(nil, log)
+			handler := NewOrderHandler(nil, nil, log)
 
 			router := gin.New()
 			router.POST("/orders", func(c *gin.Context) {

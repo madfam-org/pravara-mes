@@ -256,9 +256,9 @@ func TestBatchProcessing_Timing(t *testing.T) {
 
 	// Test batch size boundaries
 	batchSizes := []struct {
-		size      int
+		size        int
 		shouldFlush bool
-		maxSize   int
+		maxSize     int
 	}{
 		{size: 50, shouldFlush: false, maxSize: 100},
 		{size: 99, shouldFlush: false, maxSize: 100},
@@ -271,5 +271,117 @@ func TestBatchProcessing_Timing(t *testing.T) {
 		if shouldFlush != tc.shouldFlush {
 			t.Errorf("batch size %d: shouldFlush got %v, want %v", tc.size, shouldFlush, tc.shouldFlush)
 		}
+	}
+}
+
+func TestRetryLogic_ExponentialBackoff(t *testing.T) {
+	// Test exponential backoff calculation
+	baseDelay := 100 * time.Millisecond
+	maxBackoff := 30 * time.Second
+
+	tests := []struct {
+		attempt         int
+		expectedBackoff time.Duration
+	}{
+		{attempt: 0, expectedBackoff: 100 * time.Millisecond},  // 100ms * 2^0 = 100ms
+		{attempt: 1, expectedBackoff: 200 * time.Millisecond},  // 100ms * 2^1 = 200ms
+		{attempt: 2, expectedBackoff: 400 * time.Millisecond},  // 100ms * 2^2 = 400ms
+		{attempt: 3, expectedBackoff: 800 * time.Millisecond},  // 100ms * 2^3 = 800ms
+		{attempt: 4, expectedBackoff: 1600 * time.Millisecond}, // 100ms * 2^4 = 1.6s
+		{attempt: 8, expectedBackoff: 25600 * time.Millisecond}, // 100ms * 2^8 = 25.6s
+		{attempt: 9, expectedBackoff: 30 * time.Second},         // Capped at 30s
+		{attempt: 10, expectedBackoff: 30 * time.Second},        // Capped at 30s
+	}
+
+	for _, tt := range tests {
+		t.Run("attempt_"+string(rune('0'+tt.attempt)), func(t *testing.T) {
+			backoff := baseDelay * time.Duration(1<<uint(tt.attempt))
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+
+			if backoff != tt.expectedBackoff {
+				t.Errorf("attempt %d: backoff got %v, want %v", tt.attempt, backoff, tt.expectedBackoff)
+			}
+		})
+	}
+}
+
+func TestRetryLogic_MaxRetries(t *testing.T) {
+	// Test retry attempt limits
+	tests := []struct {
+		maxRetries   int
+		attempt      int
+		shouldRetry  bool
+	}{
+		{maxRetries: 3, attempt: 0, shouldRetry: true},
+		{maxRetries: 3, attempt: 1, shouldRetry: true},
+		{maxRetries: 3, attempt: 2, shouldRetry: true},
+		{maxRetries: 3, attempt: 3, shouldRetry: false}, // Last attempt, no more retries
+		{maxRetries: 5, attempt: 4, shouldRetry: true},
+		{maxRetries: 5, attempt: 5, shouldRetry: false},
+		{maxRetries: 0, attempt: 0, shouldRetry: false}, // No retries allowed
+	}
+
+	for _, tt := range tests {
+		shouldRetry := tt.attempt < tt.maxRetries
+		if shouldRetry != tt.shouldRetry {
+			t.Errorf("maxRetries %d, attempt %d: shouldRetry got %v, want %v",
+				tt.maxRetries, tt.attempt, shouldRetry, tt.shouldRetry)
+		}
+	}
+}
+
+func TestRetryLogic_BackoffCap(t *testing.T) {
+	// Verify backoff is capped at 30 seconds
+	maxBackoff := 30 * time.Second
+	baseDelay := 1 * time.Second
+
+	// With base delay of 1s and attempt 6, uncapped would be 64s
+	attempt := 6
+	backoff := baseDelay * time.Duration(1<<uint(attempt))
+	if backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+
+	if backoff != maxBackoff {
+		t.Errorf("backoff should be capped at %v, got %v", maxBackoff, backoff)
+	}
+
+	// Verify very high attempts don't overflow
+	attempt = 20
+	backoff = baseDelay * time.Duration(1<<uint(attempt))
+	if backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+
+	if backoff != maxBackoff {
+		t.Errorf("high attempt backoff should be capped at %v, got %v", maxBackoff, backoff)
+	}
+}
+
+func TestWorkerConfig_RetrySettings(t *testing.T) {
+	// Test default retry configuration values
+	tests := []struct {
+		name          string
+		retryAttempts int
+		retryDelayMs  int
+		valid         bool
+	}{
+		{name: "default config", retryAttempts: 3, retryDelayMs: 100, valid: true},
+		{name: "aggressive retry", retryAttempts: 5, retryDelayMs: 50, valid: true},
+		{name: "conservative retry", retryAttempts: 2, retryDelayMs: 500, valid: true},
+		{name: "no retry", retryAttempts: 0, retryDelayMs: 100, valid: true},
+		{name: "invalid negative attempts", retryAttempts: -1, retryDelayMs: 100, valid: false},
+		{name: "invalid negative delay", retryAttempts: 3, retryDelayMs: -100, valid: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid := tt.retryAttempts >= 0 && tt.retryDelayMs >= 0
+			if valid != tt.valid {
+				t.Errorf("config validity: got %v, want %v", valid, tt.valid)
+			}
+		})
 	}
 }

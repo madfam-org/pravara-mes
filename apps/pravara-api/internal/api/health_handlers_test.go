@@ -18,9 +18,9 @@ func TestHealthHandler_Health(t *testing.T) {
 		expectedBody   string
 	}{
 		{
-			name:           "returns healthy status",
-			expectedStatus: http.StatusOK,
-			expectedBody:   `"status":"healthy"`,
+			name:           "returns degraded status without db",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   `"status":"degraded"`,
 		},
 	}
 

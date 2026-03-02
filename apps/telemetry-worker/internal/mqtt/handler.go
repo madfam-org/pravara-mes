@@ -268,7 +268,7 @@ func (h *Handler) flushBatch() {
 	h.flushBatchLocked()
 }
 
-// flushBatchLocked writes the current batch to storage (must be called with lock held).
+// flushBatchLocked writes the current batch to storage with retry logic (must be called with lock held).
 func (h *Handler) flushBatchLocked() {
 	if len(h.batch) == 0 {
 		return
@@ -278,16 +278,60 @@ func (h *Handler) flushBatchLocked() {
 	h.batch = make([]types.Telemetry, 0, h.cfg.Worker.BatchSize)
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		h.writeBatchWithRetry(batch)
+	}()
+}
 
-		if err := h.store.CreateBatch(ctx, batch); err != nil {
-			h.log.WithError(err).WithField("count", len(batch)).Error("Failed to write telemetry batch")
+// writeBatchWithRetry attempts to write a batch to storage with retry logic.
+func (h *Handler) writeBatchWithRetry(batch []types.Telemetry) {
+	maxRetries := h.cfg.Worker.RetryAttempts
+	retryDelay := time.Duration(h.cfg.Worker.RetryDelay) * time.Millisecond
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		err := h.store.CreateBatch(ctx, batch)
+		cancel()
+
+		if err == nil {
+			h.log.WithFields(logrus.Fields{
+				"count":   len(batch),
+				"attempt": attempt + 1,
+			}).Debug("Flushed telemetry batch")
 			return
 		}
 
-		h.log.WithField("count", len(batch)).Debug("Flushed telemetry batch")
-	}()
+		// Log the failure
+		h.log.WithError(err).WithFields(logrus.Fields{
+			"count":      len(batch),
+			"attempt":    attempt + 1,
+			"maxRetries": maxRetries,
+		}).Warn("Failed to write telemetry batch")
+
+		// Don't retry on the last attempt
+		if attempt < maxRetries {
+			// Exponential backoff: delay * 2^attempt
+			backoff := retryDelay * time.Duration(1<<uint(attempt))
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second // Cap at 30 seconds
+			}
+
+			h.log.WithFields(logrus.Fields{
+				"backoff_ms": backoff.Milliseconds(),
+				"attempt":    attempt + 1,
+			}).Debug("Retrying batch write after backoff")
+
+			time.Sleep(backoff)
+		}
+	}
+
+	// All retries exhausted - log error and drop batch
+	h.log.WithFields(logrus.Fields{
+		"count":      len(batch),
+		"maxRetries": maxRetries,
+	}).Error("Failed to write telemetry batch after all retries, data lost")
+
+	// TODO: Consider writing to dead letter queue or local file for later recovery
 }
 
 // Stop gracefully shuts down the handler.

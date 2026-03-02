@@ -54,7 +54,11 @@ func (h *HealthHandler) Health(c *gin.Context) {
 
 	// Check database
 	dbHealth := ComponentHealth{Status: "healthy"}
-	if err := h.db.Health(); err != nil {
+	if h.db == nil {
+		dbHealth.Status = "unhealthy"
+		dbHealth.Details = map[string]any{"error": "database not configured"}
+		response.Status = "degraded"
+	} else if err := h.db.Health(); err != nil {
 		dbHealth.Status = "unhealthy"
 		dbHealth.Details = map[string]any{"error": err.Error()}
 		response.Status = "degraded"
@@ -101,6 +105,14 @@ func (h *HealthHandler) Liveness(c *gin.Context) {
 // This is used by Kubernetes to determine if the container can receive traffic.
 func (h *HealthHandler) Readiness(c *gin.Context) {
 	// Check if we can connect to the database
+	if h.db == nil {
+		h.log.Warn("Readiness check failed: database not configured")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status": "not_ready",
+			"reason": "database_not_configured",
+		})
+		return
+	}
 	if err := h.db.Health(); err != nil {
 		h.log.WithError(err).Warn("Readiness check failed: database unhealthy")
 		c.JSON(http.StatusServiceUnavailable, gin.H{

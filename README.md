@@ -193,7 +193,15 @@ pravara-mes/
 | GET | `/v1/orders/:id` | Get order by ID |
 | PATCH | `/v1/orders/:id` | Update order |
 | DELETE | `/v1/orders/:id` | Delete order |
-| POST | `/v1/webhooks/cotiza` | Cotiza Studio webhook |
+| GET | `/v1/orders/:id/items` | List order items |
+| POST | `/v1/orders/:id/items` | Add item to order |
+
+### Webhooks API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/webhooks/cotiza` | Cotiza Studio order webhook |
+| POST | `/v1/webhooks/forgesight` | ForgeSight integration (planned) |
 
 ### Tasks API (Kanban)
 
@@ -219,6 +227,15 @@ pravara-mes/
 | DELETE | `/v1/machines/:id` | Delete machine |
 | GET | `/v1/machines/:id/telemetry` | Get telemetry data |
 | POST | `/v1/machines/:id/heartbeat` | Update heartbeat |
+
+### Telemetry API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/telemetry` | List telemetry with filters |
+| GET | `/v1/telemetry/aggregated` | Get aggregated metrics |
+| GET | `/v1/telemetry/latest` | Get latest metric value |
+| POST | `/v1/telemetry/batch` | Batch insert telemetry (max 1000) |
 
 ## MQTT Topics (Unified Namespace)
 

@@ -15,22 +15,27 @@ import (
 // RegisterRoutes sets up all API routes.
 func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger) {
 	// Initialize OIDC verifier
-	verifier, err := auth.NewOIDCVerifier(cfg.Auth)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to initialize OIDC verifier")
+	oidcConfig := auth.OIDCConfig{
+		Issuer:   cfg.OIDC.Issuer,
+		JWKSURL:  cfg.OIDC.JWKSURL,
+		Audience: cfg.OIDC.Audience,
 	}
+	verifier := auth.NewOIDCVerifier(oidcConfig, log)
 
-	// Initialize repositories
-	orderRepo := repositories.NewOrderRepository(database.Conn)
-	taskRepo := repositories.NewTaskRepository(database.Conn)
-	machineRepo := repositories.NewMachineRepository(database.Conn)
-	telemetryRepo := repositories.NewTelemetryRepository(database.Conn)
+	// Initialize repositories (database.DB is the embedded *sql.DB)
+	orderRepo := repositories.NewOrderRepository(database.DB)
+	orderItemRepo := repositories.NewOrderItemRepository(database.DB)
+	taskRepo := repositories.NewTaskRepository(database.DB)
+	machineRepo := repositories.NewMachineRepository(database.DB)
+	telemetryRepo := repositories.NewTelemetryRepository(database.DB)
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
-	orderHandler := NewOrderHandler(orderRepo, log)
+	orderHandler := NewOrderHandler(orderRepo, orderItemRepo, log)
 	taskHandler := NewTaskHandler(taskRepo, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
+	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
+	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, "") // TODO: Add cotiza secret from config
 
 	// Health check endpoints (no auth required)
 	router.GET("/health", healthHandler.Health)
@@ -39,7 +44,7 @@ func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log
 
 	// API v1 routes (protected)
 	v1 := router.Group("/v1")
-	v1.Use(middleware.AuthMiddleware(verifier, database.Conn))
+	v1.Use(middleware.AuthMiddleware(verifier, database, log))
 	{
 		// Orders endpoints
 		orders := v1.Group("/orders")
@@ -49,8 +54,8 @@ func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log
 			orders.GET("/:id", orderHandler.GetByID)
 			orders.PATCH("/:id", orderHandler.Update)
 			orders.DELETE("/:id", orderHandler.Delete)
-			orders.GET("/:id/items", placeholderHandler("list order items"))
-			orders.POST("/:id/items", placeholderHandler("add order item"))
+			orders.GET("/:id/items", orderHandler.ListItems)
+			orders.POST("/:id/items", orderHandler.AddItem)
 		}
 
 		// Tasks (Kanban) endpoints
@@ -81,14 +86,16 @@ func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log
 		// Telemetry endpoints
 		telemetry := v1.Group("/telemetry")
 		{
-			telemetry.GET("", placeholderHandler("query telemetry"))
-			telemetry.POST("/batch", placeholderHandler("batch insert telemetry"))
+			telemetry.GET("", telemetryHandler.List)
+			telemetry.GET("/aggregated", telemetryHandler.GetAggregated)
+			telemetry.GET("/latest", telemetryHandler.GetLatest)
+			telemetry.POST("/batch", telemetryHandler.BatchInsert)
 		}
 
 		// Webhook endpoints (may need different auth)
 		webhooks := v1.Group("/webhooks")
 		{
-			webhooks.POST("/cotiza", placeholderHandler("cotiza webhook"))
+			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
 			webhooks.POST("/forgesight", placeholderHandler("forgesight webhook"))
 		}
 	}

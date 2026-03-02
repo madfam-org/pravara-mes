@@ -16,15 +16,17 @@ import (
 
 // OrderHandler handles order-related HTTP requests.
 type OrderHandler struct {
-	repo *repositories.OrderRepository
-	log  *logrus.Logger
+	repo         *repositories.OrderRepository
+	orderItemRepo *repositories.OrderItemRepository
+	log          *logrus.Logger
 }
 
 // NewOrderHandler creates a new order handler.
-func NewOrderHandler(repo *repositories.OrderRepository, log *logrus.Logger) *OrderHandler {
+func NewOrderHandler(repo *repositories.OrderRepository, orderItemRepo *repositories.OrderItemRepository, log *logrus.Logger) *OrderHandler {
 	return &OrderHandler{
-		repo: repo,
-		log:  log,
+		repo:         repo,
+		orderItemRepo: orderItemRepo,
+		log:          log,
 	}
 }
 
@@ -311,4 +313,124 @@ func (h *OrderHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Order cancelled successfully",
 	})
+}
+
+// CreateOrderItemRequest represents the request body for creating an order item.
+type CreateOrderItemRequest struct {
+	ProductName    string         `json:"product_name" binding:"required"`
+	ProductSKU     string         `json:"product_sku"`
+	Quantity       int            `json:"quantity" binding:"required,min=1"`
+	UnitPrice      float64        `json:"unit_price"`
+	Specifications map[string]any `json:"specifications"`
+	CADFileURL     string         `json:"cad_file_url"`
+}
+
+// ListItems returns all items for an order.
+func (h *OrderHandler) ListItems(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_id",
+			"message": "Invalid order ID format",
+		})
+		return
+	}
+
+	// Verify order exists
+	order, err := h.repo.GetByID(c.Request.Context(), orderID)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get order")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve order",
+		})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "Order not found",
+		})
+		return
+	}
+
+	items, err := h.orderItemRepo.List(c.Request.Context(), orderID)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to list order items")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve order items",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"order_id": orderID,
+		"items":    items,
+		"count":    len(items),
+	})
+}
+
+// AddItem adds an item to an order.
+func (h *OrderHandler) AddItem(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_id",
+			"message": "Invalid order ID format",
+		})
+		return
+	}
+
+	// Verify order exists
+	order, err := h.repo.GetByID(c.Request.Context(), orderID)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get order")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve order",
+		})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "Order not found",
+		})
+		return
+	}
+
+	var req CreateOrderItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	item := &types.OrderItem{
+		OrderID:        orderID,
+		ProductName:    req.ProductName,
+		ProductSKU:     req.ProductSKU,
+		Quantity:       req.Quantity,
+		UnitPrice:      req.UnitPrice,
+		Specifications: req.Specifications,
+		CADFileURL:     req.CADFileURL,
+	}
+
+	if err := h.orderItemRepo.Create(c.Request.Context(), item); err != nil {
+		h.log.WithError(err).Error("Failed to create order item")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to create order item",
+		})
+		return
+	}
+
+	h.log.WithFields(logrus.Fields{
+		"order_id": orderID,
+		"item_id":  item.ID,
+	}).Info("Order item created")
+	c.JSON(http.StatusCreated, item)
 }

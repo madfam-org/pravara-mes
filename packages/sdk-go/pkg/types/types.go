@@ -11,13 +11,14 @@ import (
 type OrderStatus string
 
 const (
-	OrderStatusReceived   OrderStatus = "received"
-	OrderStatusValidated  OrderStatus = "validated"
-	OrderStatusScheduled  OrderStatus = "scheduled"
-	OrderStatusInProgress OrderStatus = "in_progress"
-	OrderStatusCompleted  OrderStatus = "completed"
-	OrderStatusShipped    OrderStatus = "shipped"
-	OrderStatusCancelled  OrderStatus = "cancelled"
+	OrderStatusReceived     OrderStatus = "received"
+	OrderStatusConfirmed    OrderStatus = "confirmed"
+	OrderStatusInProduction OrderStatus = "in_production"
+	OrderStatusQualityCheck OrderStatus = "quality_check"
+	OrderStatusReady        OrderStatus = "ready"
+	OrderStatusShipped      OrderStatus = "shipped"
+	OrderStatusDelivered    OrderStatus = "delivered"
+	OrderStatusCancelled    OrderStatus = "cancelled"
 )
 
 // TaskStatus represents the Kanban board state of a task.
@@ -36,11 +37,12 @@ const (
 type MachineStatus string
 
 const (
+	MachineStatusOffline     MachineStatus = "offline"
+	MachineStatusOnline      MachineStatus = "online"
 	MachineStatusIdle        MachineStatus = "idle"
 	MachineStatusRunning     MachineStatus = "running"
 	MachineStatusSetup       MachineStatus = "setup"
 	MachineStatusMaintenance MachineStatus = "maintenance"
-	MachineStatusOffline     MachineStatus = "offline"
 	MachineStatusError       MachineStatus = "error"
 )
 
@@ -105,10 +107,12 @@ type Machine struct {
 	Name           string         `json:"name"`
 	Code           string         `json:"code"`
 	Type           string         `json:"type,omitempty"`
+	Description    string         `json:"description,omitempty"`
 	Location       string         `json:"location,omitempty"`
 	Status         MachineStatus  `json:"status"`
 	Capabilities   []string       `json:"capabilities,omitempty"`
 	Specifications map[string]any `json:"specifications,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 	MQTTTopic      string         `json:"mqtt_topic,omitempty"`
 	LastHeartbeat  *time.Time     `json:"last_heartbeat,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
