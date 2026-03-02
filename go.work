@@ -4,5 +4,6 @@ use (
 	./apps/pravara-api
 	./apps/machine-adapter
 	./apps/telemetry-worker
+	./apps/visualization-engine
 	./packages/sdk-go
 )
