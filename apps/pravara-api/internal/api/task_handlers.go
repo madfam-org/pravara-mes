@@ -11,13 +11,20 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // TaskHandler handles task-related HTTP requests (Kanban board operations).
 type TaskHandler struct {
-	repo *repositories.TaskRepository
-	log  *logrus.Logger
+	repo      *repositories.TaskRepository
+	log       *logrus.Logger
+	publisher *pubsub.Publisher
+}
+
+// SetPublisher sets the event publisher for real-time updates.
+func (h *TaskHandler) SetPublisher(p *pubsub.Publisher) {
+	h.publisher = p
 }
 
 // NewTaskHandler creates a new task handler.

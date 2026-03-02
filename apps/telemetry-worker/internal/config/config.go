@@ -75,6 +75,14 @@ func (c *MQTTConfig) BrokerURL() string {
 	return fmt.Sprintf("%s://%s:%d", protocol, c.Broker, c.Port)
 }
 
+// URL returns the Redis connection URL.
+func (c *RedisConfig) URL() string {
+	if c.Password != "" {
+		return fmt.Sprintf("redis://:%s@%s:%d/%d", c.Password, c.Host, c.Port, c.DB)
+	}
+	return fmt.Sprintf("redis://%s:%d/%d", c.Host, c.Port, c.DB)
+}
+
 // Load reads configuration from environment variables and config files.
 func Load() (*Config, error) {
 	v := viper.New()

@@ -11,14 +11,21 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // OrderHandler handles order-related HTTP requests.
 type OrderHandler struct {
-	repo         *repositories.OrderRepository
+	repo          *repositories.OrderRepository
 	orderItemRepo *repositories.OrderItemRepository
-	log          *logrus.Logger
+	log           *logrus.Logger
+	publisher     *pubsub.Publisher
+}
+
+// SetPublisher sets the event publisher for real-time updates.
+func (h *OrderHandler) SetPublisher(p *pubsub.Publisher) {
+	h.publisher = p
 }
 
 // NewOrderHandler creates a new order handler.

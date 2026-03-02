@@ -10,12 +10,13 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	OIDC     OIDCConfig     `mapstructure:"oidc"`
-	R2       R2Config       `mapstructure:"r2"`
+	App        AppConfig        `mapstructure:"app"`
+	Server     ServerConfig     `mapstructure:"server"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Redis      RedisConfig      `mapstructure:"redis"`
+	OIDC       OIDCConfig       `mapstructure:"oidc"`
+	R2         R2Config         `mapstructure:"r2"`
+	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
 }
 
 // AppConfig holds application-level settings.
@@ -60,6 +61,15 @@ type R2Config struct {
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 	Bucket          string `mapstructure:"bucket"`
+}
+
+// CentrifugoConfig holds Centrifugo WebSocket gateway settings.
+type CentrifugoConfig struct {
+	TokenSecret   string `mapstructure:"token_secret"`
+	TokenTTL      int    `mapstructure:"token_ttl"` // Token TTL in seconds
+	APIKey        string `mapstructure:"api_key"`
+	APIURL        string `mapstructure:"api_url"`
+	PublicURL     string `mapstructure:"public_url"`
 }
 
 // Load reads configuration from environment variables and config files.
@@ -120,6 +130,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("oidc.issuer", "https://auth.madfam.io")
 	v.SetDefault("oidc.jwks_url", "https://auth.madfam.io/.well-known/jwks.json")
 	v.SetDefault("oidc.audience", "pravara-api")
+
+	// Centrifugo defaults
+	v.SetDefault("centrifugo.token_ttl", 3600) // 1 hour
+	v.SetDefault("centrifugo.api_url", "http://pravara-gateway:9000")
+	v.SetDefault("centrifugo.public_url", "wss://gateway.pravara.madfam.io")
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -144,6 +159,12 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("r2.access_key_id", "R2_ACCESS_KEY_ID")
 	v.BindEnv("r2.secret_access_key", "R2_SECRET_ACCESS_KEY")
 	v.BindEnv("r2.bucket", "R2_BUCKET")
+
+	v.BindEnv("centrifugo.token_secret", "CENTRIFUGO_TOKEN_SECRET")
+	v.BindEnv("centrifugo.token_ttl", "CENTRIFUGO_TOKEN_TTL")
+	v.BindEnv("centrifugo.api_key", "CENTRIFUGO_API_KEY")
+	v.BindEnv("centrifugo.api_url", "CENTRIFUGO_API_URL")
+	v.BindEnv("centrifugo.public_url", "CENTRIFUGO_PUBLIC_URL")
 }
 
 // IsDevelopment returns true if running in development mode.

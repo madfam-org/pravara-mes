@@ -1,0 +1,105 @@
+# =============================================================================
+# PravaraMES Ingress Configuration
+# Routes external traffic to internal services
+# Assumes nginx-ingress controller and cert-manager are installed
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pravara-ingress
+  namespace: pravara-mes
+  labels:
+    app.kubernetes.io/name: pravara-mes
+    app.kubernetes.io/part-of: pravara-mes
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Enable CORS for API
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pravara.madfam.io"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  tls:
+    - hosts:
+        - pravara.madfam.io
+        - api.pravara.madfam.io
+        - gateway.pravara.madfam.io
+      secretName: pravara-tls
+  rules:
+    # UI Frontend
+    - host: pravara.madfam.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pravara-ui
+                port:
+                  number: 4501
+
+    # API Backend
+    - host: api.pravara.madfam.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pravara-api
+                port:
+                  number: 4500
+
+    # WebSocket Gateway (Centrifugo)
+    - host: gateway.pravara.madfam.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: centrifugo
+                port:
+                  number: 8000
+---
+# Separate Ingress for WebSocket with specific annotations
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pravara-gateway-ingress
+  namespace: pravara-mes
+  labels:
+    app.kubernetes.io/name: pravara-mes
+    app.kubernetes.io/part-of: pravara-mes
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # WebSocket-specific configurations
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$binary_remote_addr"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  tls:
+    - hosts:
+        - gateway.pravara.madfam.io
+      secretName: pravara-gateway-tls
+  rules:
+    - host: gateway.pravara.madfam.io
+      http:
+        paths:
+          - path: /connection
+            pathType: Prefix
+            backend:
+              service:
+                name: centrifugo
+                port:
+                  number: 8000

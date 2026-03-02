@@ -10,10 +10,16 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
 // RegisterRoutes sets up all API routes.
 func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger) {
+	RegisterRoutesWithPublisher(router, database, cfg, log, nil)
+}
+
+// RegisterRoutesWithPublisher sets up all API routes with an optional event publisher.
+func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher) {
 	// Initialize OIDC verifier
 	oidcConfig := auth.OIDCConfig{
 		Issuer:   cfg.OIDC.Issuer,
@@ -36,6 +42,14 @@ func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, "") // TODO: Add cotiza secret from config
+	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
+
+	// Set publisher on handlers that support events
+	if publisher != nil {
+		taskHandler.SetPublisher(publisher)
+		orderHandler.SetPublisher(publisher)
+		machineHandler.SetPublisher(publisher)
+	}
 
 	// Health check endpoints (no auth required)
 	router.GET("/health", healthHandler.Health)
@@ -98,6 +112,20 @@ func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log
 			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
 			webhooks.POST("/forgesight", placeholderHandler("forgesight webhook"))
 		}
+
+		// Real-time connection endpoints
+		realtime := v1.Group("/realtime")
+		{
+			realtime.GET("/token", realtimeHandler.GetToken)
+		}
+	}
+
+	// Centrifugo proxy endpoints (no user auth - called by Centrifugo internally)
+	// These should be protected by API key or internal network only
+	centrifugoProxy := router.Group("/v1/realtime")
+	{
+		centrifugoProxy.POST("/auth", realtimeHandler.AuthConnect)
+		centrifugoProxy.POST("/subscribe", realtimeHandler.AuthSubscribe)
 	}
 }
 

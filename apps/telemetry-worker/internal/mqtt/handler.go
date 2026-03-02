@@ -38,6 +38,7 @@ type TelemetryStore interface {
 type Handler struct {
 	client      mqtt.Client
 	store       TelemetryStore
+	publisher   *EventPublisher
 	cfg         *config.Config
 	log         *logrus.Logger
 	batch       []types.Telemetry
@@ -64,6 +65,11 @@ func NewHandler(cfg *config.Config, store TelemetryStore, log *logrus.Logger) *H
 		stopChan:    make(chan struct{}),
 		messageChan: make(chan *TelemetryMessage, cfg.Worker.BatchSize*cfg.Worker.NumWorkers),
 	}
+}
+
+// SetPublisher sets the event publisher for real-time updates.
+func (h *Handler) SetPublisher(p *EventPublisher) {
+	h.publisher = p
 }
 
 // Connect establishes connection to the MQTT broker.
@@ -298,6 +304,16 @@ func (h *Handler) writeBatchWithRetry(batch []types.Telemetry) {
 				"count":   len(batch),
 				"attempt": attempt + 1,
 			}).Debug("Flushed telemetry batch")
+
+			// Publish events to Redis for real-time distribution
+			if h.publisher != nil {
+				pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if pubErr := h.publisher.PublishTelemetryBatch(pubCtx, batch); pubErr != nil {
+					h.log.WithError(pubErr).Debug("Failed to publish telemetry events to Redis")
+				}
+				pubCancel()
+			}
+
 			return
 		}
 

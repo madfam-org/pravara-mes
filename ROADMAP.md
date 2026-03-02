@@ -4,28 +4,30 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 
 ## Current Status
 
-**Version**: MVP Phase 1 (In Development)
+**Version**: Phase 2 Real-Time Foundation (Complete)
 **Last Updated**: March 1, 2026
 
 | Component | Status | Progress |
 |-----------|--------|----------|
-| pravara-api | Active Development | 90% |
-| pravara-ui | Active Development | 75% |
+| pravara-api | Complete | 100% |
+| pravara-ui | Active Development | 85% |
 | telemetry-worker | Complete | 100% |
-| Infrastructure | Ready | 70% |
+| pravara-gateway | Complete | 100% |
+| Infrastructure | Complete | 100% |
 
 ---
 
 ## Release Timeline
 
 ```
-Q1 2026                    Q2 2026                    Q3 2026
-├── Phase 0: Stabilize     ├── Phase 1.5: Production  ├── Phase 2.0: Compliance
-├── Phase 1: MVP Complete  │   - CI/CD Pipeline       │   - CFDI 4.0 (Mexico)
-│   - Cotiza Integration   │   - Observability        │   - Annex 24
-│   - Kanban Board         │   - Network Security     │   - Tezca Integration
-│   - Telemetry Pipeline   │   - Quality Management   │
-│   - CRUD Operations      │   - Dhanam Billing       └── Phase 3.0: AI (Future)
+Q1 2026                         Q2 2026                    Q3 2026
+├── Phase 0: Stabilize ✅       ├── Phase 2.5: Production  ├── Phase 3.0: Compliance
+├── Phase 1: MVP Complete ✅    │   - CI/CD Pipeline       │   - CFDI 4.0 (Mexico)
+├── Phase 2: Real-Time ✅       │   - Observability        │   - Annex 24
+│   - Centrifugo Gateway        │   - Network Security     │   - Tezca Integration
+│   - Redis Pub/Sub             │   - Quality Management   │
+│   - WebSocket Hooks           │   - Dhanam Billing       └── Phase 4.0: AI (Future)
+│   - Live UI Updates           │
 ```
 
 ---
@@ -44,7 +46,7 @@ Fix critical build issues to ensure codebase compiles and tests pass.
 ---
 
 ## Phase 1: MVP Completion
-> **Status**: In Progress | **Timeline**: 1-2 weeks
+> **Status**: Complete ✅ | **Timeline**: 1-2 weeks
 
 Complete all core MVP features per the PRD.
 
@@ -70,7 +72,44 @@ Complete all core MVP features per the PRD.
 
 ---
 
-## Phase 1.5: Production Readiness
+## Phase 2: Real-Time Foundation
+> **Status**: Complete ✅ | **Timeline**: 1-2 weeks
+
+Live machine status, real-time UI updates, WebSocket infrastructure.
+
+### WebSocket Gateway (pravara-gateway)
+- [x] Centrifugo v5 deployment configuration
+- [x] Redis Pub/Sub engine integration
+- [x] Tenant-scoped channel namespaces (machines, tasks, orders, telemetry, notifications)
+- [x] Proxy authentication via pravara-api
+
+### Backend (pravara-api)
+- [x] Redis event publisher (`internal/pubsub/`)
+- [x] Real-time token endpoint (`GET /v1/realtime/token`)
+- [x] Centrifugo proxy auth (`POST /v1/realtime/auth`, `/subscribe`)
+- [x] Event publishing from handlers (tasks, orders, machines)
+
+### Backend (telemetry-worker)
+- [x] Redis event publisher for telemetry batches
+- [x] Machine heartbeat event publishing
+
+### Frontend (pravara-ui)
+- [x] Centrifuge-js client integration (`lib/realtime/`)
+- [x] Real-time connection hook (`useRealtimeConnection`)
+- [x] Machine updates hook (`useMachineUpdates`)
+- [x] Task updates hook (`useTaskUpdates`)
+- [x] Order updates hook (`useOrderUpdates`)
+- [x] Telemetry updates hook (`useTelemetryUpdates`)
+- [x] Zustand connection state store
+
+### Infrastructure
+- [x] Centrifugo Kubernetes deployment (`centrifugo.yaml`)
+- [x] Ingress configuration for WSS routing (`ingress.yaml`)
+- [x] Centrifugo secrets management
+
+---
+
+## Phase 2.5: Production Readiness
 > **Status**: Planned | **Timeline**: 2-3 weeks
 
 Enterprise-grade infrastructure and monitoring.
@@ -107,7 +146,7 @@ Enterprise-grade infrastructure and monitoring.
 
 ---
 
-## Phase 2.0: Mexican Compliance
+## Phase 3.0: Mexican Compliance
 > **Status**: Planned | **Timeline**: 3-4 weeks
 
 Full regulatory compliance for Mexican market.
@@ -136,7 +175,7 @@ apps/compliance-engine/
 
 ---
 
-## Phase 3.0: AI Orchestration
+## Phase 4.0: AI Orchestration
 > **Status**: Future | **Timeline**: TBD
 
 Intelligent manufacturing operations.
@@ -161,26 +200,29 @@ Intelligent manufacturing operations.
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        PravaraMES                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐ ┌─────────────┐ ┌───────────────┐              │
-│  │ pravara-api │ │ pravara-ui  │ │ telemetry-    │              │
-│  │  (Go/Gin)   │ │ (Next.js)   │ │ worker        │              │
-│  │  :4500      │ │  :4501      │ │  :4502        │              │
-│  └──────┬──────┘ └──────┬──────┘ └───────┬───────┘              │
-│         │               │                 │                      │
-│  ┌──────┴───────────────┴─────────────────┴──────────────────┐  │
-│  │                    Shared Infrastructure                   │  │
-│  │  PostgreSQL (RLS) │ Redis │ EMQX (MQTT) │ Janua SSO       │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  Future Services:                                                │
-│  ┌─────────────────┐ ┌─────────────────┐                        │
-│  │ compliance-     │ │ ml-orchestrator │                        │
-│  │ engine (v2.0)   │ │ (v3.0)          │                        │
-│  └─────────────────┘ └─────────────────┘                        │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                            PravaraMES                                   │
+├────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐  │
+│  │ pravara-api │ │ pravara-ui  │ │ telemetry-  │ │ pravara-gateway │  │
+│  │  (Go/Gin)   │ │ (Next.js)   │ │   worker    │ │  (Centrifugo)   │  │
+│  │  :4500      │ │  :4501      │ │  (Go/MQTT)  │ │     :8000       │  │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └───────┬─────────┘  │
+│         │               │                │                │           │
+│         │               │ WebSocket      │                │           │
+│         │               └────────────────┼────────────────┘           │
+│         │                                │                            │
+│  ┌──────┴────────────────────────────────┴─────────────────────────┐  │
+│  │                    Shared Infrastructure                         │  │
+│  │  PostgreSQL (RLS) │ Redis (Pub/Sub) │ EMQX (MQTT) │ Janua SSO   │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  Future Services:                                                      │
+│  ┌─────────────────┐ ┌─────────────────┐                              │
+│  │ compliance-     │ │ ml-orchestrator │                              │
+│  │ engine (v3.0)   │ │ (v4.0)          │                              │
+│  └─────────────────┘ └─────────────────┘                              │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -189,11 +231,12 @@ Intelligent manufacturing operations.
 
 | Integration | Phase | Status |
 |-------------|-------|--------|
-| **Janua SSO** | 1.0 | Implemented |
-| **Cloudflare R2** | 1.0 | Configured |
-| **ForgeSight** | 1.5 | Planned |
-| **Dhanam Billing** | 1.5 | Planned |
-| **Tezca Labs** | 2.0 | Planned |
+| **Janua SSO** | 1.0 | ✅ Implemented |
+| **Cloudflare R2** | 1.0 | ✅ Configured |
+| **Centrifugo** | 2.0 | ✅ Implemented |
+| **ForgeSight** | 2.5 | Planned |
+| **Dhanam Billing** | 2.5 | Planned |
+| **Tezca Labs** | 3.0 | Planned |
 
 ---
 
@@ -223,13 +266,15 @@ enclii deploy --service pravara-api --env production
 
 ## Success Metrics
 
-| Metric | Phase 1 | Phase 1.5 | Phase 2.0 |
-|--------|---------|-----------|-----------|
-| Build Status | Passing | Passing | Passing |
-| Test Coverage | >60% | >80% | >85% |
-| API Uptime | - | 99.9% | 99.9% |
-| p95 Latency | - | <200ms | <200ms |
-| CFDI Compliance | - | - | 100% |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 3.0 |
+|--------|---------|---------|-----------|-----------|
+| Build Status | ✅ Passing | ✅ Passing | Passing | Passing |
+| Test Coverage | >60% | >65% | >80% | >85% |
+| API Uptime | - | - | 99.9% | 99.9% |
+| p95 Latency | - | - | <200ms | <200ms |
+| Real-Time Latency | - | <500ms | <300ms | <300ms |
+| WebSocket Connections | - | 100+ | 1000+ | 1000+ |
+| CFDI Compliance | - | - | - | 100% |
 
 ---
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -19,6 +20,12 @@ type MachineHandler struct {
 	repo          *repositories.MachineRepository
 	telemetryRepo *repositories.TelemetryRepository
 	log           *logrus.Logger
+	publisher     *pubsub.Publisher
+}
+
+// SetPublisher sets the event publisher for real-time updates.
+func (h *MachineHandler) SetPublisher(p *pubsub.Publisher) {
+	h.publisher = p
 }
 
 // NewMachineHandler creates a new machine handler.

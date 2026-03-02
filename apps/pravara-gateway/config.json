@@ -1,0 +1,119 @@
+{
+  "version": "5",
+  "engine": "redis",
+  "admin": true,
+  "admin_insecure": false,
+  "api_insecure": false,
+
+  "token_hmac_secret_key": "${CENTRIFUGO_TOKEN_HMAC_SECRET}",
+  "api_key": "${CENTRIFUGO_API_KEY}",
+  "admin_password": "${CENTRIFUGO_ADMIN_PASSWORD}",
+  "admin_secret": "${CENTRIFUGO_ADMIN_SECRET}",
+
+  "redis_address": "${REDIS_URL}",
+
+  "allowed_origins": [
+    "${PRAVARA_UI_ORIGIN}",
+    "http://localhost:4501",
+    "http://localhost:3000"
+  ],
+
+  "namespaces": [
+    {
+      "name": "machines",
+      "publish": false,
+      "subscribe": true,
+      "presence": true,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "60s",
+      "recover": true,
+      "position": true
+    },
+    {
+      "name": "tasks",
+      "publish": false,
+      "subscribe": true,
+      "presence": false,
+      "join_leave": false,
+      "history_size": 100,
+      "history_ttl": "120s",
+      "recover": true,
+      "position": true
+    },
+    {
+      "name": "orders",
+      "publish": false,
+      "subscribe": true,
+      "presence": false,
+      "join_leave": false,
+      "history_size": 100,
+      "history_ttl": "120s",
+      "recover": true,
+      "position": true
+    },
+    {
+      "name": "telemetry",
+      "publish": false,
+      "subscribe": true,
+      "presence": false,
+      "join_leave": false,
+      "history_size": 200,
+      "history_ttl": "30s",
+      "recover": true,
+      "position": true
+    },
+    {
+      "name": "notifications",
+      "publish": false,
+      "subscribe": true,
+      "presence": false,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "300s",
+      "recover": true,
+      "position": true
+    }
+  ],
+
+  "client": {
+    "channel_limit": 128,
+    "queue_max_size": 1048576,
+    "presence_update_interval": "25s",
+    "expired_close_delay": "25s",
+    "expired_sub_close_delay": "25s",
+    "stale_close_delay": "25s",
+    "user_connection_limit": 10
+  },
+
+  "channel": {
+    "without_namespace": false,
+    "max_length": 255
+  },
+
+  "log_level": "info",
+  "log_file": "",
+
+  "health": true,
+  "prometheus": true,
+  "prometheus_path": "/metrics",
+
+  "websocket_handler_prefix": "/connection/websocket",
+  "sse_handler_prefix": "/connection/sse",
+
+  "websocket_compression": true,
+  "websocket_compression_min_size": 0,
+
+  "http_stream": {
+    "enabled": true,
+    "handler_prefix": "/connection/http_stream"
+  },
+
+  "port": "8000",
+  "internal_port": "9000",
+
+  "proxy_connect_endpoint": "${PRAVARA_API_URL}/v1/realtime/auth",
+  "proxy_connect_timeout": "5s",
+  "proxy_subscribe_endpoint": "${PRAVARA_API_URL}/v1/realtime/subscribe",
+  "proxy_subscribe_timeout": "3s"
+}

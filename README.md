@@ -11,27 +11,31 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 - **Unified Namespace (UNS)** - Event-driven architecture replacing ISA-95 hierarchy
 - **Multi-Tenant** - PostgreSQL Row-Level Security for secure data isolation
 - **Real-Time Telemetry** - MQTT-based machine data ingestion via EMQX
+- **Real-Time Updates** - WebSocket-based live UI updates via Centrifugo
 - **Kanban Scheduling** - Visual drag-and-drop work-in-progress tracking
 - **Janua SSO** - OAuth 2.0/OIDC authentication with RS256 JWT
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           PravaraMES                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐            │
-│  │ pravara-api │  │ pravara-ui  │  │ telemetry-worker  │            │
-│  │  (Go/Gin)   │  │ (Next.js)   │  │    (Go/MQTT)      │            │
-│  │  :4500      │  │  :4501      │  │    :4502          │            │
-│  └──────┬──────┘  └──────┬──────┘  └─────────┬─────────┘            │
-│         │                │                    │                      │
-│         └────────────────┼────────────────────┘                      │
-│                          │                                           │
-│  ┌───────────────────────┴───────────────────────────────────────┐  │
-│  │                PostgreSQL + Redis + EMQX                       │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                              PravaraMES                                    │
+├───────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │ pravara-api │  │ pravara-ui  │  │  telemetry- │  │ pravara-gateway │  │
+│  │  (Go/Gin)   │  │ (Next.js)   │  │   worker    │  │  (Centrifugo)   │  │
+│  │  :4500      │  │  :4501      │  │  (Go/MQTT)  │  │     :8000       │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └───────┬─────────┘  │
+│         │                │                │                  │            │
+│         │                │ WebSocket      │                  │            │
+│         │                └────────────────┼──────────────────┘            │
+│         │                                 │                               │
+│         └─────────────────────────────────┘                               │
+│                          │                                                │
+│  ┌───────────────────────┴────────────────────────────────────────────┐  │
+│  │            PostgreSQL + Redis (Pub/Sub) + EMQX (MQTT)               │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Tech Stack
@@ -41,7 +45,8 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 | **Backend API** | Go 1.24 + Gin |
 | **Frontend** | Next.js 15 + React 19 + Radix UI + Tailwind CSS |
 | **Database** | PostgreSQL 16 with Row-Level Security |
-| **Cache** | Redis 7 |
+| **Cache/Pub-Sub** | Redis 7 |
+| **Real-Time Gateway** | Centrifugo v5 (WebSocket) |
 | **Auth** | Janua SSO (OIDC, RS256 JWT) |
 | **IIoT Broker** | EMQX (MQTT 5.0) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
@@ -114,6 +119,7 @@ PRAVARA_REDIS_PORT=6379
 | pravara-api | 4500 | REST API (Go/Gin) |
 | pravara-ui | 4501 | Web Dashboard (Next.js) |
 | telemetry-worker | 4502 | MQTT Telemetry Processor |
+| pravara-gateway | 8000 | Real-Time WebSocket Gateway (Centrifugo) |
 
 ## Project Structure
 
@@ -130,6 +136,7 @@ pravara-mes/
 │   │       │   ├── migrations/   # SQL migrations
 │   │       │   └── repositories/ # Data access
 │   │       ├── middleware/       # HTTP middleware
+│   │       ├── pubsub/           # Redis event publishing
 │   │       └── services/         # Business logic
 │   │
 │   ├── pravara-ui/               # Next.js dashboard
@@ -142,14 +149,21 @@ pravara-mes/
 │   │   ├── components/           # React components
 │   │   │   ├── kanban/           # Kanban board components
 │   │   │   └── ui/               # Radix UI primitives
-│   │   └── lib/                  # Utilities & API client
+│   │   ├── lib/                  # Utilities & API client
+│   │   │   └── realtime/         # WebSocket client & types
+│   │   ├── hooks/                # React hooks (incl. realtime)
+│   │   └── stores/               # Zustand state stores
 │   │
-│   └── telemetry-worker/         # MQTT processor
-│       ├── cmd/worker/           # Entry point
-│       └── internal/
-│           ├── config/           # Worker configuration
-│           ├── db/               # Database operations
-│           └── mqtt/             # MQTT handler & processing
+│   ├── telemetry-worker/         # MQTT processor
+│   │   ├── cmd/worker/           # Entry point
+│   │   └── internal/
+│   │       ├── config/           # Worker configuration
+│   │       ├── db/               # Database operations
+│   │       └── mqtt/             # MQTT handler & event publishing
+│   │
+│   └── pravara-gateway/          # Real-time WebSocket gateway
+│       ├── config.json           # Centrifugo configuration
+│       └── Dockerfile
 │
 ├── packages/
 │   ├── sdk-go/                   # Shared Go types
@@ -164,7 +178,9 @@ pravara-mes/
 │       │   ├── secrets.yaml
 │       │   ├── postgres.yaml
 │       │   ├── redis.yaml
-│       │   └── emqx.yaml
+│       │   ├── emqx.yaml
+│       │   ├── centrifugo.yaml   # WebSocket gateway
+│       │   └── ingress.yaml      # External routing
 │       └── production/           # Production overlays
 │
 ├── scripts/                      # Automation scripts
@@ -228,6 +244,14 @@ pravara-mes/
 | GET | `/v1/machines/:id/telemetry` | Get telemetry data |
 | POST | `/v1/machines/:id/heartbeat` | Update heartbeat |
 
+### Real-Time API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/realtime/token` | Get Centrifugo connection token |
+| POST | `/v1/realtime/auth` | Proxy auth for Centrifugo connect |
+| POST | `/v1/realtime/subscribe` | Proxy auth for channel subscription |
+
 ### Telemetry API
 
 | Method | Endpoint | Description |
@@ -287,6 +311,56 @@ madfam/hel/production/line-1/cnc-01/event/job_completed
 | humidity | percent | Ambient humidity |
 | cycle_count | count | Production cycles |
 | uptime | hours | Machine uptime |
+
+## Real-Time WebSocket (Centrifugo)
+
+PravaraMES uses Centrifugo for real-time WebSocket communication. Events are published via Redis Pub/Sub.
+
+### Channel Namespaces
+
+| Channel | Events | Description |
+|---------|--------|-------------|
+| `machines:{tenant_id}` | status_changed, heartbeat, created, updated, deleted | Machine status updates |
+| `tasks:{tenant_id}` | moved, assigned, created, updated, deleted, completed | Task/Kanban updates |
+| `orders:{tenant_id}` | status_changed, created, updated, deleted | Order status changes |
+| `telemetry:{tenant_id}` | telemetry_batch | Real-time telemetry data |
+| `notifications:{tenant_id}` | alert, warning, info | System notifications |
+
+### Event Payload Schema
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "machine.status_changed",
+  "tenant_id": "123e4567-e89b-12d3-a456-426614174000",
+  "timestamp": "2026-03-01T15:30:00.000Z",
+  "data": {
+    "machine_id": "cnc-01-uuid",
+    "machine_name": "CNC-01",
+    "old_status": "idle",
+    "new_status": "running",
+    "updated_at": "2026-03-01T15:30:00.000Z"
+  }
+}
+```
+
+### Frontend Integration
+
+```typescript
+// Connect to real-time updates
+import { useRealtimeConnection, useMachineUpdates } from '@/hooks';
+
+function Dashboard() {
+  const { isConnected } = useRealtimeConnection();
+
+  // Auto-updates React Query cache on machine events
+  useMachineUpdates({
+    onStatusChange: (data) => console.log('Machine status:', data),
+  });
+
+  return <div>Connected: {isConnected ? 'Yes' : 'No'}</div>;
+}
+```
 
 ## Database Schema
 

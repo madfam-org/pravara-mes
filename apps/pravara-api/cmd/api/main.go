@@ -16,6 +16,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/api"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
 func main() {
@@ -52,6 +53,21 @@ func main() {
 
 	log.Info("Database connection established")
 
+	// Initialize Redis publisher for real-time events (optional)
+	var publisher *pubsub.Publisher
+	if cfg.Redis.URL != "" {
+		var err error
+		publisher, err = pubsub.NewPublisher(pubsub.PublisherConfig{
+			RedisURL: cfg.Redis.URL,
+		}, log)
+		if err != nil {
+			log.WithError(err).Warn("Failed to connect to Redis for real-time events, continuing without publisher")
+		} else {
+			defer publisher.Close()
+			log.Info("Redis publisher connected for real-time events")
+		}
+	}
+
 	// Set Gin mode
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -64,8 +80,8 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(log))
 
-	// Register routes
-	api.RegisterRoutes(router, database, cfg, log)
+	// Register routes with optional publisher
+	api.RegisterRoutesWithPublisher(router, database, cfg, log, publisher)
 
 	// Create HTTP server
 	srv := &http.Server{

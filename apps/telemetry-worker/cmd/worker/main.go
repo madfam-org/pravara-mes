@@ -46,8 +46,29 @@ func main() {
 
 	log.Info("Connected to database")
 
+	// Initialize Redis event publisher (optional - for real-time updates)
+	var publisher *mqtt.EventPublisher
+	redisURL := cfg.Redis.URL()
+	if redisURL != "" {
+		var err error
+		publisher, err = mqtt.NewEventPublisher(mqtt.PublisherConfig{
+			RedisURL: redisURL,
+		}, log)
+		if err != nil {
+			log.WithError(err).Warn("Failed to connect to Redis for event publishing, real-time updates disabled")
+		} else {
+			defer publisher.Close()
+			log.Info("Event publisher connected to Redis")
+		}
+	}
+
 	// Initialize MQTT handler
 	handler := mqtt.NewHandler(cfg, store, log)
+
+	// Set event publisher if available
+	if publisher != nil {
+		handler.SetPublisher(publisher)
+	}
 
 	// Connect to MQTT broker
 	if err := handler.Connect(); err != nil {

@@ -9,6 +9,8 @@ data:
   environment: production
   api_url: "https://api.pravara.madfam.io"
   ui_url: "https://pravara.madfam.io"
+  gateway_url: "wss://gateway.pravara.madfam.io/connection/websocket"
   database_host: "postgres-pravara"
   redis_host: "redis-pravara"
   mqtt_broker: "emqx-pravara"
+  centrifugo_host: "centrifugo"

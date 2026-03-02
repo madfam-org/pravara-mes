@@ -1,0 +1,135 @@
+# =============================================================================
+# PravaraMES Gateway - enclii Deployment Specification
+# Real-time WebSocket gateway powered by Centrifugo
+# =============================================================================
+
+apiVersion: enclii.io/v1
+kind: Service
+metadata:
+  name: pravara-gateway
+  namespace: pravara-mes
+  labels:
+    app: pravara-gateway
+    tier: gateway
+
+spec:
+  # Build configuration
+  build:
+    dockerfile: Dockerfile
+    context: .
+
+  # Runtime configuration
+  runtime:
+    port: 8000
+    additionalPorts:
+      - name: internal
+        port: 9000
+        targetPort: 9000
+    replicas:
+      min: 2
+      max: 10
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  # Environment variables
+  env:
+    - name: CENTRIFUGO_TOKEN_HMAC_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: pravara-gateway
+          key: token_hmac_secret
+    - name: CENTRIFUGO_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: pravara-gateway
+          key: api_key
+    - name: CENTRIFUGO_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: pravara-gateway
+          key: admin_password
+    - name: CENTRIFUGO_ADMIN_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: pravara-gateway
+          key: admin_secret
+    - name: REDIS_URL
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: redis_url
+    - name: PRAVARA_API_URL
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: api_internal_url
+    - name: PRAVARA_UI_ORIGIN
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: ui_origin
+
+  # Health checks
+  health:
+    liveness:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readiness:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 3
+      periodSeconds: 5
+
+  # Deployment strategy
+  deployment:
+    strategy: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Autoscaling based on connections
+  autoscaling:
+    enabled: true
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+
+  # Security
+  security:
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+    podSecurityContext:
+      fsGroup: 1000
+
+  # Ingress for external WebSocket access
+  ingress:
+    enabled: true
+    host: gateway.pravara.madfam.io
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+      nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    tls:
+      enabled: true
+      secretName: pravara-gateway-tls
