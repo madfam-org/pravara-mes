@@ -13,8 +13,8 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { KanbanColumn } from "./column";
-import { KanbanCard } from "./card";
-import type { Task, TaskStatus } from "@/lib/api";
+import { KanbanCard, type CommandStatus } from "./card";
+import type { Task, TaskStatus, Machine } from "@/lib/api";
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   { id: "backlog", title: "Backlog", color: "bg-blue-500" },
@@ -27,11 +27,19 @@ const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
 
 interface KanbanBoardProps {
   tasks: Record<TaskStatus, Task[]>;
+  machines?: Map<string, Machine>;
+  commandStatuses?: Map<string, CommandStatus>;
   onTaskMove: (taskId: string, status: TaskStatus, position: number) => void;
   onTaskClick?: (task: Task) => void;
 }
 
-export function KanbanBoard({ tasks, onTaskMove, onTaskClick }: KanbanBoardProps) {
+export function KanbanBoard({
+  tasks,
+  machines,
+  commandStatuses,
+  onTaskMove,
+  onTaskClick,
+}: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   const sensors = useSensors(
@@ -100,6 +108,16 @@ export function KanbanBoard({ tasks, onTaskMove, onTaskClick }: KanbanBoardProps
     return undefined;
   }
 
+  function getMachineForTask(task: Task): Machine | undefined {
+    if (!machines || !task.machine_id) return undefined;
+    return machines.get(task.machine_id);
+  }
+
+  function getCommandStatusForTask(task: Task): CommandStatus | undefined {
+    if (!commandStatuses) return undefined;
+    return commandStatuses.get(task.id);
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -124,6 +142,8 @@ export function KanbanBoard({ tasks, onTaskMove, onTaskClick }: KanbanBoardProps
                   <KanbanCard
                     key={task.id}
                     task={task}
+                    machine={getMachineForTask(task)}
+                    commandStatus={getCommandStatusForTask(task)}
                     onClick={() => onTaskClick?.(task)}
                   />
                 ))}
@@ -133,7 +153,14 @@ export function KanbanBoard({ tasks, onTaskMove, onTaskClick }: KanbanBoardProps
         ))}
       </div>
       <DragOverlay>
-        {activeTask ? <KanbanCard task={activeTask} isDragging /> : null}
+        {activeTask ? (
+          <KanbanCard
+            task={activeTask}
+            machine={getMachineForTask(activeTask)}
+            commandStatus={getCommandStatusForTask(activeTask)}
+            isDragging
+          />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );

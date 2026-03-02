@@ -31,6 +31,19 @@ type AckStore interface {
 	GetMachineByCode(ctx context.Context, code string) (*MachineInfo, error)
 	// UpdateCommandStatus updates the status of a command.
 	UpdateCommandStatus(ctx context.Context, commandID uuid.UUID, status string, message string) error
+	// GetTaskCommandByCommandID retrieves task command info by command ID.
+	GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error)
+	// UpdateTaskStatusOnJobComplete updates task status when a job completes.
+	UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error
+}
+
+// TaskCommandInfo contains task command information for job completion handling.
+type TaskCommandInfo struct {
+	ID          uuid.UUID
+	TaskID      uuid.UUID
+	TenantID    uuid.UUID
+	MachineID   uuid.UUID
+	CommandType string
 }
 
 // MachineInfo contains the information needed to process acks.
@@ -176,9 +189,18 @@ func (h *AckHandler) handleAckMessage(client mqtt.Client, msg mqtt.Message) {
 		if !ack.Success {
 			status = "failed"
 		}
+		// Mark as completed if job_completed is true
+		if ack.JobCompleted && ack.Success {
+			status = "completed"
+		}
 		if err := store.UpdateCommandStatus(ctx, commandID, status, ack.Message); err != nil {
 			log.WithError(err).Warn("Failed to update command status")
 			// Continue to publish ack event anyway
+		}
+
+		// Handle job completion - update task status
+		if ack.JobCompleted && ack.Success {
+			h.handleJobCompletion(ctx, store, commandID, ack.Timestamp, log)
 		}
 	}
 
@@ -198,7 +220,10 @@ func (h *AckHandler) handleAckMessage(client mqtt.Client, msg mqtt.Message) {
 		}
 	}
 
-	log.WithField("machine_code", machineCode).Info("Command acknowledgment processed")
+	log.WithFields(logrus.Fields{
+		"machine_code":  machineCode,
+		"job_completed": ack.JobCompleted,
+	}).Info("Command acknowledgment processed")
 }
 
 // extractMachineCode extracts the machine code from an ack topic.
@@ -210,6 +235,43 @@ func extractMachineCode(topic string) string {
 	}
 	// Machine code is at index 4 (5th element)
 	return parts[4]
+}
+
+// handleJobCompletion handles task status updates when a job completes successfully.
+func (h *AckHandler) handleJobCompletion(ctx context.Context, store AckStore, commandID uuid.UUID, completedAt time.Time, log *logrus.Entry) {
+	// Look up the task command to find the associated task
+	taskCmd, err := store.GetTaskCommandByCommandID(ctx, commandID)
+	if err != nil {
+		log.WithError(err).Warn("Failed to get task command for job completion")
+		return
+	}
+
+	if taskCmd == nil {
+		// No task associated with this command - that's OK, not all commands are task-driven
+		log.Debug("No task command found for this command - skipping task update")
+		return
+	}
+
+	// Only process start_job completions for task status updates
+	if taskCmd.CommandType != string(CommandStartJob) {
+		log.Debug("Command is not start_job - skipping task status update")
+		return
+	}
+
+	// Move task to quality_check status
+	newStatus := "quality_check"
+	if err := store.UpdateTaskStatusOnJobComplete(ctx, taskCmd.TaskID, newStatus, completedAt); err != nil {
+		log.WithError(err).WithFields(logrus.Fields{
+			"task_id":    taskCmd.TaskID,
+			"new_status": newStatus,
+		}).Error("Failed to update task status on job completion")
+		return
+	}
+
+	log.WithFields(logrus.Fields{
+		"task_id":    taskCmd.TaskID,
+		"new_status": newStatus,
+	}).Info("Task status updated on job completion")
 }
 
 // Stop gracefully shuts down the ack handler.

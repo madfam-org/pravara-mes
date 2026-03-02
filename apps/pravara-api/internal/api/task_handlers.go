@@ -12,19 +12,26 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // TaskHandler handles task-related HTTP requests (Kanban board operations).
 type TaskHandler struct {
-	repo      *repositories.TaskRepository
-	log       *logrus.Logger
-	publisher *pubsub.Publisher
+	repo       *repositories.TaskRepository
+	log        *logrus.Logger
+	publisher  *pubsub.Publisher
+	automation *services.AutomationService
 }
 
 // SetPublisher sets the event publisher for real-time updates.
 func (h *TaskHandler) SetPublisher(p *pubsub.Publisher) {
 	h.publisher = p
+}
+
+// SetAutomation sets the automation service for machine-task integration.
+func (h *TaskHandler) SetAutomation(a *services.AutomationService) {
+	h.automation = a
 }
 
 // NewTaskHandler creates a new task handler.
@@ -353,6 +360,26 @@ func (h *TaskHandler) Move(c *gin.Context) {
 		return
 	}
 
+	// Get task before move to capture old status for automation
+	task, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get task for move")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve task",
+		})
+		return
+	}
+	if task == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "Task not found",
+		})
+		return
+	}
+
+	oldStatus := task.Status
+
 	if err := h.repo.MoveTask(c.Request.Context(), id, newStatus, req.Position); err != nil {
 		if err.Error() == "task not found" {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -367,6 +394,42 @@ func (h *TaskHandler) Move(c *gin.Context) {
 			"message": "Failed to move task",
 		})
 		return
+	}
+
+	// Trigger automation if status changed
+	if oldStatus != newStatus && h.automation != nil {
+		// Get user ID for automation tracking
+		userID, _ := middleware.GetUserID(c)
+		userUUID, _ := uuid.Parse(userID)
+
+		// Update task status for automation
+		task.Status = newStatus
+
+		// Trigger automation (non-blocking - errors are logged)
+		if err := h.automation.OnTaskStatusChange(c.Request.Context(), task, oldStatus, newStatus, userUUID); err != nil {
+			h.log.WithError(err).WithFields(logrus.Fields{
+				"task_id":    id,
+				"old_status": oldStatus,
+				"new_status": newStatus,
+			}).Warn("Automation failed for task move")
+			// Don't fail the request - the move succeeded, automation is best-effort
+		}
+	}
+
+	// Publish task move event for real-time updates
+	if h.publisher != nil {
+		userID, _ := middleware.GetUserID(c)
+		userUUID, _ := uuid.Parse(userID)
+		h.publisher.PublishTaskMove(c.Request.Context(), task.TenantID, pubsub.TaskMoveData{
+			TaskID:      task.ID,
+			TaskTitle:   task.Title,
+			OldStatus:   string(oldStatus),
+			NewStatus:   string(newStatus),
+			OldPosition: task.KanbanPosition,
+			NewPosition: req.Position,
+			MovedBy:     userUUID,
+			MovedAt:     time.Now().UTC(),
+		})
 	}
 
 	h.log.WithFields(logrus.Fields{

@@ -21,6 +21,10 @@ export const EventTypes = {
   TASK_ASSIGNED: "task.assigned",
   TASK_DELETED: "task.deleted",
   TASK_COMPLETED: "task.completed",
+  TASK_JOB_STARTED: "task.job_started",
+  TASK_JOB_COMPLETED: "task.job_completed",
+  TASK_JOB_FAILED: "task.job_failed",
+  TASK_BLOCKED: "task.blocked",
 
   // Order events
   ORDER_CREATED: "order.created",
@@ -111,6 +115,20 @@ export interface TaskAssignData {
   assignee_name?: string;
   assigned_by: string;
   assigned_at: string;
+}
+
+// Task job lifecycle data
+export interface TaskJobData {
+  task_id: string;
+  task_title: string;
+  command_id: string;
+  machine_id: string;
+  machine_name: string;
+  command_type: string;
+  status: "started" | "completed" | "failed";
+  error_message?: string;
+  timestamp: string;
+  actual_minutes?: number;
 }
 
 // Order status data

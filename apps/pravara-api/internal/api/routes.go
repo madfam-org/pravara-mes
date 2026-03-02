@@ -12,6 +12,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 )
 
 // RegisterRoutes sets up all API routes.
@@ -43,6 +44,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	qualityCertRepo := repositories.NewQualityCertificateRepository(database.DB)
 	inspectionRepo := repositories.NewInspectionRepository(database.DB)
 	batchLotRepo := repositories.NewBatchLotRepository(database.DB)
+	taskCmdRepo := repositories.NewTaskCommandRepository(database.DB)
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
@@ -59,6 +61,10 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 		taskHandler.SetPublisher(publisher)
 		orderHandler.SetPublisher(publisher)
 		machineHandler.SetPublisher(publisher)
+
+		// Initialize and set automation service for task-machine integration
+		automationService := services.NewAutomationService(taskRepo, machineRepo, taskCmdRepo, publisher, log)
+		taskHandler.SetAutomation(automationService)
 	}
 
 	// Set usage recorder on handlers that track billable events

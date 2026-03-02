@@ -57,10 +57,11 @@ type MQTTCommandPayload struct {
 
 // CommandAck represents an acknowledgment from a machine.
 type CommandAck struct {
-	CommandID string    `json:"command_id"`
-	Success   bool      `json:"success"`
-	Message   string    `json:"message,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	CommandID    string    `json:"command_id"`
+	Success      bool      `json:"success"`
+	Message      string    `json:"message,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+	JobCompleted bool      `json:"job_completed,omitempty"` // True when job has finished
 }
 
 // CommandAckEvent represents a command ack event to publish via Redis.

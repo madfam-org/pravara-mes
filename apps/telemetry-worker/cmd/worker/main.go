@@ -158,6 +158,10 @@ func main() {
 			cfg.MQTT.TopicRoot,
 		)
 
+		// Set the store for machine lookups and task updates
+		ackStoreAdapter := db.NewAckStoreAdapter(store)
+		ackHandler.SetStore(ackStoreAdapter)
+
 		if err := ackHandler.Start(ctx); err != nil {
 			log.WithError(err).Error("Failed to start ack handler")
 			// Continue without ack handling - not fatal

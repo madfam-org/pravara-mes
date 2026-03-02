@@ -148,6 +148,104 @@ func (s *Store) UpdateMachineHeartbeat(ctx context.Context, machineID uuid.UUID)
 	return nil
 }
 
+// MachineInfo is a lightweight machine info struct for the ack handler.
+type MachineInfo struct {
+	ID       uuid.UUID
+	TenantID uuid.UUID
+	Code     string
+	Name     string
+}
+
+// GetMachineInfoByCode retrieves machine info by its code for the ack handler.
+func (s *Store) GetMachineInfoByCode(ctx context.Context, code string) (*MachineInfo, error) {
+	machine, err := s.GetMachineByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if machine == nil {
+		return nil, nil
+	}
+	return &MachineInfo{
+		ID:       machine.ID,
+		TenantID: machine.TenantID,
+		Code:     machine.Code,
+		Name:     machine.Name,
+	}, nil
+}
+
+// UpdateCommandStatus updates the status of a task command.
+func (s *Store) UpdateCommandStatus(ctx context.Context, commandID uuid.UUID, status, message string) error {
+	query := `
+		UPDATE task_commands
+		SET status = $2,
+		    error_message = NULLIF($3, ''),
+		    acked_at = CASE WHEN $2 = 'acknowledged' THEN NOW() ELSE acked_at END,
+		    completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+		WHERE command_id = $1
+	`
+
+	_, err := s.db.ExecContext(ctx, query, commandID, status, message)
+	if err != nil {
+		return fmt.Errorf("failed to update command status: %w", err)
+	}
+
+	return nil
+}
+
+// TaskCommandInfo contains task command information.
+type TaskCommandInfo struct {
+	ID          uuid.UUID
+	TaskID      uuid.UUID
+	TenantID    uuid.UUID
+	MachineID   uuid.UUID
+	CommandType string
+}
+
+// GetTaskCommandByCommandID retrieves task command info by command ID.
+func (s *Store) GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error) {
+	query := `
+		SELECT id, task_id, tenant_id, machine_id, command_type
+		FROM task_commands
+		WHERE command_id = $1
+	`
+
+	var info TaskCommandInfo
+	err := s.db.QueryRowContext(ctx, query, commandID).Scan(
+		&info.ID, &info.TaskID, &info.TenantID, &info.MachineID, &info.CommandType,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task command: %w", err)
+	}
+
+	return &info, nil
+}
+
+// UpdateTaskStatusOnJobComplete updates a task's status when a job completes.
+func (s *Store) UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error {
+	query := `
+		UPDATE tasks
+		SET status = $2,
+		    completed_at = $3,
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := s.db.ExecContext(ctx, query, taskID, newStatus, completedAt)
+	if err != nil {
+		return fmt.Errorf("failed to update task status: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	return nil
+}
+
 // GetMachineByID retrieves a machine by ID.
 func (s *Store) GetMachineByID(ctx context.Context, id uuid.UUID) (*types.Machine, error) {
 	query := `

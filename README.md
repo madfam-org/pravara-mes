@@ -235,6 +235,41 @@ pravara-mes/
 | POST | `/v1/tasks/:id/move` | Move task (status/position) |
 | POST | `/v1/tasks/:id/assign` | Assign task to user |
 | DELETE | `/v1/tasks/:id` | Delete task |
+| GET | `/v1/tasks/:id/commands` | Get command history for task |
+
+#### Kanban-Machine Automation
+
+When a task with an assigned machine is moved to `in_progress`, PravaraMES automatically:
+
+1. **Validates the machine** - Checks machine status and MQTT topic configuration
+2. **Dispatches `start_job` command** - Sends command via Redis → MQTT pipeline
+3. **Tracks command lifecycle** - Records command in `task_commands` table
+4. **Updates UI in real-time** - Publishes events via Centrifugo
+
+When the machine completes the job (sends ACK with `job_completed: true`):
+
+1. **Updates command status** - Marks command as `completed`
+2. **Moves task automatically** - Transitions task to `quality_check` status
+3. **Notifies UI** - Publishes `task.job_completed` event
+
+**Machine Validation Rules**:
+
+| Machine Status | Can Start Job? | Behavior |
+|----------------|----------------|----------|
+| `online` / `idle` | Yes | Command dispatched immediately |
+| `offline` | Yes (with warning) | Command queued for when machine connects |
+| `running` | Yes (with warning) | Command queued after current job |
+| `error` | No | Blocked - requires maintenance |
+| `maintenance` | No | Blocked - machine unavailable |
+
+**Command Lifecycle Events**:
+
+| Event Type | Description |
+|------------|-------------|
+| `task.job_started` | Command sent to machine |
+| `task.job_completed` | Machine finished job successfully |
+| `task.job_failed` | Machine reported job failure |
+| `task.blocked` | Task blocked due to machine error |
 
 ### Machines API
 

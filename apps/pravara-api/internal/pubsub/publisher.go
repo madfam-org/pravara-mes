@@ -187,6 +187,24 @@ func (p *Publisher) PublishTaskAssign(ctx context.Context, tenantID uuid.UUID, d
 	return p.Publish(ctx, NamespaceTasks, tenantID, event)
 }
 
+// PublishTaskJobStarted publishes a task job started event.
+func (p *Publisher) PublishTaskJobStarted(ctx context.Context, tenantID uuid.UUID, data TaskJobData) error {
+	event := NewEvent(EventTaskJobStarted, tenantID, data)
+	return p.Publish(ctx, NamespaceTasks, tenantID, event)
+}
+
+// PublishTaskJobCompleted publishes a task job completed event.
+func (p *Publisher) PublishTaskJobCompleted(ctx context.Context, tenantID uuid.UUID, data TaskJobData) error {
+	event := NewEvent(EventTaskJobCompleted, tenantID, data)
+	return p.Publish(ctx, NamespaceTasks, tenantID, event)
+}
+
+// PublishTaskJobFailed publishes a task job failed event.
+func (p *Publisher) PublishTaskJobFailed(ctx context.Context, tenantID uuid.UUID, data TaskJobData) error {
+	event := NewEvent(EventTaskJobFailed, tenantID, data)
+	return p.Publish(ctx, NamespaceTasks, tenantID, event)
+}
+
 // PublishOrderStatus publishes an order status change event.
 func (p *Publisher) PublishOrderStatus(ctx context.Context, tenantID uuid.UUID, data OrderStatusData) error {
 	event := NewEvent(EventOrderStatus, tenantID, data)

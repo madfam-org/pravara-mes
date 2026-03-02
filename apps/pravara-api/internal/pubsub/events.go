@@ -23,12 +23,16 @@ const (
 	EventMachineCommandFailed  EventType = "machine.command_failed"
 
 	// Task events
-	EventTaskCreated   EventType = "task.created"
-	EventTaskUpdated   EventType = "task.updated"
-	EventTaskMoved     EventType = "task.moved"
-	EventTaskAssigned  EventType = "task.assigned"
-	EventTaskDeleted   EventType = "task.deleted"
-	EventTaskCompleted EventType = "task.completed"
+	EventTaskCreated      EventType = "task.created"
+	EventTaskUpdated      EventType = "task.updated"
+	EventTaskMoved        EventType = "task.moved"
+	EventTaskAssigned     EventType = "task.assigned"
+	EventTaskDeleted      EventType = "task.deleted"
+	EventTaskCompleted    EventType = "task.completed"
+	EventTaskJobStarted   EventType = "task.job_started"   // Job dispatched to machine
+	EventTaskJobCompleted EventType = "task.job_completed" // Machine completed job
+	EventTaskJobFailed    EventType = "task.job_failed"    // Machine job failed
+	EventTaskBlocked      EventType = "task.blocked"       // Task blocked due to machine error
 
 	// Order events
 	EventOrderCreated  EventType = "order.created"
@@ -173,6 +177,20 @@ type TaskAssignData struct {
 	AssigneeName *string    `json:"assignee_name,omitempty"`
 	AssignedBy   uuid.UUID  `json:"assigned_by"`
 	AssignedAt   time.Time  `json:"assigned_at"`
+}
+
+// TaskJobData contains data for task job lifecycle events.
+type TaskJobData struct {
+	TaskID        uuid.UUID  `json:"task_id"`
+	TaskTitle     string     `json:"task_title"`
+	CommandID     uuid.UUID  `json:"command_id"`
+	MachineID     uuid.UUID  `json:"machine_id"`
+	MachineName   string     `json:"machine_name"`
+	CommandType   string     `json:"command_type"`
+	Status        string     `json:"status"` // started, completed, failed
+	ErrorMessage  string     `json:"error_message,omitempty"`
+	Timestamp     time.Time  `json:"timestamp"`
+	ActualMinutes int        `json:"actual_minutes,omitempty"`
 }
 
 // OrderStatusData contains data for order status change events.
