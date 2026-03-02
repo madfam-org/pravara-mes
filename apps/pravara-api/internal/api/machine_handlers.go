@@ -62,6 +62,14 @@ type UpdateMachineRequest struct {
 	Metadata       map[string]any `json:"metadata"`
 }
 
+// SendCommandRequest represents the request body for sending a command to a machine.
+type SendCommandRequest struct {
+	Command    string         `json:"command" binding:"required"`
+	Parameters map[string]any `json:"parameters,omitempty"`
+	TaskID     *uuid.UUID     `json:"task_id,omitempty"`
+	OrderID    *uuid.UUID     `json:"order_id,omitempty"`
+}
+
 // List returns a paginated list of machines.
 func (h *MachineHandler) List(c *gin.Context) {
 	filter := repositories.MachineFilter{
@@ -416,5 +424,147 @@ func (h *MachineHandler) Heartbeat(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Heartbeat recorded",
+	})
+}
+
+// validCommands defines the set of allowed machine commands.
+var validCommands = map[string]pubsub.MachineCommandType{
+	"start_job":       pubsub.CommandStartJob,
+	"pause":           pubsub.CommandPause,
+	"resume":          pubsub.CommandResume,
+	"stop":            pubsub.CommandStop,
+	"home":            pubsub.CommandHome,
+	"calibrate":       pubsub.CommandCalibrate,
+	"emergency_stop":  pubsub.CommandEmergency,
+	"preheat":         pubsub.CommandPreheat,
+	"cooldown":        pubsub.CommandCooldown,
+	"load_file":       pubsub.CommandLoadFile,
+	"unload_file":     pubsub.CommandUnloadFile,
+	"set_origin":      pubsub.CommandSetOrigin,
+	"probe":           pubsub.CommandProbe,
+}
+
+// SendCommand sends a control command to a machine.
+// The command is published via Redis for the telemetry-worker to dispatch via MQTT.
+func (h *MachineHandler) SendCommand(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_id",
+			"message": "Invalid machine ID format",
+		})
+		return
+	}
+
+	var req SendCommandRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Validate command type
+	cmdType, valid := validCommands[req.Command]
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_command",
+			"message": "Unknown command type. Valid commands: start_job, pause, resume, stop, home, calibrate, emergency_stop, preheat, cooldown, load_file, unload_file, set_origin, probe",
+		})
+		return
+	}
+
+	// Get machine to verify it exists and get MQTT topic
+	machine, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get machine")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve machine",
+		})
+		return
+	}
+
+	if machine == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "Machine not found",
+		})
+		return
+	}
+
+	// Check if machine has MQTT topic configured
+	if machine.MQTTTopic == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "no_mqtt_topic",
+			"message": "Machine does not have an MQTT topic configured for command dispatch",
+		})
+		return
+	}
+
+	// Check if machine is online (optional - allow commands to offline machines for recovery)
+	if machine.Status == types.MachineStatusError {
+		// Only allow emergency_stop for machines in error state
+		if cmdType != pubsub.CommandEmergency {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   "machine_error",
+				"message": "Machine is in error state. Only emergency_stop command is allowed.",
+			})
+			return
+		}
+	}
+
+	// Get user ID from context
+	userID, _ := middleware.GetUserID(c)
+	userUUID, _ := uuid.Parse(userID)
+
+	// Generate command ID
+	commandID := uuid.New()
+
+	// Build command data
+	commandData := pubsub.MachineCommandData{
+		CommandID:   commandID,
+		MachineID:   machine.ID,
+		MachineName: machine.Name,
+		MQTTTopic:   machine.MQTTTopic,
+		Command:     cmdType,
+		Parameters:  req.Parameters,
+		TaskID:      req.TaskID,
+		OrderID:     req.OrderID,
+		IssuedBy:    userUUID,
+		IssuedAt:    time.Now().UTC(),
+	}
+
+	// Publish command event for telemetry-worker to dispatch via MQTT
+	if h.publisher != nil {
+		if err := h.publisher.PublishMachineCommand(c.Request.Context(), machine.TenantID, commandData); err != nil {
+			h.log.WithError(err).WithFields(logrus.Fields{
+				"machine_id": machine.ID,
+				"command":    req.Command,
+			}).Error("Failed to publish machine command")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "publish_error",
+				"message": "Failed to dispatch command to machine",
+			})
+			return
+		}
+	} else {
+		h.log.Warn("Publisher not configured - command will not be dispatched")
+	}
+
+	h.log.WithFields(logrus.Fields{
+		"machine_id": machine.ID,
+		"command_id": commandID,
+		"command":    req.Command,
+		"issued_by":  userID,
+	}).Info("Machine command issued")
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"command_id": commandID,
+		"machine_id": machine.ID,
+		"command":    req.Command,
+		"status":     "dispatched",
+		"message":    "Command dispatched to machine",
 	})
 }

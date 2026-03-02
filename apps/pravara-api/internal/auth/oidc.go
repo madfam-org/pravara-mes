@@ -3,8 +3,11 @@ package auth
 
 import (
 	"context"
+	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -183,7 +186,7 @@ func (v *OIDCVerifier) refreshJWKS(ctx context.Context) error {
 }
 
 // ToPublicKey converts a JWK to an RSA public key.
-func (j *JWK) ToPublicKey() (interface{}, error) {
+func (j *JWK) ToPublicKey() (*rsa.PublicKey, error) {
 	if j.Kty != "RSA" {
 		return nil, fmt.Errorf("unsupported key type: %s", j.Kty)
 	}
@@ -205,31 +208,17 @@ func (j *JWK) ToPublicKey() (interface{}, error) {
 		e = e<<8 + int(b)
 	}
 
-	// Create the public key
-	return &struct {
-		N []byte
-		E int
-	}{
-		N: nBytes,
+	// Create the RSA public key
+	return &rsa.PublicKey{
+		N: new(big.Int).SetBytes(nBytes),
 		E: e,
 	}, nil
 }
 
 // base64URLDecode decodes a base64url-encoded string.
 func base64URLDecode(s string) ([]byte, error) {
-	// Add padding if necessary
-	switch len(s) % 4 {
-	case 2:
-		s += "=="
-	case 3:
-		s += "="
-	}
-
-	// Replace URL-safe characters
-	s = strings.ReplaceAll(s, "-", "+")
-	s = strings.ReplaceAll(s, "_", "/")
-
-	return []byte(s), nil
+	// Use RawURLEncoding which handles base64url without padding
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 // ExtractBearerToken extracts the token from the Authorization header.
@@ -243,5 +232,10 @@ func ExtractBearerToken(authHeader string) (string, error) {
 		return "", fmt.Errorf("invalid authorization header format")
 	}
 
-	return parts[1], nil
+	token := strings.TrimSpace(parts[1])
+	if token == "" {
+		return "", fmt.Errorf("empty bearer token")
+	}
+
+	return token, nil
 }

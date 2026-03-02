@@ -117,6 +117,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			machines.DELETE("/:id", machineHandler.Delete)
 			machines.GET("/:id/telemetry", machineHandler.GetTelemetry)
 			machines.POST("/:id/heartbeat", machineHandler.Heartbeat)
+			machines.POST("/:id/command", machineHandler.SendCommand)
 		}
 
 		// Telemetry endpoints

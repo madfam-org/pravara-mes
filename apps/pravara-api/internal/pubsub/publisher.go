@@ -156,6 +156,19 @@ func (p *Publisher) PublishMachineHeartbeat(ctx context.Context, tenantID uuid.U
 	return p.Publish(ctx, NamespaceMachines, tenantID, event)
 }
 
+// PublishMachineCommand publishes a machine command event.
+// This notifies the UI and any listeners that a command was issued.
+func (p *Publisher) PublishMachineCommand(ctx context.Context, tenantID uuid.UUID, data MachineCommandData) error {
+	event := NewEvent(EventMachineCommandSent, tenantID, data)
+	return p.PublishToEntity(ctx, NamespaceMachines, tenantID, data.MachineID, event)
+}
+
+// PublishMachineCommandAck publishes a command acknowledgement event.
+func (p *Publisher) PublishMachineCommandAck(ctx context.Context, tenantID uuid.UUID, data MachineCommandAckData) error {
+	event := NewEvent(EventMachineCommandAck, tenantID, data)
+	return p.PublishToEntity(ctx, NamespaceMachines, tenantID, data.MachineID, event)
+}
+
 // PublishTelemetryBatch publishes a telemetry batch event.
 func (p *Publisher) PublishTelemetryBatch(ctx context.Context, tenantID uuid.UUID, data TelemetryBatchData) error {
 	event := NewEvent(EventMachineTelemetryBatch, tenantID, data)

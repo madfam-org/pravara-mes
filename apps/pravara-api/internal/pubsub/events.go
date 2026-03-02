@@ -18,6 +18,9 @@ const (
 	EventMachineCreated        EventType = "machine.created"
 	EventMachineUpdated        EventType = "machine.updated"
 	EventMachineDeleted        EventType = "machine.deleted"
+	EventMachineCommandSent    EventType = "machine.command_sent"
+	EventMachineCommandAck     EventType = "machine.command_ack"
+	EventMachineCommandFailed  EventType = "machine.command_failed"
 
 	// Task events
 	EventTaskCreated   EventType = "task.created"
@@ -87,6 +90,51 @@ type MachineHeartbeatData struct {
 	IsOnline       bool      `json:"is_online"`
 	CurrentJobID   *string   `json:"current_job_id,omitempty"`
 	CurrentJobName *string   `json:"current_job_name,omitempty"`
+}
+
+// MachineCommandType represents supported machine command types.
+type MachineCommandType string
+
+const (
+	// Core machine control commands
+	CommandStartJob  MachineCommandType = "start_job"
+	CommandPause     MachineCommandType = "pause"
+	CommandResume    MachineCommandType = "resume"
+	CommandStop      MachineCommandType = "stop"
+	CommandHome      MachineCommandType = "home"
+	CommandCalibrate MachineCommandType = "calibrate"
+	CommandEmergency MachineCommandType = "emergency_stop"
+	// 3D printer specific commands
+	CommandPreheat    MachineCommandType = "preheat"
+	CommandCooldown   MachineCommandType = "cooldown"
+	CommandLoadFile   MachineCommandType = "load_file"
+	CommandUnloadFile MachineCommandType = "unload_file"
+	// CNC specific commands
+	CommandSetOrigin MachineCommandType = "set_origin"
+	CommandProbe     MachineCommandType = "probe"
+)
+
+// MachineCommandData contains data for machine command events.
+type MachineCommandData struct {
+	CommandID   uuid.UUID              `json:"command_id"`
+	MachineID   uuid.UUID              `json:"machine_id"`
+	MachineName string                 `json:"machine_name"`
+	MQTTTopic   string                 `json:"mqtt_topic"`
+	Command     MachineCommandType     `json:"command"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+	TaskID      *uuid.UUID             `json:"task_id,omitempty"`
+	OrderID     *uuid.UUID             `json:"order_id,omitempty"`
+	IssuedBy    uuid.UUID              `json:"issued_by"`
+	IssuedAt    time.Time              `json:"issued_at"`
+}
+
+// MachineCommandAckData contains data for command acknowledgement events.
+type MachineCommandAckData struct {
+	CommandID   uuid.UUID `json:"command_id"`
+	MachineID   uuid.UUID `json:"machine_id"`
+	Success     bool      `json:"success"`
+	Message     string    `json:"message,omitempty"`
+	AckedAt     time.Time `json:"acked_at"`
 }
 
 // TelemetryBatchData contains data for telemetry batch events.

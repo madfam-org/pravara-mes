@@ -247,6 +247,41 @@ pravara-mes/
 | DELETE | `/v1/machines/:id` | Delete machine |
 | GET | `/v1/machines/:id/telemetry` | Get telemetry data |
 | POST | `/v1/machines/:id/heartbeat` | Update heartbeat |
+| POST | `/v1/machines/:id/command` | Send command to machine |
+
+#### Machine Commands
+
+Send commands to digital fabrication machines (3D printers, CNC, laser cutters):
+
+```json
+POST /v1/machines/:id/command
+{
+  "command": "start_job",
+  "parameters": {
+    "file_path": "/gcode/part001.gcode"
+  },
+  "task_id": "optional-task-uuid",
+  "order_id": "optional-order-uuid"
+}
+```
+
+**Supported Commands**:
+
+| Command | Description | Parameters |
+|---------|-------------|------------|
+| `start_job` | Start a job | `file_path` (optional) |
+| `pause` | Pause current job | - |
+| `resume` | Resume paused job | - |
+| `stop` | Stop current job | - |
+| `home` | Home all axes | - |
+| `calibrate` | Run calibration | - |
+| `emergency_stop` | Emergency stop | - |
+| `preheat` | Preheat (3D printers) | `temperature`, `bed_temp` |
+| `cooldown` | Cooldown (3D printers) | - |
+| `load_file` | Load file to machine | `file_path` |
+| `unload_file` | Unload current file | - |
+| `set_origin` | Set work origin (CNC) | `x`, `y`, `z` (optional) |
+| `probe` | Run probe cycle (CNC) | - |
 
 ### Real-Time API
 
@@ -350,7 +385,8 @@ PravaraMES uses Centrifugo for real-time WebSocket communication. Events are pub
 
 | Channel | Events | Description |
 |---------|--------|-------------|
-| `machines:{tenant_id}` | status_changed, heartbeat, created, updated, deleted | Machine status updates |
+| `machines:{tenant_id}` | status_changed, heartbeat, created, updated, deleted, command_sent, command_ack, command_failed | Machine status and command updates |
+| `machines:{tenant_id}:{machine_id}` | command_sent, command_ack, command_failed | Machine-specific command events |
 | `tasks:{tenant_id}` | moved, assigned, created, updated, deleted, completed | Task/Kanban updates |
 | `orders:{tenant_id}` | status_changed, created, updated, deleted | Order status changes |
 | `telemetry:{tenant_id}` | telemetry_batch | Real-time telemetry data |
