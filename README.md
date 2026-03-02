@@ -13,7 +13,10 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 - **Real-Time Telemetry** - MQTT-based machine data ingestion via EMQX
 - **Real-Time Updates** - WebSocket-based live UI updates via Centrifugo
 - **Kanban Scheduling** - Visual drag-and-drop work-in-progress tracking
+- **Quality Management** - COC/COA certificates, inspections, batch traceability
+- **Usage-Based Billing** - Per-tenant resource tracking and billing metrics
 - **Janua SSO** - OAuth 2.0/OIDC authentication with RS256 JWT
+- **Zero-Trust Security** - Network policies, RBAC, pod security standards, rate limiting
 
 ## Architecture
 
@@ -50,6 +53,7 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 | **Auth** | Janua SSO (OIDC, RS256 JWT) |
 | **IIoT Broker** | EMQX (MQTT 5.0) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
+| **Metrics** | Prometheus + AlertManager |
 | **Deploy** | enclii GitOps + Kubernetes |
 
 ## Quick Start
@@ -261,6 +265,32 @@ pravara-mes/
 | GET | `/v1/telemetry/latest` | Get latest metric value |
 | POST | `/v1/telemetry/batch` | Batch insert telemetry (max 1000) |
 
+### Quality Management API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/quality/certificates` | List quality certificates |
+| POST | `/v1/quality/certificates` | Create certificate |
+| GET | `/v1/quality/certificates/:id` | Get certificate by ID |
+| PATCH | `/v1/quality/certificates/:id` | Update certificate |
+| DELETE | `/v1/quality/certificates/:id` | Delete certificate |
+| GET | `/v1/quality/inspections` | List inspections |
+| POST | `/v1/quality/inspections` | Create inspection |
+| GET | `/v1/quality/inspections/:id` | Get inspection by ID |
+| PATCH | `/v1/quality/inspections/:id` | Update inspection |
+| POST | `/v1/quality/inspections/:id/complete` | Complete inspection with result |
+| GET | `/v1/quality/batches` | List batch lots |
+| POST | `/v1/quality/batches` | Create batch lot |
+| GET | `/v1/quality/batches/:id` | Get batch lot by ID |
+| PATCH | `/v1/quality/batches/:id` | Update batch lot |
+
+### Billing API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/billing/usage` | Get tenant usage summary |
+| GET | `/v1/billing/usage/daily` | Get daily usage breakdown |
+
 ## MQTT Topics (Unified Namespace)
 
 PravaraMES uses the Unified Namespace (UNS) pattern for MQTT topics:
@@ -389,6 +419,103 @@ CREATE POLICY tenant_isolation ON orders
 **Task Status**: `backlog` → `queued` → `in_progress` → `quality_check` → `completed` | `blocked`
 
 **Machine Status**: `offline` | `online` | `idle` | `running` | `maintenance` | `error`
+
+**Certificate Type**: `coc` (Certificate of Conformance) | `coa` (Certificate of Analysis) | `inspection` | `test_report` | `calibration`
+
+**Inspection Status**: `pending` → `in_progress` → `completed` | `failed`
+
+## Quality Management
+
+PravaraMES includes comprehensive quality management capabilities for manufacturing compliance and traceability.
+
+### Certificate Types
+
+- **COC (Certificate of Conformance)** - Confirms products meet specifications
+- **COA (Certificate of Analysis)** - Detailed test results and material composition
+- **Inspection Certificate** - Results from quality inspections
+- **Test Report** - Specific test procedures and outcomes
+- **Calibration Certificate** - Equipment calibration records
+
+### Inspection Workflow
+
+1. **Create Inspection** - Define inspection parameters, type, and assigned inspector
+2. **In Progress** - Inspector performs checks and records measurements
+3. **Complete** - Submit results with pass/fail status and notes
+4. **Certificate Generation** - Automatically generate certificates from passed inspections
+
+### Batch Lot Traceability
+
+Track materials and products through manufacturing:
+
+- Unique batch/lot numbers
+- Parent-child batch relationships
+- Expiration date tracking
+- Material specifications and quantities
+- Full audit trail of batch lifecycle
+
+## Security Features
+
+PravaraMES implements defense-in-depth security with multiple layers:
+
+### Zero-Trust Network Policies
+
+- Default deny-all traffic between pods
+- Explicit allowlist for inter-service communication
+- Namespace isolation with ingress/egress controls
+- External traffic restricted to ingress controller only
+
+### Role-Based Access Control (RBAC)
+
+- Service account per microservice with minimal permissions
+- Read-only access by default
+- Write permissions only where required
+- No cross-namespace access
+
+### Pod Security Standards
+
+- Enforced "restricted" security policy
+- No privileged containers
+- Read-only root filesystems
+- Non-root user execution
+- Drop all Linux capabilities by default
+
+### Rate Limiting
+
+- **Per-IP Rate Limiting**: 100 requests/minute per IP address
+- **Per-Tenant Rate Limiting**: 1000 requests/minute per tenant
+- Prevents abuse and ensures fair resource allocation
+- Configurable limits via environment variables
+
+## Observability
+
+### Prometheus Metrics
+
+All services expose Prometheus metrics at `/metrics` endpoint:
+
+**API Metrics** (`pravara-api`):
+- `pravara_http_requests_total` - HTTP request counter (method, path, status)
+- `pravara_http_request_duration_seconds` - Request duration histogram
+- `pravara_db_connections_active` - Active database connections
+- `pravara_redis_operations_total` - Redis operation counter
+
+**Telemetry Worker Metrics** (`telemetry-worker`):
+- `pravara_mqtt_messages_received_total` - MQTT message counter
+- `pravara_mqtt_message_processing_duration_seconds` - Processing time
+- `pravara_telemetry_points_processed_total` - Telemetry data points
+
+**Billing Metrics**:
+- `pravara_usage_api_requests_total` - API usage by tenant
+- `pravara_usage_storage_bytes` - Storage usage by tenant
+- `pravara_usage_compute_seconds` - Compute time by tenant
+
+### AlertManager Integration
+
+Critical alerts configured for:
+- Service health check failures
+- Database connection pool exhaustion
+- High error rates (>5% of requests)
+- MQTT broker disconnection
+- Resource quota exceeded per tenant
 
 ## Testing
 
