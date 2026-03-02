@@ -8,6 +8,10 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 
 ### Key Features
 
+- **Universal Machine Connectivity** - Support for 95%+ of digital fabrication machines
+- **Protocol Adapters** - GRBL, Marlin, OctoPrint, Ruida, LinuxCNC, Industrial CNCs
+- **Agent-Based Task Management** - Intelligent task routing with human-in-the-loop control
+- **Machine Discovery** - Automatic detection via mDNS, USB, and network scanning
 - **Unified Namespace (UNS)** - Event-driven architecture replacing ISA-95 hierarchy
 - **Multi-Tenant** - PostgreSQL Row-Level Security for secure data isolation
 - **Real-Time Telemetry** - MQTT-based machine data ingestion via EMQX

@@ -13,7 +13,6 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
-	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // AgentStatus represents the availability status of an agent.

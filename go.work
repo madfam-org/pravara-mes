@@ -2,6 +2,7 @@ go 1.24.0
 
 use (
 	./apps/pravara-api
+	./apps/machine-adapter
 	./apps/telemetry-worker
 	./packages/sdk-go
 )
