@@ -21,6 +21,10 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 - **Usage-Based Billing** - Per-tenant resource tracking and billing metrics
 - **Janua SSO** - OAuth 2.0/OIDC authentication with RS256 JWT
 - **Zero-Trust Security** - Network policies, RBAC, pod security standards, rate limiting
+- **Digital Twin** - Real-time 3D factory floor visualization with physics simulation
+- **Video Streaming** - WebRTC-based live camera feeds with recording capabilities
+- **AI/ML Orchestration** - Predictive maintenance, anomaly detection, quality prediction
+- **Process Optimization** - AI-driven parameter optimization for efficiency gains
 
 ## Architecture
 
@@ -51,6 +55,9 @@ PravaraMES is a unified, event-driven platform optimized for phygital (physical+
 |-------|------------|
 | **Backend API** | Go 1.24 + Gin |
 | **Frontend** | Next.js 15 + React 19 + Radix UI + Tailwind CSS |
+| **3D Visualization** | Three.js + React Three Fiber |
+| **Video Streaming** | WebRTC + FFmpeg |
+| **ML/AI** | Python + FastAPI + TensorFlow + Scikit-learn |
 | **Database** | PostgreSQL 16 with Row-Level Security |
 | **Cache/Pub-Sub** | Redis 7 |
 | **Real-Time Gateway** | Centrifugo v5 (WebSocket) |
@@ -168,6 +175,32 @@ pravara-mes/
 │   │       ├── config/           # Worker configuration
 │   │       ├── db/               # Database operations
 │   │       └── mqtt/             # MQTT handler & event publishing
+│   │
+│   ├── visualization-engine/     # 3D visualization & physics
+│   │   ├── cmd/server/           # HTTP/WebSocket server
+│   │   └── internal/
+│   │       ├── models/           # 3D model management
+│   │       ├── physics/          # Physics simulation engine
+│   │       └── websocket/        # Real-time updates
+│   │
+│   ├── video-streaming/          # WebRTC video service
+│   │   ├── cmd/server/           # WebRTC signaling server
+│   │   └── internal/
+│   │       ├── camera/           # Camera discovery & management
+│   │       ├── rtc/              # WebRTC peer connections
+│   │       └── recording/        # Video recording service
+│   │
+│   ├── ml-orchestrator/          # AI/ML service (Python)
+│   │   ├── models/               # ML models
+│   │   │   ├── predictive_maintenance.py
+│   │   │   ├── anomaly_detection.py
+│   │   │   ├── quality_prediction.py
+│   │   │   └── process_optimizer.py
+│   │   ├── services/             # ML services
+│   │   │   ├── training_service.py
+│   │   │   ├── inference_service.py
+│   │   │   └── telemetry_service.py
+│   │   └── main.py               # FastAPI application
 │   │
 │   └── pravara-gateway/          # Real-time WebSocket gateway
 │       ├── config.json           # Centrifugo configuration

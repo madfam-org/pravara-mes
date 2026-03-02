@@ -44,6 +44,45 @@
       "scan": true,
       "deploy_check": "telemetry-worker",
       "port": 4502
+    },
+    {
+      "name": "visualization-engine",
+      "path": "apps/visualization-engine",
+      "type": "go",
+      "dockerfile": "apps/visualization-engine/Dockerfile",
+      "image": "visualization-engine",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "visualization-engine",
+      "dependencies": ["packages/sdk-go"],
+      "scan": true,
+      "deploy_check": "visualization-engine",
+      "port": 4505
+    },
+    {
+      "name": "video-streaming",
+      "path": "apps/video-streaming",
+      "type": "go",
+      "dockerfile": "apps/video-streaming/Dockerfile",
+      "image": "video-streaming",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "video-streaming",
+      "dependencies": ["packages/sdk-go"],
+      "scan": true,
+      "deploy_check": "video-streaming",
+      "port": 4506
+    },
+    {
+      "name": "ml-orchestrator",
+      "path": "apps/ml-orchestrator",
+      "type": "python",
+      "dockerfile": "apps/ml-orchestrator/Dockerfile",
+      "image": "ml-orchestrator",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "ml-orchestrator",
+      "dependencies": [],
+      "scan": true,
+      "deploy_check": "ml-orchestrator",
+      "port": 8001
     }
   ]
 }
