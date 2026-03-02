@@ -168,3 +168,102 @@ type AuditLog struct {
 	UserAgent    string         `json:"user_agent,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 }
+
+// QualityCertType represents the type of quality certificate.
+type QualityCertType string
+
+const (
+	QualityCertTypeCOC         QualityCertType = "coc"
+	QualityCertTypeCOA         QualityCertType = "coa"
+	QualityCertTypeInspection  QualityCertType = "inspection"
+	QualityCertTypeTestReport  QualityCertType = "test_report"
+	QualityCertTypeCalibration QualityCertType = "calibration"
+)
+
+// QualityCertStatus represents the status of a quality certificate.
+type QualityCertStatus string
+
+const (
+	QualityCertStatusDraft         QualityCertStatus = "draft"
+	QualityCertStatusPendingReview QualityCertStatus = "pending_review"
+	QualityCertStatusApproved      QualityCertStatus = "approved"
+	QualityCertStatusRejected      QualityCertStatus = "rejected"
+	QualityCertStatusExpired       QualityCertStatus = "expired"
+)
+
+// InspectionResult represents the result of an inspection.
+type InspectionResult string
+
+const (
+	InspectionResultPass        InspectionResult = "pass"
+	InspectionResultFail        InspectionResult = "fail"
+	InspectionResultConditional InspectionResult = "conditional"
+	InspectionResultPending     InspectionResult = "pending"
+)
+
+// QualityCertificate represents a quality certificate (COC, COA, etc.).
+type QualityCertificate struct {
+	ID                uuid.UUID         `json:"id"`
+	TenantID          uuid.UUID         `json:"tenant_id"`
+	CertificateNumber string            `json:"certificate_number"`
+	Type              QualityCertType   `json:"type"`
+	Status            QualityCertStatus `json:"status"`
+	OrderID           *uuid.UUID        `json:"order_id,omitempty"`
+	TaskID            *uuid.UUID        `json:"task_id,omitempty"`
+	MachineID         *uuid.UUID        `json:"machine_id,omitempty"`
+	BatchLotID        *uuid.UUID        `json:"batch_lot_id,omitempty"`
+	Title             string            `json:"title"`
+	Description       string            `json:"description,omitempty"`
+	IssuedDate        *time.Time        `json:"issued_date,omitempty"`
+	ExpiryDate        *time.Time        `json:"expiry_date,omitempty"`
+	IssuedBy          *uuid.UUID        `json:"issued_by,omitempty"`
+	ApprovedBy        *uuid.UUID        `json:"approved_by,omitempty"`
+	ApprovedAt        *time.Time        `json:"approved_at,omitempty"`
+	DocumentURL       string            `json:"document_url,omitempty"`
+	Metadata          map[string]any    `json:"metadata,omitempty"`
+	CreatedAt         time.Time         `json:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at"`
+}
+
+// Inspection represents a quality inspection.
+type Inspection struct {
+	ID               uuid.UUID        `json:"id"`
+	TenantID         uuid.UUID        `json:"tenant_id"`
+	InspectionNumber string           `json:"inspection_number"`
+	OrderID          *uuid.UUID       `json:"order_id,omitempty"`
+	TaskID           *uuid.UUID       `json:"task_id,omitempty"`
+	MachineID        *uuid.UUID       `json:"machine_id,omitempty"`
+	Type             string           `json:"type"`
+	ScheduledAt      *time.Time       `json:"scheduled_at,omitempty"`
+	CompletedAt      *time.Time       `json:"completed_at,omitempty"`
+	InspectorID      *uuid.UUID       `json:"inspector_id,omitempty"`
+	Result           InspectionResult `json:"result"`
+	Notes            string           `json:"notes,omitempty"`
+	Checklist        []any            `json:"checklist,omitempty"`
+	CertificateID    *uuid.UUID       `json:"certificate_id,omitempty"`
+	Metadata         map[string]any   `json:"metadata,omitempty"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+}
+
+// BatchLot represents a batch lot for traceability.
+type BatchLot struct {
+	ID                uuid.UUID      `json:"id"`
+	TenantID          uuid.UUID      `json:"tenant_id"`
+	LotNumber         string         `json:"lot_number"`
+	ProductName       string         `json:"product_name"`
+	ProductCode       string         `json:"product_code,omitempty"`
+	Quantity          float64        `json:"quantity"`
+	Unit              string         `json:"unit"`
+	ManufacturedDate  *time.Time     `json:"manufactured_date,omitempty"`
+	ExpiryDate        *time.Time     `json:"expiry_date,omitempty"`
+	ReceivedDate      *time.Time     `json:"received_date,omitempty"`
+	SupplierName      string         `json:"supplier_name,omitempty"`
+	SupplierLotNumber string         `json:"supplier_lot_number,omitempty"`
+	PurchaseOrder     string         `json:"purchase_order,omitempty"`
+	Status            string         `json:"status"`
+	OrderID           *uuid.UUID     `json:"order_id,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+}

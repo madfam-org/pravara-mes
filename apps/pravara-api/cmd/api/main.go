@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/api"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/billing"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
@@ -71,6 +72,23 @@ func main() {
 		}
 	}
 
+	// Initialize Redis usage recorder for billing (optional)
+	var usageRecorder billing.UsageRecorder
+	if cfg.Redis.URL != "" {
+		var err error
+		usageRecorder, err = billing.NewRedisUsageRecorder(billing.RecorderConfig{
+			RedisURL:      cfg.Redis.URL,
+			BufferSize:    1000,
+			FlushInterval: 5 * time.Minute,
+		}, log)
+		if err != nil {
+			log.WithError(err).Warn("Failed to connect to Redis for usage tracking, continuing without recorder")
+		} else {
+			defer usageRecorder.Close()
+			log.Info("Redis usage recorder connected for billing tracking")
+		}
+	}
+
 	// Set Gin mode
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -82,13 +100,17 @@ func main() {
 	// Add middleware
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(log))
+	router.Use(middleware.RateLimiter(log))
 	router.Use(middleware.Metrics())
+	if usageRecorder != nil {
+		router.Use(middleware.UsageTracking(usageRecorder, log))
+	}
 
 	// Add Prometheus metrics endpoint
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Register routes with optional publisher
-	api.RegisterRoutesWithPublisher(router, database, cfg, log, publisher)
+	// Register routes with optional publisher and usage recorder
+	api.RegisterRoutesWithRecorder(router, database, cfg, log, publisher, usageRecorder)
 
 	// Start background goroutine to collect database stats
 	ctx, cancel := context.WithCancel(context.Background())

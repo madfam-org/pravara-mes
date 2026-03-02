@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/auth"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/billing"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
@@ -15,11 +16,16 @@ import (
 
 // RegisterRoutes sets up all API routes.
 func RegisterRoutes(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger) {
-	RegisterRoutesWithPublisher(router, database, cfg, log, nil)
+	RegisterRoutesWithRecorder(router, database, cfg, log, nil, nil)
 }
 
 // RegisterRoutesWithPublisher sets up all API routes with an optional event publisher.
 func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher) {
+	RegisterRoutesWithRecorder(router, database, cfg, log, publisher, nil)
+}
+
+// RegisterRoutesWithRecorder sets up all API routes with optional event publisher and usage recorder.
+func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher, usageRecorder billing.UsageRecorder) {
 	// Initialize OIDC verifier
 	oidcConfig := auth.OIDCConfig{
 		Issuer:   cfg.OIDC.Issuer,
@@ -34,6 +40,9 @@ func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *confi
 	taskRepo := repositories.NewTaskRepository(database.DB)
 	machineRepo := repositories.NewMachineRepository(database.DB)
 	telemetryRepo := repositories.NewTelemetryRepository(database.DB)
+	qualityCertRepo := repositories.NewQualityCertificateRepository(database.DB)
+	inspectionRepo := repositories.NewInspectionRepository(database.DB)
+	batchLotRepo := repositories.NewBatchLotRepository(database.DB)
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
@@ -43,12 +52,25 @@ func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *confi
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, "") // TODO: Add cotiza secret from config
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
+	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
 
 	// Set publisher on handlers that support events
 	if publisher != nil {
 		taskHandler.SetPublisher(publisher)
 		orderHandler.SetPublisher(publisher)
 		machineHandler.SetPublisher(publisher)
+	}
+
+	// Set usage recorder on handlers that track billable events
+	if usageRecorder != nil {
+		orderHandler.SetUsageRecorder(usageRecorder)
+		qualityHandler.SetUsageRecorder(usageRecorder)
+	}
+
+	// Initialize billing handler if usage recorder is available
+	var billingHandler *BillingHandler
+	if usageRecorder != nil {
+		billingHandler = NewBillingHandler(usageRecorder, log)
 	}
 
 	// Health check endpoints (no auth required)
@@ -106,6 +128,39 @@ func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *confi
 			telemetry.POST("/batch", telemetryHandler.BatchInsert)
 		}
 
+		// Quality Management endpoints
+		quality := v1.Group("/quality")
+		{
+			// Quality Certificates
+			certificates := quality.Group("/certificates")
+			{
+				certificates.GET("", qualityHandler.ListCertificates)
+				certificates.POST("", qualityHandler.CreateCertificate)
+				certificates.GET("/:id", qualityHandler.GetCertificateByID)
+				certificates.PATCH("/:id", qualityHandler.UpdateCertificate)
+				certificates.DELETE("/:id", qualityHandler.DeleteCertificate)
+			}
+
+			// Inspections
+			inspections := quality.Group("/inspections")
+			{
+				inspections.GET("", qualityHandler.ListInspections)
+				inspections.POST("", qualityHandler.CreateInspection)
+				inspections.GET("/:id", qualityHandler.GetInspectionByID)
+				inspections.PATCH("/:id", qualityHandler.UpdateInspection)
+				inspections.POST("/:id/complete", qualityHandler.CompleteInspection)
+			}
+
+			// Batch Lots
+			batches := quality.Group("/batches")
+			{
+				batches.GET("", qualityHandler.ListBatchLots)
+				batches.POST("", qualityHandler.CreateBatchLot)
+				batches.GET("/:id", qualityHandler.GetBatchLotByID)
+				batches.PATCH("/:id", qualityHandler.UpdateBatchLot)
+			}
+		}
+
 		// Webhook endpoints (may need different auth)
 		webhooks := v1.Group("/webhooks")
 		{
@@ -117,6 +172,22 @@ func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *confi
 		realtime := v1.Group("/realtime")
 		{
 			realtime.GET("/token", realtimeHandler.GetToken)
+		}
+
+		// Billing endpoints
+		if billingHandler != nil {
+			billing := v1.Group("/billing")
+			{
+				billing.GET("/usage", billingHandler.GetUsage)
+				billing.GET("/usage/daily", billingHandler.GetDailyUsage)
+			}
+
+			// Admin billing endpoints (requires admin role)
+			admin := v1.Group("/admin/billing")
+			admin.Use(middleware.RequireRole("admin"))
+			{
+				admin.GET("/tenants/:id/usage", billingHandler.GetTenantUsageAdmin)
+			}
 		}
 	}
 

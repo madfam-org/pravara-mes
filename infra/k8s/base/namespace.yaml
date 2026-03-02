@@ -5,6 +5,13 @@ metadata:
   labels:
     app.kubernetes.io/name: pravara-mes
     app.kubernetes.io/part-of: pravara-mes
+    # Pod Security Standards enforcement
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
 ---
 apiVersion: v1
 kind: ResourceQuota

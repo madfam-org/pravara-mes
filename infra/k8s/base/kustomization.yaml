@@ -13,6 +13,7 @@ resources:
   - centrifugo.yaml
   - ingress.yaml
   - observability/
+  - security/
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
