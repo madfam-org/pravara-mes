@@ -38,7 +38,10 @@ type QualityCertificateFilter struct {
 	Offset     int
 }
 
-// List retrieves quality certificates with optional filtering.
+// List retrieves quality certificates matching the given filter with pagination.
+// Results are ordered by created_at descending (most recent first).
+// Supports filtering by type, status, and related entities (order, task, machine, batch lot).
+// Returns the list of certificates, total count (for pagination), and any error encountered.
 func (r *QualityCertificateRepository) List(ctx context.Context, filter QualityCertificateFilter) ([]types.QualityCertificate, int, error) {
 	query := `
 		SELECT id, tenant_id, certificate_number, type, status,
@@ -148,7 +151,9 @@ func (r *QualityCertificateRepository) List(ctx context.Context, filter QualityC
 	return certificates, total, nil
 }
 
-// GetByID retrieves a quality certificate by ID.
+// GetByID retrieves a quality certificate by its unique identifier.
+// Returns nil, nil if the certificate is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *QualityCertificateRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.QualityCertificate, error) {
 	query := `
 		SELECT id, tenant_id, certificate_number, type, status,
@@ -172,7 +177,10 @@ func (r *QualityCertificateRepository) GetByID(ctx context.Context, id uuid.UUID
 	return &cert, nil
 }
 
-// Create inserts a new quality certificate.
+// Create inserts a new quality certificate into the database.
+// If cert.ID is nil, a new UUID is generated automatically.
+// The cert.CreatedAt and cert.UpdatedAt fields are populated from the database
+// after successful insertion.
 func (r *QualityCertificateRepository) Create(ctx context.Context, cert *types.QualityCertificate) error {
 	query := `
 		INSERT INTO quality_certificates (
@@ -204,7 +212,10 @@ func (r *QualityCertificateRepository) Create(ctx context.Context, cert *types.Q
 	return nil
 }
 
-// Update modifies an existing quality certificate.
+// Update modifies an existing quality certificate's mutable fields.
+// The cert.ID must exist in the database. The cert.UpdatedAt field
+// is refreshed from the database after successful update.
+// Returns an error if the certificate is not found.
 func (r *QualityCertificateRepository) Update(ctx context.Context, cert *types.QualityCertificate) error {
 	query := `
 		UPDATE quality_certificates SET
@@ -240,7 +251,9 @@ func (r *QualityCertificateRepository) Update(ctx context.Context, cert *types.Q
 	return nil
 }
 
-// Delete removes a quality certificate.
+// Delete permanently removes a quality certificate from the database.
+// This is a hard delete - the certificate record is not recoverable.
+// Returns an error if the certificate is not found.
 func (r *QualityCertificateRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM quality_certificates WHERE id = $1`
 
@@ -348,7 +361,10 @@ type InspectionFilter struct {
 	Offset     int
 }
 
-// List retrieves inspections with optional filtering.
+// List retrieves inspections matching the given filter with pagination.
+// Results are ordered by created_at descending (most recent first).
+// Supports filtering by type, result, and related entities (order, task, machine).
+// Returns the list of inspections, total count (for pagination), and any error encountered.
 func (r *InspectionRepository) List(ctx context.Context, filter InspectionFilter) ([]types.Inspection, int, error) {
 	query := `
 		SELECT id, tenant_id, inspection_number, order_id, task_id, machine_id,
@@ -450,7 +466,9 @@ func (r *InspectionRepository) List(ctx context.Context, filter InspectionFilter
 	return inspections, total, nil
 }
 
-// GetByID retrieves an inspection by ID.
+// GetByID retrieves an inspection by its unique identifier.
+// Returns nil, nil if the inspection is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *InspectionRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Inspection, error) {
 	query := `
 		SELECT id, tenant_id, inspection_number, order_id, task_id, machine_id,
@@ -473,7 +491,10 @@ func (r *InspectionRepository) GetByID(ctx context.Context, id uuid.UUID) (*type
 	return &inspection, nil
 }
 
-// Create inserts a new inspection.
+// Create inserts a new inspection into the database.
+// If inspection.ID is nil, a new UUID is generated automatically.
+// The inspection.CreatedAt and inspection.UpdatedAt fields are populated from the database
+// after successful insertion.
 func (r *InspectionRepository) Create(ctx context.Context, inspection *types.Inspection) error {
 	query := `
 		INSERT INTO inspections (
@@ -506,7 +527,10 @@ func (r *InspectionRepository) Create(ctx context.Context, inspection *types.Ins
 	return nil
 }
 
-// Update modifies an existing inspection.
+// Update modifies an existing inspection's mutable fields.
+// The inspection.ID must exist in the database. The inspection.UpdatedAt field
+// is refreshed from the database after successful update.
+// Returns an error if the inspection is not found.
 func (r *InspectionRepository) Update(ctx context.Context, inspection *types.Inspection) error {
 	query := `
 		UPDATE inspections SET
@@ -541,7 +565,9 @@ func (r *InspectionRepository) Update(ctx context.Context, inspection *types.Ins
 	return nil
 }
 
-// Delete removes an inspection.
+// Delete permanently removes an inspection from the database.
+// This is a hard delete - the inspection record is not recoverable.
+// Returns an error if the inspection is not found.
 func (r *InspectionRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM inspections WHERE id = $1`
 
@@ -639,7 +665,10 @@ type BatchLotFilter struct {
 	Offset      int
 }
 
-// List retrieves batch lots with optional filtering.
+// List retrieves batch lots matching the given filter with pagination.
+// Results are ordered by created_at descending (most recent first).
+// Supports filtering by status, product code, order, and date range.
+// Returns the list of batch lots, total count (for pagination), and any error encountered.
 func (r *BatchLotRepository) List(ctx context.Context, filter BatchLotFilter) ([]types.BatchLot, int, error) {
 	query := `
 		SELECT id, tenant_id, lot_number, product_name, product_code,

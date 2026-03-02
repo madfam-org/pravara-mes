@@ -1,3 +1,4 @@
+// Package repositories provides database access layer implementations.
 package repositories
 
 import (
@@ -31,7 +32,10 @@ type TaskFilter struct {
 	Offset    int
 }
 
-// List retrieves tasks with optional filtering.
+// List retrieves tasks matching the given filter with pagination.
+// Results are ordered by status (for Kanban grouping) then by kanban_position.
+// Returns the list of tasks, total count (for pagination), and any error encountered.
+// An empty filter returns all tasks. Use filter.Limit and filter.Offset for pagination.
 func (r *TaskRepository) List(ctx context.Context, filter TaskFilter) ([]types.Task, int, error) {
 	query := `
 		SELECT id, tenant_id, order_id, order_item_id, machine_id, assigned_user_id,
@@ -111,7 +115,9 @@ func (r *TaskRepository) List(ctx context.Context, filter TaskFilter) ([]types.T
 	return tasks, total, nil
 }
 
-// GetByID retrieves a task by ID.
+// GetByID retrieves a task by its unique identifier.
+// Returns nil, nil if the task is not found (not an error condition).
+// Returns nil, error if a database error occurs.
 func (r *TaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Task, error) {
 	query := `
 		SELECT id, tenant_id, order_id, order_item_id, machine_id, assigned_user_id,
@@ -133,7 +139,10 @@ func (r *TaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Task
 	return task, nil
 }
 
-// Create inserts a new task.
+// Create inserts a new task into the database.
+// If task.ID is nil, a new UUID is generated automatically.
+// The task.KanbanPosition is automatically set to the next available position
+// within its status column. CreatedAt and UpdatedAt are populated from the database.
 func (r *TaskRepository) Create(ctx context.Context, task *types.Task) error {
 	// Get the next kanban position for the status
 	var maxPosition int
@@ -170,7 +179,10 @@ func (r *TaskRepository) Create(ctx context.Context, task *types.Task) error {
 	return nil
 }
 
-// Update modifies an existing task.
+// Update modifies an existing task's mutable fields.
+// The task.ID must exist in the database. The UpdatedAt field
+// is refreshed from the database after successful update.
+// Returns an error if the task is not found.
 func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 	query := `
 		UPDATE tasks SET
@@ -213,6 +225,12 @@ func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 }
 
 // MoveTask updates the task's status and/or position for Kanban board operations.
+// This method handles all the position recalculations needed when moving a card:
+//   - Moving between columns: shifts positions in both old and new columns
+//   - Moving within a column: shifts affected tasks up or down
+//
+// The operation is performed within a transaction to maintain data integrity.
+// Returns an error if the task is not found.
 func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition int) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -293,6 +311,9 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 }
 
 // AssignTask assigns a task to a user and/or machine.
+// Either userID or machineID can be nil to indicate no assignment.
+// Passing nil for both clears all assignments.
+// Returns an error if the task is not found.
 func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, machineID *uuid.UUID) error {
 	query := `UPDATE tasks SET assigned_user_id = $2, machine_id = $3 WHERE id = $1`
 
@@ -309,7 +330,9 @@ func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, m
 	return nil
 }
 
-// Delete removes a task.
+// Delete permanently removes a task from the database.
+// This is a hard delete - the task record is not recoverable.
+// Returns an error if the task is not found.
 func (r *TaskRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM tasks WHERE id = $1`
 
@@ -327,6 +350,9 @@ func (r *TaskRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // GetKanbanBoard retrieves all tasks grouped by status for a Kanban board view.
+// Returns a map where keys are TaskStatus values and values are slices of tasks.
+// All status columns are initialized (even if empty) to ensure consistent UI rendering.
+// Tasks within each column are ordered by their kanban_position.
 func (r *TaskRepository) GetKanbanBoard(ctx context.Context) (map[types.TaskStatus][]types.Task, error) {
 	tasks, _, err := r.List(ctx, TaskFilter{Limit: 1000})
 	if err != nil {
