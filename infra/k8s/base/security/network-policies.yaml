@@ -1,0 +1,365 @@
+---
+# Default deny all ingress and egress for pravara-mes namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: pravara-mes
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow DNS resolution for all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: pravara-mes
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Allow pravara-api ingress from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pravara-api-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: pravara-api
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 4500
+    # Allow from pravara-ui for internal API calls (if needed)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pravara-ui
+      ports:
+        - protocol: TCP
+          port: 4500
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 4500
+---
+# Allow pravara-api egress to PostgreSQL, Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pravara-api-egress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: pravara-api
+  policyTypes:
+    - Egress
+  egress:
+    # Allow to PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow to Centrifugo for real-time publishing
+    - to:
+        - podSelector:
+            matchLabels:
+              app: centrifugo
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Allow pravara-ui ingress from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pravara-ui-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: pravara-ui
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 4501
+---
+# Allow pravara-ui egress to pravara-api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pravara-ui-egress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: pravara-ui
+  policyTypes:
+    - Egress
+  egress:
+    # Allow to pravara-api
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pravara-api
+      ports:
+        - protocol: TCP
+          port: 4500
+---
+# Allow telemetry-worker egress to PostgreSQL, Redis, EMQX
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: telemetry-worker-egress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: telemetry-worker
+  policyTypes:
+    - Egress
+  egress:
+    # Allow to PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow to EMQX MQTT
+    - to:
+        - podSelector:
+            matchLabels:
+              app: emqx
+      ports:
+        - protocol: TCP
+          port: 1883
+    # Allow to Centrifugo for real-time publishing
+    - to:
+        - podSelector:
+            matchLabels:
+              app: centrifugo
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Allow Centrifugo ingress from pravara-api and telemetry-worker
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: centrifugo-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: centrifugo
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from pravara-api
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pravara-api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from telemetry-worker
+    - from:
+        - podSelector:
+            matchLabels:
+              app: telemetry-worker
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from ingress controller for WebSocket connections
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Allow Centrifugo egress to Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: centrifugo-egress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: centrifugo
+  policyTypes:
+    - Egress
+  egress:
+    # Allow to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Allow PostgreSQL ingress from pravara-api and telemetry-worker
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from pravara-api
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pravara-api
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow from telemetry-worker
+    - from:
+        - podSelector:
+            matchLabels:
+              app: telemetry-worker
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Allow Redis ingress from pravara-api, centrifugo, and telemetry-worker
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from pravara-api
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pravara-api
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow from centrifugo
+    - from:
+        - podSelector:
+            matchLabels:
+              app: centrifugo
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow from telemetry-worker
+    - from:
+        - podSelector:
+            matchLabels:
+              app: telemetry-worker
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Allow EMQX ingress from telemetry-worker
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: emqx-ingress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app: emqx
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from telemetry-worker
+    - from:
+        - podSelector:
+            matchLabels:
+              app: telemetry-worker
+      ports:
+        - protocol: TCP
+          port: 1883
+    # Allow from external MQTT clients (via ingress)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 1883

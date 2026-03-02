@@ -1,0 +1,163 @@
+---
+# Pod Security Standards Configuration
+# These labels should be applied to the pravara-mes namespace to enforce Pod Security Standards
+# The labels are applied via kustomize commonLabels or namespace.yaml
+#
+# Note: The actual namespace is defined in namespace.yaml
+# This file documents the Pod Security Admission (PSA) requirements
+#
+# Pod Security Standard labels to add to namespace:
+#   pod-security.kubernetes.io/enforce: restricted
+#   pod-security.kubernetes.io/enforce-version: latest
+#   pod-security.kubernetes.io/warn: baseline
+#   pod-security.kubernetes.io/warn-version: latest
+#   pod-security.kubernetes.io/audit: restricted
+#   pod-security.kubernetes.io/audit-version: latest
+---
+# Security Context Constraints Template (for reference)
+# These constraints should be applied to all pod specs in deployments
+#
+# Example pod security context to use in all deployments:
+#
+# securityContext:
+#   runAsNonRoot: true
+#   runAsUser: 1000
+#   fsGroup: 1000
+#   seccompProfile:
+#     type: RuntimeDefault
+#
+# Example container security context to use in all containers:
+#
+# securityContext:
+#   allowPrivilegeEscalation: false
+#   readOnlyRootFilesystem: true
+#   runAsNonRoot: true
+#   runAsUser: 1000
+#   capabilities:
+#     drop:
+#       - ALL
+#     add:
+#       - NET_BIND_SERVICE  # Only if needed for binding to ports < 1024
+#
+# For containers requiring writable filesystem (e.g., cache, logs):
+# - Mount emptyDir volumes for temporary storage
+# - Use persistent volumes for durable data
+#
+# Example emptyDir volume for writable directories:
+#
+# volumes:
+#   - name: tmp
+#     emptyDir: {}
+#   - name: cache
+#     emptyDir: {}
+#
+# volumeMounts:
+#   - name: tmp
+#     mountPath: /tmp
+#   - name: cache
+#     mountPath: /app/cache
+---
+# ConfigMap documenting security requirements for deployments
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-security-requirements
+  namespace: pravara-mes
+  labels:
+    app.kubernetes.io/component: security-documentation
+data:
+  README.md: |
+    # Pod Security Requirements for PravaraMES
+
+    All deployments in the pravara-mes namespace must comply with the restricted Pod Security Standard.
+
+    ## Required Pod Security Context
+
+    ```yaml
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    ```
+
+    ## Required Container Security Context
+
+    ```yaml
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      capabilities:
+        drop:
+          - ALL
+    ```
+
+    ## Service Accounts
+
+    All pods must use dedicated service accounts:
+    - pravara-api: pravara-api-sa
+    - pravara-ui: pravara-ui-sa
+    - telemetry-worker: telemetry-worker-sa
+    - centrifugo: centrifugo-sa
+    - postgres: postgres-sa
+    - redis: redis-sa
+    - emqx: emqx-sa
+
+    ## Writable Filesystem Requirements
+
+    For services requiring writable directories:
+
+    ```yaml
+    volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+
+    volumeMounts:
+      - name: tmp
+        mountPath: /tmp
+      - name: cache
+        mountPath: /app/cache
+    ```
+
+    ## Network Policies
+
+    All network traffic is denied by default. Specific network policies define allowed communication:
+    - pravara-api ← Ingress controller (external traffic)
+    - pravara-api → PostgreSQL, Redis, Centrifugo
+    - pravara-ui ← Ingress controller (external traffic)
+    - pravara-ui → pravara-api
+    - telemetry-worker → PostgreSQL, Redis, EMQX, Centrifugo
+    - centrifugo → Redis
+    - All pods → DNS (kube-system)
+
+    ## Resource Limits
+
+    All containers must define resource requests and limits:
+
+    ```yaml
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    ```
+
+    ## Additional Security Recommendations
+
+    1. Use specific image tags, never :latest
+    2. Scan container images for vulnerabilities
+    3. Minimize image size and attack surface
+    4. Use distroless or minimal base images where possible
+    5. Store secrets in Kubernetes Secrets, not environment variables
+    6. Enable audit logging for all API operations
+    7. Implement pod disruption budgets for high availability
+    8. Use liveness and readiness probes
+    9. Implement graceful shutdown handling
+    10. Monitor security events and anomalies

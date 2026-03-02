@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/billing"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
@@ -21,11 +22,17 @@ type OrderHandler struct {
 	orderItemRepo *repositories.OrderItemRepository
 	log           *logrus.Logger
 	publisher     *pubsub.Publisher
+	usageRecorder billing.UsageRecorder
 }
 
 // SetPublisher sets the event publisher for real-time updates.
 func (h *OrderHandler) SetPublisher(p *pubsub.Publisher) {
 	h.publisher = p
+}
+
+// SetUsageRecorder sets the usage recorder for billing tracking.
+func (h *OrderHandler) SetUsageRecorder(r billing.UsageRecorder) {
+	h.usageRecorder = r
 }
 
 // NewOrderHandler creates a new order handler.
@@ -205,6 +212,24 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			"message": "Failed to create order",
 		})
 		return
+	}
+
+	// Record order creation for billing
+	if h.usageRecorder != nil {
+		go func() {
+			event := billing.UsageEvent{
+				TenantID:  tenantID,
+				EventType: billing.UsageEventOrder,
+				Quantity:  1,
+				Metadata: map[string]string{
+					"order_id": order.ID.String(),
+				},
+				Timestamp: time.Now(),
+			}
+			if err := h.usageRecorder.RecordEvent(c.Request.Context(), event); err != nil {
+				h.log.WithError(err).Warn("Failed to record order creation usage")
+			}
+		}()
 	}
 
 	h.log.WithField("order_id", order.ID).Info("Order created")

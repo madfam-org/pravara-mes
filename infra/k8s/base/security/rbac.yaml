@@ -1,0 +1,212 @@
+---
+# ServiceAccount for pravara-api
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pravara-api-sa
+  namespace: pravara-mes
+  labels:
+    app: pravara-api
+automountServiceAccountToken: true
+---
+# ServiceAccount for pravara-ui
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pravara-ui-sa
+  namespace: pravara-mes
+  labels:
+    app: pravara-ui
+automountServiceAccountToken: true
+---
+# ServiceAccount for telemetry-worker
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: telemetry-worker-sa
+  namespace: pravara-mes
+  labels:
+    app: telemetry-worker
+automountServiceAccountToken: true
+---
+# ServiceAccount for centrifugo
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: centrifugo-sa
+  namespace: pravara-mes
+  labels:
+    app: centrifugo
+automountServiceAccountToken: true
+---
+# ServiceAccount for postgres
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-sa
+  namespace: pravara-mes
+  labels:
+    app: postgres
+automountServiceAccountToken: true
+---
+# ServiceAccount for redis
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-sa
+  namespace: pravara-mes
+  labels:
+    app: redis
+automountServiceAccountToken: true
+---
+# ServiceAccount for emqx
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: emqx-sa
+  namespace: pravara-mes
+  labels:
+    app: emqx
+automountServiceAccountToken: true
+---
+# Role with minimal permissions for application pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pravara-app-role
+  namespace: pravara-mes
+rules:
+  # Allow reading ConfigMaps (for configuration)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  # Allow reading Secrets (for credentials)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  # Allow reading own pod info (for graceful shutdown, health checks)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+    resourceNames: []
+---
+# RoleBinding for pravara-api
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pravara-api-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: pravara-api-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-app-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for pravara-ui
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pravara-ui-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: pravara-ui-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-app-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for telemetry-worker
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: telemetry-worker-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: telemetry-worker-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-app-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for centrifugo
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: centrifugo-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: centrifugo-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-app-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role for infrastructure pods (minimal permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pravara-infra-role
+  namespace: pravara-mes
+rules:
+  # Allow reading ConfigMaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  # Allow reading own pod info
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+# RoleBinding for postgres
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: postgres-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-infra-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for redis
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: redis-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: redis-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-infra-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for emqx
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: emqx-binding
+  namespace: pravara-mes
+subjects:
+  - kind: ServiceAccount
+    name: emqx-sa
+    namespace: pravara-mes
+roleRef:
+  kind: Role
+  name: pravara-infra-role
+  apiGroup: rbac.authorization.k8s.io
