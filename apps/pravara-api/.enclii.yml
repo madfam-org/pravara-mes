@@ -1,0 +1,143 @@
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: pravara-api
+  project: madfam-mes
+  description: PravaraMES Core API - Manufacturing Execution System
+  labels:
+    app: pravara-mes
+    component: api
+    tier: backend
+
+spec:
+  build:
+    type: dockerfile
+    dockerfile: apps/pravara-api/Dockerfile
+    context: .
+    source:
+      git:
+        repository: https://github.com/madfam-org/pravara-mes
+        branch: main
+        autoDeploy: true
+
+  runtime:
+    port: 4500
+    replicas: 2
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "512Mi"
+
+    healthCheck:
+      path: /health
+      port: 4500
+      initialDelaySeconds: 10
+      periodSeconds: 10
+
+    readinessProbe:
+      path: /health/ready
+      port: 4500
+      initialDelaySeconds: 5
+      periodSeconds: 5
+
+    livenessProbe:
+      path: /health/live
+      port: 4500
+      initialDelaySeconds: 15
+      periodSeconds: 10
+
+  env:
+    - name: APP_ENV
+      value: production
+    - name: LOG_LEVEL
+      value: info
+    - name: GIN_MODE
+      value: release
+    - name: PORT
+      value: "4500"
+
+    # Database
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: pravara-secrets
+          key: database-url
+
+    # Redis
+    - name: REDIS_URL
+      valueFrom:
+        secretKeyRef:
+          name: pravara-secrets
+          key: redis-url
+
+    # Janua SSO
+    - name: OIDC_ISSUER
+      value: https://auth.madfam.io
+    - name: OIDC_JWKS_URL
+      value: https://auth.madfam.io/.well-known/jwks.json
+    - name: OIDC_AUDIENCE
+      value: pravara-api
+
+    # R2 Storage
+    - name: R2_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: pravara-secrets
+          key: r2-endpoint
+    - name: R2_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: pravara-secrets
+          key: r2-access-key-id
+    - name: R2_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: pravara-secrets
+          key: r2-secret-access-key
+    - name: R2_BUCKET
+      value: pravara-production
+
+  networking:
+    port: 4500
+    domains:
+      - api.pravara.madfam.io
+    tls:
+      enabled: true
+      provider: cloudflare
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    metrics:
+      - type: cpu
+        target: 70
+      - type: memory
+        target: 80
+
+  deployment:
+    strategy: canary
+    canary:
+      steps:
+        - weight: 10
+          pause: 2m
+        - weight: 50
+          pause: 5m
+        - weight: 100
+      rollback:
+        automatic: true
+        errorThreshold: 5
+
+  security:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    dropCapabilities:
+      - ALL
+
+  slo:
+    availability: 99.9
+    latencyP95: 200
+    errorRate: 0.5

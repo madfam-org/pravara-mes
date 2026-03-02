@@ -1,0 +1,139 @@
+# =============================================================================
+# PravaraMES Telemetry Worker - enclii Deployment Specification
+# =============================================================================
+
+apiVersion: enclii.io/v1
+kind: Service
+metadata:
+  name: telemetry-worker
+  namespace: pravara-mes
+  labels:
+    app: telemetry-worker
+    tier: worker
+
+spec:
+  # Build configuration
+  build:
+    dockerfile: Dockerfile
+    context: ../..
+    args:
+      - name: GO_VERSION
+        value: "1.24"
+
+  # Runtime configuration
+  runtime:
+    port: 4502
+    replicas:
+      min: 2
+      max: 8
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  # Environment variables
+  env:
+    - name: PRAVARA_ENVIRONMENT
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: environment
+    - name: PRAVARA_LOG_LEVEL
+      value: info
+    - name: PRAVARA_MQTT_BROKER
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: mqtt_broker
+    - name: PRAVARA_MQTT_PORT
+      value: "1883"
+    - name: PRAVARA_MQTT_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: pravara-mqtt
+          key: username
+    - name: PRAVARA_MQTT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: pravara-mqtt
+          key: password
+    - name: PRAVARA_DATABASE_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: database_host
+    - name: PRAVARA_DATABASE_PORT
+      value: "5432"
+    - name: PRAVARA_DATABASE_USER
+      valueFrom:
+        secretKeyRef:
+          name: pravara-db
+          key: username
+    - name: PRAVARA_DATABASE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: pravara-db
+          key: password
+    - name: PRAVARA_DATABASE_NAME
+      value: pravara_mes
+    - name: PRAVARA_REDIS_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: redis_host
+    - name: PRAVARA_WORKER_BATCH_SIZE
+      value: "100"
+    - name: PRAVARA_WORKER_NUM_WORKERS
+      value: "4"
+
+  # Health checks
+  health:
+    liveness:
+      exec:
+        command:
+          - pgrep
+          - telemetry-worker
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      exec:
+        command:
+          - pgrep
+          - telemetry-worker
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+  # Deployment strategy
+  deployment:
+    strategy: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Autoscaling (based on MQTT message queue depth if available)
+  autoscaling:
+    enabled: true
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+
+  # Security
+  security:
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+    podSecurityContext:
+      fsGroup: 1000

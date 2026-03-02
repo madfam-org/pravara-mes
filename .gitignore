@@ -1,0 +1,101 @@
+# Binaries
+bin/
+dist/
+build/
+/api
+/worker
+
+# Dependencies
+node_modules/
+vendor/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.build
+.env.production
+.env.staging
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Node
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.next/
+.cache/
+*.tsbuildinfo
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+*.local.yaml
+*-secrets.local.yaml
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Docker
+.dockerignore
+
+# Secrets (NEVER commit)
+*-secrets.yaml
+*-secret.yaml
+secrets.dev.yaml
+secrets.*.yaml
+!*-secrets.example.yaml
+!*-secrets.yaml.template
+!*-secret.yaml.template
+!*.TEMPLATE
+
+# Enclii credentials
+.enclii/
+credentials
+**/credentials
+
+# Terraform
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Playwright
+playwright-report/
+playwright/.cache/
+test-results/
+.playwright/
+
+# Claude artifacts
+.claude/
+claudedocs/

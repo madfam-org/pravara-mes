@@ -1,0 +1,122 @@
+# =============================================================================
+# PravaraMES UI - enclii Deployment Specification
+# =============================================================================
+
+apiVersion: enclii.io/v1
+kind: Service
+metadata:
+  name: pravara-ui
+  namespace: pravara-mes
+  labels:
+    app: pravara-ui
+    tier: frontend
+
+spec:
+  # Build configuration
+  build:
+    dockerfile: Dockerfile
+    context: .
+    args:
+      NODE_ENV: production
+
+  # Runtime configuration
+  runtime:
+    port: 4501
+    replicas:
+      min: 2
+      max: 10
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # Environment variables
+  env:
+    - name: NEXT_PUBLIC_API_URL
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: api_url
+    - name: OIDC_ISSUER
+      valueFrom:
+        secretKeyRef:
+          name: pravara-oidc
+          key: issuer
+    - name: OIDC_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: pravara-oidc
+          key: client_id
+    - name: OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: pravara-oidc
+          key: client_secret
+    - name: NEXTAUTH_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: pravara-auth
+          key: nextauth_secret
+    - name: NEXTAUTH_URL
+      valueFrom:
+        configMapKeyRef:
+          name: pravara-config
+          key: ui_url
+
+  # Health checks
+  health:
+    liveness:
+      path: /api/health
+      port: 4501
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      path: /api/health
+      port: 4501
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+  # Deployment strategy
+  deployment:
+    strategy: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Autoscaling
+  autoscaling:
+    enabled: true
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: pravara.madfam.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: pravara-ui-tls
+        hosts:
+          - pravara.madfam.io
+
+  # Security
+  security:
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+    podSecurityContext:
+      fsGroup: 1001

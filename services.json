@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "description": "Service registry for PravaraMES. CI reads this to build, scan, sign, and deploy services.",
+  "services": [
+    {
+      "name": "pravara-api",
+      "path": "apps/pravara-api",
+      "type": "go",
+      "dockerfile": "apps/pravara-api/Dockerfile",
+      "image": "pravara-api",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "pravara-api",
+      "dependencies": ["packages/sdk-go"],
+      "scan": true,
+      "deploy_check": "pravara-api",
+      "port": 4500
+    },
+    {
+      "name": "pravara-ui",
+      "path": "apps/pravara-ui",
+      "type": "node",
+      "dockerfile": "apps/pravara-ui/Dockerfile",
+      "image": "pravara-ui",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "pravara-ui",
+      "dependencies": ["packages/ui-components"],
+      "scan": true,
+      "deploy_check": "pravara-ui",
+      "port": 4501,
+      "build_args": {
+        "NEXT_PUBLIC_API_URL": "https://api.pravara.madfam.io",
+        "NEXT_PUBLIC_JANUA_URL": "https://auth.madfam.io"
+      }
+    },
+    {
+      "name": "telemetry-worker",
+      "path": "apps/telemetry-worker",
+      "type": "go",
+      "dockerfile": "apps/telemetry-worker/Dockerfile",
+      "image": "telemetry-worker",
+      "kustomization": "infra/k8s/production",
+      "kustomize_image": "telemetry-worker",
+      "dependencies": ["packages/sdk-go"],
+      "scan": true,
+      "deploy_check": "telemetry-worker",
+      "port": 4502
+    }
+  ]
+}

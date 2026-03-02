@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pravara-config
+  namespace: pravara-mes
+  labels:
+    app.kubernetes.io/name: pravara-mes
+data:
+  environment: production
+  api_url: "https://api.pravara.madfam.io"
+  ui_url: "https://pravara.madfam.io"
+  database_host: "postgres-pravara"
+  redis_host: "redis-pravara"
+  mqtt_broker: "emqx-pravara"

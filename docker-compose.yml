@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: pravara-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pravara
+      POSTGRES_PASSWORD: pravara_dev
+      POSTGRES_DB: pravara_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pravara -d pravara_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Redis Cache
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: pravara-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # EMQX MQTT Broker
+  # =============================================================================
+  emqx:
+    image: emqx/emqx:5.4
+    container_name: pravara-emqx
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: pravara-emqx
+      EMQX_HOST: 0.0.0.0
+      # Default credentials (change in production)
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: pravara_dev
+    ports:
+      - "1883:1883"    # MQTT
+      - "8083:8083"    # MQTT WebSocket
+      - "8084:8084"    # MQTT SSL WebSocket
+      - "8883:8883"    # MQTT SSL
+      - "18083:18083"  # Dashboard
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  emqx_data:
+  emqx_log:
+
+networks:
+  default:
+    name: pravara-network
