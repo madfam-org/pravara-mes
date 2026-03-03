@@ -1,0 +1,169 @@
+# =============================================================================
+# ML Orchestrator — Scale-to-zero ML inference worker (Python)
+# Processes ML tasks from Redis queue, scales down when idle
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-orchestrator
+  namespace: pravara-mes
+  labels:
+    app: ml-orchestrator
+    app.kubernetes.io/name: ml-orchestrator
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: ml-orchestrator
+      app.kubernetes.io/name: ml-orchestrator
+  template:
+    metadata:
+      labels:
+        app: ml-orchestrator
+        app.kubernetes.io/name: ml-orchestrator
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ml-orchestrator
+          image: ml-orchestrator
+          ports:
+            - containerPort: 8001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 300m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-orchestrator
+  namespace: pravara-mes
+  labels:
+    app: ml-orchestrator
+    app.kubernetes.io/name: ml-orchestrator
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8001
+      name: http
+  selector:
+    app: ml-orchestrator
+    app.kubernetes.io/name: ml-orchestrator
+---
+# KEDA ScaledObject — scales ml-orchestrator from 0 to 2 based on Redis queue depth.
+# Requires KEDA to be installed in the cluster. If KEDA is not available, replace
+# this with an HPA (commented out below).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ml-orchestrator-scaler
+  namespace: pravara-mes
+  labels:
+    app: ml-orchestrator
+    app.kubernetes.io/name: ml-orchestrator
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  scaleTargetRef:
+    name: ml-orchestrator
+  minReplicaCount: 0
+  maxReplicaCount: 2
+  cooldownPeriod: 300
+  pollingInterval: 15
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-pravara.pravara-mes.svc.cluster.local:6379
+        listName: ml-tasks
+        listLength: "1"
+      authenticationRef:
+        name: ml-orchestrator-redis-auth
+---
+# TriggerAuthentication for Redis (references the existing pravara-secrets)
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: ml-orchestrator-redis-auth
+  namespace: pravara-mes
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: pravara-secrets
+      key: redis_password
+---
+# =============================================================================
+# HPA Fallback — Uncomment this and remove the ScaledObject + TriggerAuthentication
+# above if KEDA is not installed. Note: HPA cannot scale to zero.
+# =============================================================================
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: ml-orchestrator
+#   namespace: pravara-mes
+#   labels:
+#     app: ml-orchestrator
+#     app.kubernetes.io/name: ml-orchestrator
+#     app.kubernetes.io/part-of: pravara-mes
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: ml-orchestrator
+#   minReplicas: 1
+#   maxReplicas: 2
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 70

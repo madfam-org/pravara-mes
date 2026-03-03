@@ -1,0 +1,811 @@
+# =============================================================================
+# PravaraMES Application Deployments & Services
+# All application workloads (excluding infrastructure: postgres, redis, emqx, centrifugo)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# pravara-api — Control plane API (Go/Gin)
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravara-api
+  namespace: pravara-mes
+  labels:
+    app: pravara-api
+    app.kubernetes.io/name: pravara-api
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pravara-api
+      app.kubernetes.io/name: pravara-api
+  template:
+    metadata:
+      labels:
+        app: pravara-api
+        app.kubernetes.io/name: pravara-api
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pravara-api
+          image: pravara-api
+          ports:
+            - containerPort: 4500
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4500
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4500
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4500
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravara-api
+  namespace: pravara-mes
+  labels:
+    app: pravara-api
+    app.kubernetes.io/name: pravara-api
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4500
+      name: http
+  selector:
+    app: pravara-api
+    app.kubernetes.io/name: pravara-api
+
+# -----------------------------------------------------------------------------
+# pravara-ui — Web dashboard (Next.js)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravara-ui
+  namespace: pravara-mes
+  labels:
+    app: pravara-ui
+    app.kubernetes.io/name: pravara-ui
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pravara-ui
+      app.kubernetes.io/name: pravara-ui
+  template:
+    metadata:
+      labels:
+        app: pravara-ui
+        app.kubernetes.io/name: pravara-ui
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pravara-ui
+          image: pravara-ui
+          ports:
+            - containerPort: 4501
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /
+              port: 4501
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4501
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4501
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravara-ui
+  namespace: pravara-mes
+  labels:
+    app: pravara-ui
+    app.kubernetes.io/name: pravara-ui
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4501
+      name: http
+  selector:
+    app: pravara-ui
+    app.kubernetes.io/name: pravara-ui
+
+# -----------------------------------------------------------------------------
+# telemetry-worker — MQTT telemetry consumer (Go)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry-worker
+  namespace: pravara-mes
+  labels:
+    app: telemetry-worker
+    app.kubernetes.io/name: telemetry-worker
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telemetry-worker
+      app.kubernetes.io/name: telemetry-worker
+  template:
+    metadata:
+      labels:
+        app: telemetry-worker
+        app.kubernetes.io/name: telemetry-worker
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: telemetry-worker
+          image: telemetry-worker
+          ports:
+            - containerPort: 4502
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4502
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4502
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4502
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemetry-worker
+  namespace: pravara-mes
+  labels:
+    app: telemetry-worker
+    app.kubernetes.io/name: telemetry-worker
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4502
+      name: http
+  selector:
+    app: telemetry-worker
+    app.kubernetes.io/name: telemetry-worker
+
+# -----------------------------------------------------------------------------
+# visualization-engine — Real-time dashboard rendering (Go)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visualization-engine
+  namespace: pravara-mes
+  labels:
+    app: visualization-engine
+    app.kubernetes.io/name: visualization-engine
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visualization-engine
+      app.kubernetes.io/name: visualization-engine
+  template:
+    metadata:
+      labels:
+        app: visualization-engine
+        app.kubernetes.io/name: visualization-engine
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: visualization-engine
+          image: visualization-engine
+          ports:
+            - containerPort: 4505
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4505
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4505
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4505
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: visualization-engine
+  namespace: pravara-mes
+  labels:
+    app: visualization-engine
+    app.kubernetes.io/name: visualization-engine
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4505
+      name: http
+  selector:
+    app: visualization-engine
+    app.kubernetes.io/name: visualization-engine
+
+# -----------------------------------------------------------------------------
+# video-streaming — WebRTC video relay (Go)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-streaming
+  namespace: pravara-mes
+  labels:
+    app: video-streaming
+    app.kubernetes.io/name: video-streaming
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: video-streaming
+      app.kubernetes.io/name: video-streaming
+  template:
+    metadata:
+      labels:
+        app: video-streaming
+        app.kubernetes.io/name: video-streaming
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: video-streaming
+          image: video-streaming
+          ports:
+            - containerPort: 4506
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4506
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4506
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4506
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-streaming
+  namespace: pravara-mes
+  labels:
+    app: video-streaming
+    app.kubernetes.io/name: video-streaming
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4506
+      name: http
+  selector:
+    app: video-streaming
+    app.kubernetes.io/name: video-streaming
+
+# -----------------------------------------------------------------------------
+# luban-bridge — LuBan slicer integration (Node.js)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: luban-bridge
+  namespace: pravara-mes
+  labels:
+    app: luban-bridge
+    app.kubernetes.io/name: luban-bridge
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: luban-bridge
+      app.kubernetes.io/name: luban-bridge
+  template:
+    metadata:
+      labels:
+        app: luban-bridge
+        app.kubernetes.io/name: luban-bridge
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: luban-bridge
+          image: luban-bridge
+          ports:
+            - containerPort: 4507
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4507
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4507
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4507
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: luban-bridge
+  namespace: pravara-mes
+  labels:
+    app: luban-bridge
+    app.kubernetes.io/name: luban-bridge
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4507
+      name: http
+  selector:
+    app: luban-bridge
+    app.kubernetes.io/name: luban-bridge
+
+# -----------------------------------------------------------------------------
+# octoprint-connector — OctoPrint API bridge (Python)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octoprint-connector
+  namespace: pravara-mes
+  labels:
+    app: octoprint-connector
+    app.kubernetes.io/name: octoprint-connector
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octoprint-connector
+      app.kubernetes.io/name: octoprint-connector
+  template:
+    metadata:
+      labels:
+        app: octoprint-connector
+        app.kubernetes.io/name: octoprint-connector
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: octoprint-connector
+          image: octoprint-connector
+          ports:
+            - containerPort: 4508
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4508
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4508
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4508
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: octoprint-connector
+  namespace: pravara-mes
+  labels:
+    app: octoprint-connector
+    app.kubernetes.io/name: octoprint-connector
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4508
+      name: http
+  selector:
+    app: octoprint-connector
+    app.kubernetes.io/name: octoprint-connector
+
+# -----------------------------------------------------------------------------
+# machine-adapter — Generic machine protocol adapter (Go)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: machine-adapter
+  namespace: pravara-mes
+  labels:
+    app: machine-adapter
+    app.kubernetes.io/name: machine-adapter
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: machine-adapter
+      app.kubernetes.io/name: machine-adapter
+  template:
+    metadata:
+      labels:
+        app: machine-adapter
+        app.kubernetes.io/name: machine-adapter
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: machine-adapter
+          image: machine-adapter
+          ports:
+            - containerPort: 4509
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4509
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4509
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4509
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: machine-adapter
+  namespace: pravara-mes
+  labels:
+    app: machine-adapter
+    app.kubernetes.io/name: machine-adapter
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4509
+      name: http
+  selector:
+    app: machine-adapter
+    app.kubernetes.io/name: machine-adapter

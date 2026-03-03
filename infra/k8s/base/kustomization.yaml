@@ -11,6 +11,8 @@ resources:
   - redis.yaml
   - emqx.yaml
   - centrifugo.yaml
+  - apps.yaml
+  - ml-orchestrator.yaml
   - ingress.yaml
   - observability/
   - security/

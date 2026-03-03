@@ -5,6 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: pravara-mes
     app.kubernetes.io/part-of: pravara-mes
+    enclii.dev/type: application
     # Pod Security Standards enforcement
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest

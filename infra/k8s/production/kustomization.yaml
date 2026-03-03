@@ -52,18 +52,18 @@ patches:
     metadata:
       name: emqx-pravara
     spec:
-      replicas: 3
+      replicas: 1
       template:
         spec:
           containers:
             - name: emqx
               resources:
                 requests:
-                  cpu: 500m
-                  memory: 1Gi
+                  cpu: 200m
+                  memory: 512Mi
                 limits:
-                  cpu: 2000m
-                  memory: 2Gi
+                  cpu: 1000m
+                  memory: 1Gi
 
 configMapGenerator:
 - behavior: merge
@@ -87,3 +87,21 @@ images:
 - name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
   newTag: main-ca85bb7
+- name: visualization-engine
+  newName: ghcr.io/madfam-org/visualization-engine
+  newTag: latest
+- name: video-streaming
+  newName: ghcr.io/madfam-org/video-streaming
+  newTag: latest
+- name: ml-orchestrator
+  newName: ghcr.io/madfam-org/ml-orchestrator
+  newTag: latest
+- name: luban-bridge
+  newName: ghcr.io/madfam-org/luban-bridge
+  newTag: latest
+- name: octoprint-connector
+  newName: ghcr.io/madfam-org/octoprint-connector
+  newTag: latest
+- name: machine-adapter
+  newName: ghcr.io/madfam-org/machine-adapter
+  newTag: latest
