@@ -72,7 +72,11 @@ configMapGenerator:
   name: pravara-config
 
 images:
+- name: centrifugo/centrifugo
+  newName: docker.io/centrifugo/centrifugo
+  newTag: v5
 - name: emqx/emqx
+  newName: docker.io/emqx/emqx
   newTag: "5.4"
 - name: luban-bridge
   newName: ghcr.io/madfam-org/luban-bridge
@@ -87,6 +91,7 @@ images:
   newName: ghcr.io/madfam-org/octoprint-connector
   newTag: latest
 - name: postgres
+  newName: docker.io/library/postgres
   newTag: 16-alpine
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
@@ -95,6 +100,7 @@ images:
   newName: ghcr.io/madfam-org/pravara-ui
   newTag: main-ba1a5dc
 - name: redis
+  newName: docker.io/library/redis
   newTag: 7-alpine
 - name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
