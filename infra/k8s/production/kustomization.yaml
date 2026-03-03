@@ -74,6 +74,18 @@ configMapGenerator:
 images:
 - name: emqx/emqx
   newTag: "5.4"
+- name: luban-bridge
+  newName: ghcr.io/madfam-org/luban-bridge
+  newTag: latest
+- name: machine-adapter
+  newName: ghcr.io/madfam-org/machine-adapter
+  newTag: latest
+- name: ml-orchestrator
+  newName: ghcr.io/madfam-org/ml-orchestrator
+  newTag: latest
+- name: octoprint-connector
+  newName: ghcr.io/madfam-org/octoprint-connector
+  newTag: latest
 - name: postgres
   newTag: 16-alpine
 - name: pravara-api
@@ -81,27 +93,15 @@ images:
   newTag: main-2cc065b
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
-  newTag: main-2cc065b
+  newTag: main-ba1a5dc
 - name: redis
   newTag: 7-alpine
 - name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
   newTag: main-ca85bb7
-- name: visualization-engine
-  newName: ghcr.io/madfam-org/visualization-engine
-  newTag: latest
 - name: video-streaming
   newName: ghcr.io/madfam-org/video-streaming
   newTag: latest
-- name: ml-orchestrator
-  newName: ghcr.io/madfam-org/ml-orchestrator
-  newTag: latest
-- name: luban-bridge
-  newName: ghcr.io/madfam-org/luban-bridge
-  newTag: latest
-- name: octoprint-connector
-  newName: ghcr.io/madfam-org/octoprint-connector
-  newTag: latest
-- name: machine-adapter
-  newName: ghcr.io/madfam-org/machine-adapter
+- name: visualization-engine
+  newName: ghcr.io/madfam-org/visualization-engine
   newTag: latest
