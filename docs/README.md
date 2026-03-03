@@ -77,6 +77,13 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [debugging-guide.md](../.claude/skills/debugging-guide.md) | Debug common issues |
 | [database-migration.md](../.claude/skills/database-migration.md) | Database migrations |
 
+## Machine Adapter Documentation
+
+| Document | Description |
+|----------|-------------|
+| [MACHINE_UNIVERSE.md](./MACHINE_UNIVERSE.md) | Complete catalog of 50 supported machines |
+| [PROTOCOL_COMPLIANCE_MATRIX.md](./PROTOCOL_COMPLIANCE_MATRIX.md) | Protocol compliance tracking across all adapters |
+
 ## Infrastructure Documentation
 
 | Document | Description |

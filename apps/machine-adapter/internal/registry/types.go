@@ -23,6 +23,10 @@ const (
 	MachineTypeEmbroidery     MachineType = "embroidery"
 	MachineTypePickAndPlace   MachineType = "pick_place"
 	MachineTypeRobotArm       MachineType = "robot_arm"
+	MachineTypePCBMill        MachineType = "pcb_mill"
+	MachineTypeLaserEngraver  MachineType = "laser_engraver"
+	MachineTypeMultiTool      MachineType = "multi_tool"
+	MachineType3DPrinterResin MachineType = "3d_printer_resin"
 )
 
 // Protocol represents the communication protocol for a machine.
@@ -33,15 +37,29 @@ const (
 	ProtocolGRBL      Protocol = "grbl"       // GRBL-specific commands
 	ProtocolMarlin    Protocol = "marlin"     // Marlin firmware (3D printers)
 	ProtocolSmoothie  Protocol = "smoothie"   // Smoothieboard
-	ProtocolDuet      Protocol = "duet"       // Duet3D RepRapFirmware
-	ProtocolHaas      Protocol = "haas"       // Haas CNC protocol
-	ProtocolFanuc     Protocol = "fanuc"      // Fanuc CNC protocol
-	ProtocolMazak     Protocol = "mazak"      // Mazak CNC protocol
-	ProtocolUniversal Protocol = "universal"  // Universal Robots
-	ProtocolModbus    Protocol = "modbus"     // Modbus TCP/RTU
-	ProtocolOPCUA     Protocol = "opcua"      // OPC UA
-	ProtocolMTConnect Protocol = "mtconnect"  // MTConnect
-	ProtocolCustom    Protocol = "custom"     // Vendor-specific
+	ProtocolDuet        Protocol = "duet"        // Duet3D RepRapFirmware
+	ProtocolHaas        Protocol = "haas"        // Haas CNC protocol
+	ProtocolFanuc       Protocol = "fanuc"       // Fanuc CNC protocol
+	ProtocolMazak       Protocol = "mazak"       // Mazak CNC protocol
+	ProtocolUniversal   Protocol = "universal"   // Universal Robots
+	ProtocolModbus      Protocol = "modbus"      // Modbus TCP/RTU
+	ProtocolOPCUA       Protocol = "opcua"       // OPC UA
+	ProtocolMTConnect   Protocol = "mtconnect"   // MTConnect
+	ProtocolCustom      Protocol = "custom"      // Vendor-specific
+	ProtocolBambuMQTT   Protocol = "bambu_mqtt"  // Bambu Lab MQTT (TLS :8883)
+	ProtocolMoonraker   Protocol = "moonraker"   // Klipper/Moonraker REST + WebSocket
+	ProtocolOctoPrint   Protocol = "octoprint"   // OctoPrint REST + WebSocket
+	ProtocolPrusaLink   Protocol = "prusalink"   // PrusaLink HTTP REST
+	ProtocolRuida       Protocol = "ruida"       // Ruida laser controller UDP
+	ProtocolCammGL      Protocol = "camm_gl"     // Roland CAMM-GL III serial
+	ProtocolGPGL        Protocol = "gpgl"        // Graphtec GP-GL serial
+	ProtocolOpenPnP     Protocol = "openpnp"     // OpenPnP G-code + HTTP
+	ProtocolURScript    Protocol = "urscript"    // Universal Robots TCP :30002
+	ProtocolXTool       Protocol = "xtool"       // xTool WiFi/Ethernet
+	ProtocolFormlabs    Protocol = "formlabs"    // Formlabs Fleet Control REST
+	ProtocolBuildbotics  Protocol = "buildbotics"  // Buildbotics controller REST
+	ProtocolLinuxCNC    Protocol = "linuxcnc"    // LinuxCNC command API (TCP)
+	ProtocolDobot       Protocol = "dobot"       // Dobot serial API
 )
 
 // ConnectionType represents how the machine connects.
@@ -53,6 +71,7 @@ const (
 	ConnectionHTTP     ConnectionType = "http"      // REST API
 	ConnectionWebSocket ConnectionType = "websocket" // WebSocket
 	ConnectionMQTT     ConnectionType = "mqtt"      // MQTT broker
+	ConnectionUDP      ConnectionType = "udp"       // UDP datagrams (e.g. Ruida)
 )
 
 // MachineCapability describes what a machine can do.
@@ -130,6 +149,74 @@ var Capabilities = map[string]MachineCapability{
 	"bed_temp": {
 		Name:        "Bed Temperature",
 		Description: "3D printer bed temperature range",
+		Parameters: map[string]interface{}{
+			"min_celsius": 0.0,
+			"max_celsius": 0.0,
+		},
+	},
+	"print_speed": {
+		Name:        "Print Speed",
+		Description: "Maximum print speed",
+		Parameters: map[string]interface{}{
+			"max_mm_per_sec": 0.0,
+		},
+	},
+	"camera": {
+		Name:        "Camera",
+		Description: "Built-in camera for monitoring",
+		Parameters: map[string]interface{}{
+			"supported":  false,
+			"resolution": "",
+		},
+	},
+	"filament_system": {
+		Name:        "Filament System",
+		Description: "Automatic filament management (AMS, MMU, etc.)",
+		Parameters: map[string]interface{}{
+			"type":  "",
+			"slots": 0,
+		},
+	},
+	"input_shaping": {
+		Name:        "Input Shaping",
+		Description: "Vibration compensation for high-speed printing",
+		Parameters: map[string]interface{}{
+			"supported": false,
+		},
+	},
+	"multi_material": {
+		Name:        "Multi-Material",
+		Description: "Multi-material or multi-color printing support",
+		Parameters: map[string]interface{}{
+			"supported": false,
+			"colors":    0,
+		},
+	},
+	"cutting_force": {
+		Name:        "Cutting Force",
+		Description: "Maximum cutting force for vinyl/die cutters",
+		Parameters: map[string]interface{}{
+			"max_grams": 0,
+		},
+	},
+	"vision_system": {
+		Name:        "Vision System",
+		Description: "Machine vision for alignment or inspection",
+		Parameters: map[string]interface{}{
+			"supported": false,
+			"type":      "",
+		},
+	},
+	"feeder_count": {
+		Name:        "Feeder Count",
+		Description: "Number of component feeders (pick-and-place)",
+		Parameters: map[string]interface{}{
+			"count": 0,
+		},
+	},
+	"chamber_temp": {
+		Name:        "Chamber Temperature",
+		Description: "Heated chamber temperature range",
 		Parameters: map[string]interface{}{
 			"min_celsius": 0.0,
 			"max_celsius": 0.0,
@@ -242,6 +329,78 @@ func (r *Registry) loadBuiltinDefinitions() {
 
 	// Snapmaker 2.0 A350 (multi-tool: 3DP + Laser + CNC)
 	r.definitions["snapmaker_a350"] = SnapmakerA350Definition()
+
+	// Bambu Lab printers (MQTT over TLS)
+	r.definitions["bambu_p1s"] = BambuP1SDefinition()
+	r.definitions["bambu_a1"] = BambuA1Definition()
+	r.definitions["bambu_x1c"] = BambuX1CDefinition()
+
+	// Ruida RDC6445 Generic (CO2 laser cutter)
+	r.definitions["ruida_generic"] = RuidaGenericDefinition()
+
+	// Klipper/Moonraker-based printers
+	r.definitions["creality_k1_max"] = CrealityK1MaxDefinition()
+	r.definitions["voron_2_4"] = Voron24Definition()
+	r.definitions["ratrig_vcore4"] = RatRigVCore4Definition()
+
+	// Prusa PrusaLink-based printers
+	r.definitions["prusa_core_one"] = PrusaCoreOneDefinition()
+	r.definitions["prusa_mini_plus"] = PrusaMiniPlusDefinition()
+	r.definitions["prusa_sl1s"] = PrusaSL1SDefinition()
+
+	// xTool laser machines (HTTP REST)
+	r.definitions["xtool_p2s"] = XToolP2SDefinition()
+	r.definitions["xtool_s1"] = XToolS1Definition()
+	r.definitions["xtool_f1_ultra"] = XToolF1UltraDefinition()
+
+	// Roland CAMM-GL vinyl cutters (serial)
+	r.definitions["roland_gr2_640"] = RolandGR2Definition()
+	r.definitions["roland_gs2_24"] = RolandGS2Definition()
+
+	// Duet3D Generic (RepRapFirmware over HTTP)
+	r.definitions["duet_generic"] = DuetGenericDefinition()
+
+	// Ultimaker S5 (REST API)
+	r.definitions["ultimaker_s5"] = UltimakerS5Definition()
+
+	// Formlabs Form 4 (Fleet Control REST API)
+	r.definitions["formlabs_form4"] = FormlabsForm4Definition()
+
+	// Resin printers (registry-only, proprietary protocols)
+	r.definitions["elegoo_saturn4_ultra"] = ElegooSaturn4UltraDefinition()
+	r.definitions["anycubic_photon_mono_m7"] = AnycubicPhotonMonoM7Definition()
+	r.definitions["phrozen_sonic_mighty_8k"] = PhrozenSonicMighty8KDefinition()
+
+	// Laser machines (registry-only, limited/cloud APIs)
+	r.definitions["glowforge_pro"] = GlowforgeProDefinition()
+	r.definitions["trotec_speedy_360"] = TrotecSpeedyDefinition()
+
+	// Specialty machines (registry-only, proprietary protocols)
+	r.definitions["silhouette_cameo_5"] = SilhouetteCameo5Definition()
+	r.definitions["neoden_yy1"] = NeodenYY1Definition()
+	r.definitions["bantam_tools_pcb_mill"] = BantamToolsPCBMillDefinition()
+	r.definitions["brother_pe800"] = BrotherPE800Definition()
+
+	// CNC tier 3 (Buildbotics / LinuxCNC)
+	r.definitions["onefinity_woodworker"] = OneFinityWoodworkerDefinition()
+	r.definitions["linuxcnc_generic"] = LinuxCNCGenericDefinition()
+
+	// Pick-and-place and robot arms
+	r.definitions["lumen_pnp"] = LumenPnPDefinition()
+	r.definitions["index_pnp"] = IndexPnPDefinition()
+	r.definitions["ur_generic"] = URGenericDefinition()
+	r.definitions["dobot_magician"] = DobotMagicianDefinition()
+
+	// Additional GRBL CNC machines
+	r.definitions["shapeoko_hdm"] = ShapeokoHDMDefinition()
+	r.definitions["xcarve_pro"] = XCarveProDefinition()
+	r.definitions["openbuilds_lead"] = OpenBuildsLeadDefinition()
+	r.definitions["sienci_longmill_mk2"] = SienciLongMillMK2Definition()
+	r.definitions["stepcraft_d840"] = StepcraftD840Definition()
+	r.definitions["creality_falcon2"] = CrealityFalcon2Definition()
+
+	// GPGL vinyl cutter
+	r.definitions["graphtec_ce8000"] = GraphtecCE8000Definition()
 
 	// Example: Prusa 3D Printer
 	r.definitions["prusa_mk4"] = &MachineDefinition{

@@ -31,6 +31,15 @@ type CommandExecutor interface {
 	SendCommand(command string, timeout time.Duration) error
 }
 
+// MachineAdapter extends CommandExecutor for non-G-code adapters (MQTT JSON, REST, UDP).
+// Adapters implementing this interface handle protocol-aware command translation internally.
+type MachineAdapter interface {
+	CommandExecutor
+	// MapCommand translates a high-level command name and params into a protocol-specific
+	// payload and executes it. Returns a response map or error.
+	MapCommand(command string, params map[string]interface{}) (interface{}, error)
+}
+
 // CommandResponse represents the result of a command execution.
 type CommandResponse struct {
 	MachineID string `json:"machine_id"`
@@ -225,6 +234,21 @@ func (m *Manager) handleCommand(_ paho.Client, msg paho.Message) {
 	if adapter.Executor == nil {
 		m.log.WithField("machine_id", cmd.MachineID).Warn("No executor available for machine")
 		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, "no executor available")
+		return
+	}
+
+	// Use protocol-aware MapCommand for adapters that implement MachineAdapter,
+	// fall back to G-code mapping for serial adapters (GRBL, Marlin).
+	if ma, ok := adapter.Executor.(MachineAdapter); ok {
+		if _, err := ma.MapCommand(cmd.Command, cmd.Params); err != nil {
+			m.log.WithError(err).WithFields(logrus.Fields{
+				"machine_id": cmd.MachineID,
+				"command":    cmd.Command,
+			}).Error("Command execution failed")
+			m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, err.Error())
+			return
+		}
+		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, true, "")
 		return
 	}
 
