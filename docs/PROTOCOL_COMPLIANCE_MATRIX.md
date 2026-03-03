@@ -20,6 +20,7 @@ This matrix tracks our implementation compliance with official standards and pro
 | GRBL | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ Core |
 | grblHAL | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ Full |
 | Marlin | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚡ Basic |
+| Snapmaker | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚡ Basic |
 | LinuxCNC | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ Full |
 | Fanuc | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ Full |
 | Siemens | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ Full |
@@ -70,6 +71,7 @@ This matrix tracks our implementation compliance with official standards and pro
 |---------|--------|--------|-----|-----------|------|-----------|--------|--------|
 | GRBL | ✅ | ⚡ | ❌ | 🚧 | ❌ | ❌ | ❌ | ❌ |
 | Marlin | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Snapmaker | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | OctoPrint | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Klipper | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Duet | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
@@ -114,6 +116,7 @@ This matrix tracks our implementation compliance with official standards and pro
 |---------|-----------------|-------------------|----------------|-------------|
 | GRBL | <10ms | 10Hz | 5Hz | 99.9% |
 | Marlin | <20ms | 5Hz | 2Hz | 99.5% |
+| Snapmaker | <20ms | 5Hz | 2Hz | 99.5% |
 | OctoPrint | <100ms | 1Hz | 1Hz | 99% |
 | Klipper | <5ms | 20Hz | 10Hz | 99.9% |
 | Industrial | <1ms | 100Hz | 50Hz | 99.99% |
@@ -125,6 +128,7 @@ This matrix tracks our implementation compliance with official standards and pro
 ### Phase 1 - Q1 2024 (Tier 1)
 - [x] GRBL Universal Adapter ⚠️
 - [ ] Marlin Adapter 🚧
+- [x] Snapmaker A350 Multi-Tool Adapter 🚧
 - [ ] OctoPrint Interface 📋
 - [ ] Ruida Laser Adapter 📋
 

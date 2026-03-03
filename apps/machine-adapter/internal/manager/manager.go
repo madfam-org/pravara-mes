@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/sirupsen/logrus"
@@ -14,13 +15,39 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/registry"
 )
 
+// TelemetryMetric represents a single telemetry data point.
+type TelemetryMetric struct {
+	Type      string  `json:"type"`      // "position_x", "temperature_extruder", etc.
+	Value     float64 `json:"value"`
+	Unit      string  `json:"unit"`
+	Timestamp string  `json:"timestamp"`
+}
+
+// TelemetryCallback is invoked by adapters when new telemetry data is available.
+type TelemetryCallback func(metrics []TelemetryMetric)
+
+// CommandExecutor is implemented by protocol adapters to execute machine commands.
+type CommandExecutor interface {
+	SendCommand(command string, timeout time.Duration) error
+}
+
+// CommandResponse represents the result of a command execution.
+type CommandResponse struct {
+	MachineID string `json:"machine_id"`
+	Command   string `json:"command"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
 // Adapter represents a connected machine protocol adapter.
 type Adapter struct {
-	MachineID   string `json:"machine_id"`
-	MachineType string `json:"machine_type"`
-	Protocol    string `json:"protocol"`
-	Status      string `json:"status"` // connected, disconnected, error
-	TenantID    string `json:"tenant_id"`
+	MachineID   string          `json:"machine_id"`
+	MachineType string          `json:"machine_type"`
+	Protocol    string          `json:"protocol"`
+	Status      string          `json:"status"` // connected, disconnected, error
+	TenantID    string          `json:"tenant_id"`
+	Executor    CommandExecutor `json:"-"`
 }
 
 // CommandRequest represents an incoming machine command.
@@ -146,6 +173,32 @@ func (m *Manager) ListConnected() []*Adapter {
 	return adapters
 }
 
+// PublishTelemetry publishes telemetry metrics to MQTT for a specific machine.
+func (m *Manager) PublishTelemetry(tenantID, machineID string, metrics []TelemetryMetric) {
+	topic := fmt.Sprintf("pravara/%s/machines/%s/telemetry", tenantID, machineID)
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"machine_id": machineID,
+		"metrics":    metrics,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		m.log.WithError(err).Error("Failed to marshal telemetry payload")
+		return
+	}
+
+	if err := m.mqttClient.Publish(topic, 0, payload); err != nil {
+		m.log.WithError(err).WithField("machine_id", machineID).Warn("Failed to publish telemetry")
+	}
+}
+
+// MakeTelemetryCallback creates a TelemetryCallback bound to a specific tenant and machine.
+func (m *Manager) MakeTelemetryCallback(tenantID, machineID string) TelemetryCallback {
+	return func(metrics []TelemetryMetric) {
+		m.PublishTelemetry(tenantID, machineID, metrics)
+	}
+}
+
 // handleCommand processes incoming MQTT command messages.
 func (m *Manager) handleCommand(_ paho.Client, msg paho.Message) {
 	var cmd CommandRequest
@@ -168,6 +221,94 @@ func (m *Manager) handleCommand(_ paho.Client, msg paho.Message) {
 		"command":    cmd.Command,
 		"protocol":   adapter.Protocol,
 	}).Info("Routing command to adapter")
+
+	if adapter.Executor == nil {
+		m.log.WithField("machine_id", cmd.MachineID).Warn("No executor available for machine")
+		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, "no executor available")
+		return
+	}
+
+	gcode, timeout := mapCommandToGCode(cmd.Command, cmd.Params)
+	if gcode == "" {
+		m.log.WithField("command", cmd.Command).Warn("Unknown command, cannot map to G-code")
+		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, "unknown command")
+		return
+	}
+
+	if err := adapter.Executor.SendCommand(gcode, timeout); err != nil {
+		m.log.WithError(err).WithFields(logrus.Fields{
+			"machine_id": cmd.MachineID,
+			"command":    cmd.Command,
+			"gcode":      gcode,
+		}).Error("Command execution failed")
+		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, err.Error())
+		return
+	}
+
+	m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, true, "")
+}
+
+// publishCommandResponse sends a command ACK/NACK to MQTT.
+func (m *Manager) publishCommandResponse(tenantID, machineID, command string, success bool, errMsg string) {
+	topic := fmt.Sprintf("pravara/%s/machines/%s/command/response", tenantID, machineID)
+
+	resp := CommandResponse{
+		MachineID: machineID,
+		Command:   command,
+		Success:   success,
+	}
+	if success {
+		resp.Message = "ok"
+	} else {
+		resp.Error = errMsg
+	}
+
+	payload, _ := json.Marshal(resp)
+	if err := m.mqttClient.Publish(topic, 1, payload); err != nil {
+		m.log.WithError(err).Warn("Failed to publish command response")
+	}
+}
+
+// mapCommandToGCode maps a high-level command name to G-code and timeout.
+func mapCommandToGCode(command string, params map[string]interface{}) (string, time.Duration) {
+	switch command {
+	case "home":
+		return "G28", 60 * time.Second
+	case "pause":
+		return "M25", 5 * time.Second
+	case "resume":
+		return "M24", 5 * time.Second
+	case "stop":
+		return "M524", 5 * time.Second
+	case "emergency_stop":
+		return "M112", 1 * time.Second
+	case "preheat":
+		temp := 200.0
+		if t, ok := params["temperature"]; ok {
+			if tf, ok := t.(float64); ok {
+				temp = tf
+			}
+		}
+		return fmt.Sprintf("M104 S%.0f", temp), 5 * time.Second
+	case "preheat_bed":
+		temp := 60.0
+		if t, ok := params["temperature"]; ok {
+			if tf, ok := t.(float64); ok {
+				temp = tf
+			}
+		}
+		return fmt.Sprintf("M140 S%.0f", temp), 5 * time.Second
+	case "cooldown":
+		return "M104 S0\nM140 S0", 5 * time.Second
+	case "get_position":
+		return "M114", 2 * time.Second
+	case "get_temperature":
+		return "M105", 2 * time.Second
+	case "auto_level":
+		return "G29", 120 * time.Second
+	default:
+		return "", 0
+	}
 }
 
 // handleTelemetry processes incoming MQTT telemetry messages.

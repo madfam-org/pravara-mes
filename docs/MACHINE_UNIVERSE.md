@@ -159,6 +159,17 @@ This document comprehensively catalogs the entire ecosystem of digital fabricati
 - **Protocol**: HTTP REST
 - **Features**: Remote job submission
 
+#### Snapmaker 2.0 A350
+- **Protocol**: Marlin (Serial) + Snapmaker HTTP (WiFi)
+- **Build Volume**: 320×350×330mm
+- **Multi-Tool**: 3D Printing, Laser Engraving, CNC Carving
+- **Serial**: 115200 baud, standard Marlin G-code
+- **WiFi**: HTTP API on port 8080 (Luban protocol)
+- **Special Commands**: M1005 (detect tool), M605 (switch mode), M2000 (enclosure)
+- **Enclosure**: LED and fan control via M2000
+- **Temperature**: 275°C max nozzle, 80°C max bed
+- **Features**: Tool head auto-detection, mode switching, enclosure monitoring
+
 ---
 
 ## Laser Cutters & Engravers

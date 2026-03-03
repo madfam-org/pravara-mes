@@ -160,7 +160,84 @@ export const machinesAPI = {
     }),
 };
 
+// Layouts API (proxied to viz-engine)
+export const layoutsAPI = {
+  getActive: (token: string) =>
+    fetchAPI<FactoryLayout>("/v1/layouts/active", { token }),
+
+  list: (token: string) =>
+    fetchAPI<FactoryLayout[]>("/v1/layouts", { token }),
+
+  get: (token: string, id: string) =>
+    fetchAPI<FactoryLayout>(`/v1/layouts/${id}`, { token }),
+
+  update: (token: string, id: string, data: Partial<FactoryLayout>) =>
+    fetchAPI<FactoryLayout>(`/v1/layouts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      token,
+    }),
+};
+
+// Models API (proxied to viz-engine)
+export const modelsAPI = {
+  list: (token: string) =>
+    fetchAPI<MachineModel[]>("/v1/models", { token }),
+
+  upload: (token: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return fetch(`${API_BASE_URL}/v1/models/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return res.json() as Promise<MachineModel>;
+    });
+  },
+};
+
 // Types
+export interface FactoryLayout {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  machine_positions: LayoutMachinePosition[];
+  camera_presets: LayoutCameraPreset[];
+  grid_settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LayoutMachinePosition {
+  machine_id: string;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: number;
+  visible: boolean;
+}
+
+export interface LayoutCameraPreset {
+  name: string;
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+}
+
+export interface MachineModel {
+  id: string;
+  machine_type: string;
+  name: string;
+  model_url: string;
+  thumbnail_url?: string;
+  bounding_box: Record<string, unknown>;
+  scale: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ListResponse<T> {
   data: T[];
   total: number;

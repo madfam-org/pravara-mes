@@ -21,6 +21,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/models"
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/physics"
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/renderer"
+	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/storage"
 )
 
 var (
@@ -66,6 +67,11 @@ func init() {
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("cors.allowed_origins", "https://pravara.madfam.io")
+	viper.SetDefault("storage.endpoint", "")
+	viper.SetDefault("storage.bucket", "pravara-models")
+	viper.SetDefault("storage.access_key", "")
+	viper.SetDefault("storage.secret_key", "")
+	viper.SetDefault("storage.region", "auto")
 }
 
 func main() {
@@ -93,6 +99,24 @@ func main() {
 	// Connect to Redis
 	rdb := connectRedis()
 	defer rdb.Close()
+
+	// Initialize S3 storage (optional - model upload works only if configured)
+	var storageClient *storage.Client
+	if endpoint := viper.GetString("storage.endpoint"); endpoint != "" {
+		var storageErr error
+		storageClient, storageErr = storage.NewClient(storage.Config{
+			Endpoint:  endpoint,
+			Bucket:    viper.GetString("storage.bucket"),
+			AccessKey: viper.GetString("storage.access_key"),
+			SecretKey: viper.GetString("storage.secret_key"),
+			Region:    viper.GetString("storage.region"),
+		}, log)
+		if storageErr != nil {
+			log.Warnf("S3 storage not available (model upload disabled): %v", storageErr)
+		} else {
+			log.Info("S3 storage initialized for model uploads")
+		}
+	}
 
 	// Initialize services
 	modelManager := models.NewManager(db, log)
@@ -143,6 +167,9 @@ func main() {
 		v1.POST("/models", handleCreateModel(modelManager))
 		v1.PUT("/models/:id", handleUpdateModel(modelManager))
 		v1.DELETE("/models/:id", handleDeleteModel(modelManager))
+
+		// Model upload (requires S3 storage)
+		v1.POST("/models/upload", handleModelUpload(modelManager, storageClient))
 
 		// Factory layouts
 		v1.GET("/layouts", handleListLayouts(modelManager))
@@ -400,6 +427,73 @@ func handleMaterialSimulation(engine *physics.Engine) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, result)
+	}
+}
+
+func handleModelUpload(manager *models.Manager, storageClient *storage.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if storageClient == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "S3 storage not configured"})
+			return
+		}
+
+		file, header, err := c.Request.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file required"})
+			return
+		}
+		defer file.Close()
+
+		// Validate file type
+		contentType, err := storage.ValidateModelFile(header.Filename)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Generate storage key
+		key := fmt.Sprintf("models/%d_%s", time.Now().UnixNano(), header.Filename)
+
+		// Upload to S3
+		s3URL, err := storageClient.UploadModel(c.Request.Context(), key, file, header.Size, contentType)
+		if err != nil {
+			log.WithError(err).Error("Failed to upload model to S3")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "upload failed"})
+			return
+		}
+
+		// Generate presigned download URL
+		downloadURL, err := storageClient.GetPresignedURL(c.Request.Context(), key, 24*time.Hour)
+		if err != nil {
+			log.WithError(err).Warn("Failed to generate presigned URL, using S3 URI")
+			downloadURL = s3URL
+		}
+
+		// Determine machine type from form or default
+		machineType := c.PostForm("machine_type")
+		if machineType == "" {
+			machineType = "generic"
+		}
+		modelName := c.PostForm("name")
+		if modelName == "" {
+			modelName = header.Filename
+		}
+
+		// Create DB record
+		model := &models.MachineModel{
+			MachineType: machineType,
+			Name:        modelName,
+			ModelURL:    downloadURL,
+			Scale:       1.0,
+		}
+
+		if err := manager.CreateModel(c.Request.Context(), model); err != nil {
+			log.WithError(err).Error("Failed to create model record")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save model metadata"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, model)
 	}
 }
 

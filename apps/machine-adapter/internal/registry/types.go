@@ -240,6 +240,9 @@ func (r *Registry) loadBuiltinDefinitions() {
 		},
 	}
 
+	// Snapmaker 2.0 A350 (multi-tool: 3DP + Laser + CNC)
+	r.definitions["snapmaker_a350"] = SnapmakerA350Definition()
+
 	// Example: Prusa 3D Printer
 	r.definitions["prusa_mk4"] = &MachineDefinition{
 		Manufacturer: "Prusa",

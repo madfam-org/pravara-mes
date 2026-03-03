@@ -11,6 +11,10 @@ export interface Machine {
   specifications?: Record<string, any>;
   metadata?: Record<string, any>;
   lastHeartbeat?: string;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  modelUrl?: string;
+  modelId?: string;
 }
 
 interface MachineState {

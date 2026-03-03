@@ -174,6 +174,22 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			}
 		}
 
+		// Factory layout endpoints (proxy to viz-engine)
+		layouts := v1.Group("/layouts")
+		{
+			layouts.GET("/active", handleGetActiveLayout(database, log))
+			layouts.GET("", handleProxyLayouts(log))
+			layouts.GET("/:id", handleProxyLayout(log))
+			layouts.PUT("/:id", handleProxyLayoutUpdate(log))
+		}
+
+		// 3D model endpoints (proxy to viz-engine)
+		models := v1.Group("/models")
+		{
+			models.GET("", handleProxyModels(log))
+			models.POST("/upload", handleProxyModelUpload(log))
+		}
+
 		// Webhook endpoints (may need different auth)
 		webhooks := v1.Group("/webhooks")
 		{

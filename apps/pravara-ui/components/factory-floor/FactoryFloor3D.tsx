@@ -22,6 +22,7 @@ import { useControls, folder } from "leva";
 import * as THREE from "three";
 import { useRealtimeConnection } from "@/hooks/useRealtimeConnection";
 import { useTelemetryUpdates } from "@/hooks/useTelemetryUpdates";
+import { useFactoryLayout } from "@/hooks/useFactoryLayout";
 import { useMachineStore } from "@/stores/machineStore";
 
 // Types
@@ -210,19 +211,65 @@ export const FactoryFloor3D: React.FC = () => {
 
   const machines = useMachineStore((state) => state.machines);
   const { isConnected } = useRealtimeConnection();
-  const telemetryData = useTelemetryUpdates();
+  const { getLatestMetric } = useTelemetryUpdates();
+  const { layout } = useFactoryLayout();
+
+  // Build tool position from individual telemetry metrics
+  const getToolPosition = React.useCallback(
+    (machineId: string): [number, number, number] | undefined => {
+      const px = getLatestMetric(machineId, "position_x");
+      const py = getLatestMetric(machineId, "position_y");
+      const pz = getLatestMetric(machineId, "position_z");
+      if (px && py && pz) {
+        return [px.value, pz.value, py.value]; // Map Y→Z for 3D scene (Y-up)
+      }
+      return undefined;
+    },
+    [getLatestMetric]
+  );
+
+  // Build lookup from layout positions
+  const layoutPositionMap = React.useMemo(() => {
+    const map = new Map<string, { position: [number, number, number]; rotation: [number, number, number] }>();
+    if (layout?.machine_positions) {
+      for (const mp of layout.machine_positions) {
+        map.set(mp.machine_id, {
+          position: [mp.position.x, mp.position.y, mp.position.z],
+          rotation: [mp.rotation.x, mp.rotation.y, mp.rotation.z],
+        });
+      }
+    }
+    return map;
+  }, [layout]);
 
   // Convert machines to 3D positions
   const machinePositions: MachinePosition[] = React.useMemo(() => {
-    return Object.values(machines).map((machine, index) => ({
-      id: machine.id,
-      position: [(index % 5) * 3 - 6, 0, Math.floor(index / 5) * 3 - 3] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
-      scale: [1, 1, 1] as [number, number, number],
-      status: machine.status === "online" ? "running" : machine.status === "offline" ? "idle" : "error" as any,
-      toolPosition: telemetryData[machine.id]?.position as [number, number, number] | undefined,
-    }));
-  }, [machines, telemetryData]);
+    return Object.values(machines).map((machine, index) => {
+      // Priority: layout DB position > machine store position > grid fallback
+      const layoutPos = layoutPositionMap.get(machine.id);
+      const gridPosition: [number, number, number] = [
+        (index % 5) * 3 - 6,
+        0,
+        Math.floor(index / 5) * 3 - 3,
+      ];
+
+      return {
+        id: machine.id,
+        position: layoutPos?.position ?? machine.position ?? gridPosition,
+        rotation: layoutPos?.rotation ?? machine.rotation ?? [0, 0, 0] as [number, number, number],
+        scale: [1, 1, 1] as [number, number, number],
+        status: (machine.status === "online"
+          ? "running"
+          : machine.status === "offline"
+          ? "idle"
+          : machine.status === "maintenance"
+          ? "maintenance"
+          : "error") as MachinePosition["status"],
+        toolPosition: getToolPosition(machine.id),
+        modelUrl: machine.modelUrl,
+      };
+    });
+  }, [machines, getToolPosition, layoutPositionMap]);
 
   // Leva controls
   const {

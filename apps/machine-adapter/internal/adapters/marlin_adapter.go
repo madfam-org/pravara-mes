@@ -37,6 +37,17 @@ type MarlinStatus struct {
 	LastUpdate      time.Time
 }
 
+// TelemetryCallback is called when new telemetry data is available.
+type TelemetryCallback func(metrics []TelemetryMetric)
+
+// TelemetryMetric represents a single telemetry data point for publishing.
+type TelemetryMetric struct {
+	Type      string  `json:"type"`
+	Value     float64 `json:"value"`
+	Unit      string  `json:"unit"`
+	Timestamp string  `json:"timestamp"`
+}
+
 // MarlinAdapter handles communication with Marlin-based 3D printers.
 type MarlinAdapter struct {
 	mu            sync.RWMutex
@@ -59,6 +70,9 @@ type MarlinAdapter struct {
 	echoEnabled    bool
 	checksumMode   bool
 	lineNumber     int
+
+	// Telemetry callback for publishing metrics
+	OnTelemetry TelemetryCallback
 }
 
 // MarlinCapabilities defines printer capabilities.
@@ -562,7 +576,6 @@ func (a *MarlinAdapter) processResponse(line string) {
 // parseTemperature parses temperature reports.
 func (a *MarlinAdapter) parseTemperature(line string) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	// Parse extruder temperature: T:200.5 /200.0
 	if match := regexp.MustCompile(`T:([\d.]+)\s*/\s*([\d.]+)`).FindStringSubmatch(line); len(match) > 2 {
@@ -585,12 +598,27 @@ func (a *MarlinAdapter) parseTemperature(line string) {
 	}
 
 	a.status.LastUpdate = time.Now()
+	extTemp := a.status.ExtruderTemp
+	extTarget := a.status.ExtruderTarget
+	bedTemp := a.status.BedTemp
+	bedTarget := a.status.BedTarget
+	a.mu.Unlock()
+
+	// Publish temperature telemetry
+	if a.OnTelemetry != nil {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		a.OnTelemetry([]TelemetryMetric{
+			{Type: "temperature_extruder", Value: extTemp, Unit: "celsius", Timestamp: now},
+			{Type: "temperature_extruder_target", Value: extTarget, Unit: "celsius", Timestamp: now},
+			{Type: "temperature_bed", Value: bedTemp, Unit: "celsius", Timestamp: now},
+			{Type: "temperature_bed_target", Value: bedTarget, Unit: "celsius", Timestamp: now},
+		})
+	}
 }
 
 // parsePosition parses position reports.
 func (a *MarlinAdapter) parsePosition(line string) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	// Parse position: X:100.00 Y:100.00 Z:5.00 E:0.00
 	if match := regexp.MustCompile(`X:([\d.-]+)`).FindStringSubmatch(line); len(match) > 1 {
@@ -610,6 +638,18 @@ func (a *MarlinAdapter) parsePosition(line string) {
 	}
 
 	a.status.LastUpdate = time.Now()
+	pos := a.status.Position
+	a.mu.Unlock()
+
+	// Publish position telemetry
+	if a.OnTelemetry != nil {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		a.OnTelemetry([]TelemetryMetric{
+			{Type: "position_x", Value: pos[0], Unit: "mm", Timestamp: now},
+			{Type: "position_y", Value: pos[1], Unit: "mm", Timestamp: now},
+			{Type: "position_z", Value: pos[2], Unit: "mm", Timestamp: now},
+		})
+	}
 }
 
 // parseSDProgress parses SD card print progress.
