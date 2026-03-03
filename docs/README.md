@@ -82,6 +82,8 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Document | Description |
 |----------|-------------|
 | [Security README](../infra/k8s/base/security/README.md) | Security hardening |
+| [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, alerts, per-tenant metrics, Grafana dashboards |
+| [OBSERVABILITY_DEPLOYMENT.md](../OBSERVABILITY_DEPLOYMENT.md) | Deployment checklist for observability stack |
 
 ## Architecture
 

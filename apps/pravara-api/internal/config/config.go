@@ -76,12 +76,13 @@ type CentrifugoConfig struct {
 
 // DhanamConfig holds Dhanam billing integration settings.
 type DhanamConfig struct {
-	Enabled      bool   `mapstructure:"enabled"`
-	APIURL       string `mapstructure:"api_url"`
-	APIKey       string `mapstructure:"api_key"`
-	SyncInterval int    `mapstructure:"sync_interval"` // Sync interval in minutes
-	RetryCount   int    `mapstructure:"retry_count"`
-	RetryDelay   int    `mapstructure:"retry_delay"` // Retry delay in seconds
+	Enabled       bool   `mapstructure:"enabled"`
+	APIURL        string `mapstructure:"api_url"`
+	APIKey        string `mapstructure:"api_key"`
+	WebhookSecret string `mapstructure:"webhook_secret"`
+	SyncInterval  int    `mapstructure:"sync_interval"` // Sync interval in minutes
+	RetryCount    int    `mapstructure:"retry_count"`
+	RetryDelay    int    `mapstructure:"retry_delay"` // Retry delay in seconds
 }
 
 // CotizaConfig holds Cotiza webhook integration settings.
@@ -200,6 +201,7 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("dhanam.sync_interval", "DHANAM_SYNC_INTERVAL")
 	v.BindEnv("dhanam.retry_count", "DHANAM_RETRY_COUNT")
 	v.BindEnv("dhanam.retry_delay", "DHANAM_RETRY_DELAY")
+	v.BindEnv("dhanam.webhook_secret", "DHANAM_WEBHOOK_SECRET")
 
 	v.BindEnv("cotiza.enabled", "COTIZA_ENABLED")
 	v.BindEnv("cotiza.webhook_secret", "COTIZA_WEBHOOK_SECRET")

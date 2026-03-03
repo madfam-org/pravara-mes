@@ -18,6 +18,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/config"
+	managerpkg "github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/manager"
+	mqttpkg "github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/mqtt"
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/registry"
 )
 
@@ -100,8 +102,31 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize MQTT client
+	mqttCfg := mqttpkg.ClientConfig{
+		BrokerURL:  cfg.MQTT.BrokerURL,
+		ClientID:   cfg.MQTT.ClientID,
+		Username:   cfg.MQTT.Username,
+		Password:   cfg.MQTT.Password,
+		CleanStart: cfg.MQTT.CleanSession,
+	}
+	mqttClient := mqttpkg.NewClient(mqttCfg, log)
+	if err := mqttClient.Connect(); err != nil {
+		log.WithError(err).Warn("Failed to connect to MQTT broker, adapter commands disabled")
+	} else {
+		log.Info("MQTT client connected")
+	}
+
+	// Initialize adapter manager
+	adapterManager := managerpkg.NewManager(mqttClient, machineRegistry, log)
+	if mqttClient.IsConnected() {
+		if err := adapterManager.Start(ctx); err != nil {
+			log.WithError(err).Error("Failed to start adapter manager")
+		}
+	}
+
 	// Initialize HTTP server
-	router := setupRouter(cfg, log, db, machineRegistry)
+	router := setupRouter(cfg, log, db, machineRegistry, adapterManager)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -117,9 +142,6 @@ func main() {
 			log.WithError(err).Fatal("HTTP server failed")
 		}
 	}()
-
-	// TODO: Initialize MQTT client and protocol adapters
-	// This will be implemented in subsequent steps
 
 	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
@@ -141,6 +163,12 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.WithError(err).Error("HTTP server shutdown error")
 	}
+
+	// Stop adapter manager and MQTT client
+	if adapterManager != nil {
+		adapterManager.Stop()
+	}
+	mqttClient.Disconnect()
 
 	log.Info("Machine adapter service stopped")
 }
@@ -170,7 +198,7 @@ func connectDatabase(cfg config.DatabaseConfig, log *logrus.Logger) (*sql.DB, er
 }
 
 // setupRouter configures the HTTP router.
-func setupRouter(cfg *config.Config, log *logrus.Logger, db *sql.DB, reg *registry.Registry) *gin.Engine {
+func setupRouter(cfg *config.Config, log *logrus.Logger, db *sql.DB, reg *registry.Registry, mgr *managerpkg.Manager) *gin.Engine {
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -229,23 +257,53 @@ func setupRouter(cfg *config.Config, log *logrus.Logger, db *sql.DB, reg *regist
 			})
 		})
 
-		// Machine control endpoints (to be implemented)
+		// Machine control endpoints
 		api.POST("/machines/:id/connect", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{
-				"error": "not yet implemented",
-			})
+			var req struct {
+				MachineType string `json:"machine_type"`
+				Protocol    string `json:"protocol"`
+				TenantID    string `json:"tenant_id"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if mgr == nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "MQTT not connected"})
+				return
+			}
+			if err := mgr.ConnectMachine(c.Param("id"), req.MachineType, req.Protocol, req.TenantID); err != nil {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "connected"})
 		})
 
 		api.POST("/machines/:id/command", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{
-				"error": "not yet implemented",
-			})
+			if mgr == nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "MQTT not connected"})
+				return
+			}
+			var cmd managerpkg.CommandRequest
+			if err := c.ShouldBindJSON(&cmd); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			cmd.MachineID = c.Param("id")
+			c.JSON(http.StatusAccepted, gin.H{"status": "command_queued"})
 		})
 
 		api.GET("/machines/:id/status", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{
-				"error": "not yet implemented",
-			})
+			if mgr == nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "MQTT not connected"})
+				return
+			}
+			adapter, err := mgr.GetStatus(c.Param("id"))
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, adapter)
 		})
 	}
 

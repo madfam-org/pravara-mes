@@ -18,7 +18,7 @@ This package provides Gin HTTP handlers following the repository pattern. Each h
 | `QualityHandler` | 16 | Certificates, inspections, batch lots |
 | `BillingHandler` | 3 | Usage tracking |
 | `RealtimeHandler` | 3 | WebSocket token generation |
-| `WebhookHandler` | 1 | External webhook processing |
+| `WebhookHandler` | 2 | External webhook processing (Cotiza, Dhanam) |
 
 ## Request/Response Pattern
 
@@ -150,4 +150,4 @@ func (h *TaskHandler) Create(c *gin.Context) {
 | `quality_handlers.go` | Quality management |
 | `billing_handlers.go` | Usage tracking |
 | `realtime_handlers.go` | WebSocket authentication |
-| `webhook_handlers.go` | External webhooks |
+| `webhook_handlers.go` | External webhooks (Cotiza orders, Dhanam invoices) |

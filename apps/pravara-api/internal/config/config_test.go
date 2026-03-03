@@ -171,3 +171,18 @@ func TestDatabaseConfig_Defaults(t *testing.T) {
 		t.Errorf("Database.ConnMaxLifetime: got %d, want %d", cfg.Database.ConnMaxLifetime, 300)
 	}
 }
+
+func TestDhanamConfig_WebhookSecret(t *testing.T) {
+	// Set webhook secret via environment variable
+	os.Setenv("DHANAM_WEBHOOK_SECRET", "test-dhanam-secret")
+	defer os.Unsetenv("DHANAM_WEBHOOK_SECRET")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if cfg.Dhanam.WebhookSecret != "test-dhanam-secret" {
+		t.Errorf("Dhanam.WebhookSecret: got %q, want %q", cfg.Dhanam.WebhookSecret, "test-dhanam-secret")
+	}
+}

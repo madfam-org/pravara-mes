@@ -15,6 +15,7 @@ declare module "next-auth" {
       tenantId: string;
     };
     accessToken: string;
+    error?: "RefreshAccessTokenError";
   }
 
   interface User {
@@ -30,7 +31,10 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string;
+    accessTokenExpires?: number;
+    refreshToken?: string;
     role?: string;
     tenantId?: string;
+    error?: "RefreshAccessTokenError";
   }
 }

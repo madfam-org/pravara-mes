@@ -15,6 +15,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// StorageClient defines the interface for cloud storage operations.
+type StorageClient interface {
+	Upload(ctx context.Context, key string, filePath string) (string, error)
+	Delete(ctx context.Context, key string) error
+}
+
 // Service handles video recording
 type Service struct {
 	db           *sql.DB
@@ -22,6 +28,7 @@ type Service struct {
 	recordings   map[uuid.UUID]*Recording
 	recordingsMu sync.RWMutex
 	storagePath  string
+	storage      StorageClient
 }
 
 // NewService creates a new recording service
@@ -32,6 +39,11 @@ func NewService(db *sql.DB, log *logrus.Logger) *Service {
 		recordings:  make(map[uuid.UUID]*Recording),
 		storagePath: os.Getenv("RECORDING_STORAGE_PATH"),
 	}
+}
+
+// SetStorage sets the cloud storage client for recording uploads.
+func (s *Service) SetStorage(client StorageClient) {
+	s.storage = client
 }
 
 // Recording represents a video recording
@@ -339,9 +351,11 @@ func (s *Service) DeleteRecording(ctx context.Context, id string) error {
 	}
 
 	// Delete from storage
-	if rec.StorageURL != "" {
-		// TODO: Delete from S3/R2
-		s.log.Infof("Would delete from storage: %s", rec.StorageURL)
+	if rec.StorageURL != "" && s.storage != nil {
+		key := fmt.Sprintf("recordings/%s", filepath.Base(rec.FilePath))
+		if err := s.storage.Delete(context.Background(), key); err != nil {
+			s.log.WithError(err).Error("Failed to delete from storage")
+		}
 	}
 
 	// Delete local file if exists
@@ -495,10 +509,21 @@ func (s *Service) updateRecordingEvents(ctx context.Context, recordingID uuid.UU
 	return err
 }
 
-// uploadToStorage uploads recording to cloud storage
+// uploadToStorage uploads recording to cloud storage.
 func (s *Service) uploadToStorage(filePath string) (string, error) {
-	// TODO: Implement S3/R2 upload
-	// For now, return a mock URL
-	filename := filepath.Base(filePath)
-	return fmt.Sprintf("https://storage.example.com/recordings/%s", filename), nil
+	if s.storage == nil {
+		// No storage configured, return local path
+		return filePath, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	key := fmt.Sprintf("recordings/%s", filepath.Base(filePath))
+	url, err := s.storage.Upload(ctx, key, filePath)
+	if err != nil {
+		return "", fmt.Errorf("storage upload failed: %w", err)
+	}
+
+	return url, nil
 }

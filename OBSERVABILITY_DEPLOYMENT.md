@@ -103,24 +103,32 @@ kubectl port-forward -n monitoring svc/prometheus-k8s 9090:9090 &
 # - rate(pravara_api_http_requests_total[5m])
 ```
 
-### Step 5: Configure Grafana Dashboards (Optional)
+### Step 5: Deploy Grafana Dashboard ConfigMaps
+
+```bash
+# Apply Grafana dashboard ConfigMaps
+kubectl apply -k infra/k8s/base/observability/grafana-dashboards/
+
+# Verify ConfigMaps created
+kubectl get configmap -n pravara-mes -l app.kubernetes.io/component=grafana-dashboards
+
+# The Grafana sidecar auto-discovers ConfigMaps with the grafana_dashboard label.
+# Three dashboards are deployed:
+#   - api-overview: Request rate, error rate, latency (P50/P95/P99), DB pool
+#   - telemetry-pipeline: MQTT throughput, batch writes, queue depth
+#   - realtime-gateway: Centrifugo connections, message throughput
+```
+
+### Step 6: Verify Grafana Dashboards
 
 ```bash
 # Port forward to Grafana
 kubectl port-forward -n monitoring svc/grafana 3000:3000 &
 
 # Navigate to http://localhost:3000
-# Import dashboards or create new ones using metrics
-
-# Recommended dashboard panels:
-# 1. API Request Rate
-# 2. API Error Rate
-# 3. API Latency (P50, P95, P99)
-# 4. Database Connection Pool Utilization
-# 5. Telemetry Message Throughput
-# 6. Telemetry Queue Depth
-# 7. MQTT Connection Status
-# 8. Batch Write Performance
+# The three PravaraMES dashboards should appear automatically under
+# the folder configured by the Grafana sidecar.
+# Verify each dashboard loads and displays data from Prometheus.
 ```
 
 ## Post-Deployment Validation
@@ -264,6 +272,7 @@ Deployment is successful when:
 - [ ] Metrics endpoints return valid Prometheus data
 - [ ] Prometheus shows all targets as UP
 - [ ] Alert rules loaded in Prometheus
+- [ ] Grafana dashboard ConfigMaps deployed and auto-discovered
 - [ ] Grafana can query PravaraMES metrics
 - [ ] No significant performance degradation
 - [ ] Logs show no observability-related errors

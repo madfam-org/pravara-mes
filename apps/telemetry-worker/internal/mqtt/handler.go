@@ -15,6 +15,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/dlq"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/observability"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -139,14 +140,24 @@ func (h *Handler) subscribe() {
 
 // messageHandler processes incoming MQTT messages.
 func (h *Handler) messageHandler(client mqtt.Client, msg mqtt.Message) {
+	// Extract tenant from topic for per-tenant metrics
+	// Topic format: {tenant}/{site}/{area}/{line}/{machine}/{metric}
+	topic := msg.Topic()
+	tenant := "unknown"
+	if parts := strings.SplitN(topic, "/", 2); len(parts) > 0 && parts[0] != "" {
+		tenant = parts[0]
+	}
+	topicRoot := h.cfg.MQTT.TopicRoot
+	observability.MQTTMessagesReceived.WithLabelValues(topicRoot, tenant).Inc()
+
 	var payload TelemetryPayload
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		h.log.WithError(err).WithField("topic", msg.Topic()).Debug("Failed to parse telemetry payload")
+		h.log.WithError(err).WithField("topic", topic).Debug("Failed to parse telemetry payload")
 		return
 	}
 
 	h.messageChan <- &TelemetryMessage{
-		Topic:   msg.Topic(),
+		Topic:   topic,
 		Payload: payload,
 	}
 }
@@ -227,6 +238,10 @@ func (h *Handler) processMessage(ctx context.Context, msg *TelemetryMessage) {
 	if err := h.store.UpdateMachineHeartbeat(ctx, machine.ID); err != nil {
 		h.log.WithError(err).Debug("Failed to update machine heartbeat")
 	}
+
+	// Record per-tenant processing metrics
+	observability.MQTTMessagesProcessed.WithLabelValues(metricType, tenant).Inc()
+	observability.TelemetryPointsIngested.WithLabelValues(tenant).Inc()
 
 	// Create telemetry record
 	timestamp := time.Now()

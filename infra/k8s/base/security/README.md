@@ -226,8 +226,18 @@ kubectl get namespace pravara-mes -o yaml | grep pod-security
 3. Prefer distroless or minimal base images
 4. Regularly update base images for security patches
 
+### External Secrets
+
+Five `ExternalSecret` custom resources are defined in `infra/k8s/base/external-secrets/` to sync secrets from HashiCorp Vault via the Enclii `ClusterSecretStore`. Each ExternalSecret creates a corresponding Kubernetes Secret in the `pravara-mes` namespace. Secrets are automatically refreshed on the interval configured in the ExternalSecret spec.
+
+To deploy:
+```bash
+kubectl apply -k infra/k8s/base/external-secrets/
+kubectl get externalsecret -n pravara-mes
+```
+
 ### Secrets Management
-1. Store all secrets in Kubernetes Secrets
+1. Store all secrets in Kubernetes Secrets synced from Vault via ExternalSecret CRs
 2. Use external secret management (e.g., Vault) for sensitive data
 3. Rotate secrets regularly
 4. Never commit secrets to version control

@@ -22,13 +22,35 @@ Comprehensive Prometheus observability has been implemented across all PravaraME
    - Real-time connection monitoring
    - Message throughput tracking
 
+## Per-Tenant Metrics
+
+Request-scoped metrics in pravara-api and telemetry-worker include a `tenant_id` label, enabling per-tenant dashboards, alerting, and capacity planning.
+
+- `pravara_api_http_requests_total{..., tenant_id}` - HTTP requests broken down by tenant
+- `pravara_api_http_request_duration_seconds{..., tenant_id}` - Request latency per tenant
+- `pravara_telemetry_mqtt_messages_processed_total{..., tenant_id}` - Telemetry messages per tenant
+
+The `tenant_id` is extracted from the JWT token by the auth middleware and propagated to the Prometheus label set on every request-scoped metric.
+
+## Grafana Dashboard ConfigMaps
+
+Three pre-built Grafana dashboards are deployed as Kubernetes ConfigMaps in `infra/k8s/base/observability/grafana-dashboards/`:
+
+| Dashboard | ConfigMap | Description |
+|-----------|-----------|-------------|
+| API Overview | `grafana-dashboard-api-overview` | Request rate, error rate, latency percentiles, DB pool |
+| Telemetry Pipeline | `grafana-dashboard-telemetry-pipeline` | MQTT throughput, batch writes, queue depth |
+| Realtime Gateway | `grafana-dashboard-realtime-gateway` | Centrifugo connections, message throughput |
+
+These ConfigMaps are auto-discovered by the Grafana sidecar when the `grafana_dashboard: "1"` label is present.
+
 ## Metrics Exposed
 
 ### PravaraMES API (`pravara_api_*`)
 
 #### HTTP Metrics
-- `pravara_api_http_requests_total{method, path, status}` - Counter of HTTP requests
-- `pravara_api_http_request_duration_seconds{method, path}` - Histogram of request durations
+- `pravara_api_http_requests_total{method, path, status, tenant_id}` - Counter of HTTP requests
+- `pravara_api_http_request_duration_seconds{method, path, tenant_id}` - Histogram of request durations
 - `pravara_api_http_requests_in_flight` - Gauge of concurrent requests
 
 #### Database Metrics
@@ -47,8 +69,8 @@ Comprehensive Prometheus observability has been implemented across all PravaraME
 ### Telemetry Worker (`pravara_telemetry_*`)
 
 #### MQTT Metrics
-- `pravara_telemetry_mqtt_messages_received_total{topic_root}` - Messages received
-- `pravara_telemetry_mqtt_messages_processed_total{metric_type}` - Successfully processed
+- `pravara_telemetry_mqtt_messages_received_total{topic_root, tenant_id}` - Messages received
+- `pravara_telemetry_mqtt_messages_processed_total{metric_type, tenant_id}` - Successfully processed
 - `pravara_telemetry_mqtt_messages_dropped_total{reason}` - Dropped messages
 - `pravara_telemetry_mqtt_connection_status` - Connection status (1=connected, 0=disconnected)
 
@@ -86,7 +108,10 @@ infra/k8s/base/observability/
 ├── servicemonitor-api.yaml
 ├── podmonitor-telemetry.yaml
 ├── servicemonitor-centrifugo.yaml
-└── alertmanager-rules.yaml
+├── alertmanager-rules.yaml
+└── grafana-dashboards/
+    ├── kustomization.yaml
+    └── configmap.yaml          # api-overview, telemetry-pipeline, realtime-gateway
 ```
 
 ### Code Integration
@@ -340,7 +365,8 @@ kubectl port-forward -n monitoring svc/prometheus-k8s 9090:9090
 - Path labels use route templates (e.g., `/api/v1/machines/:id`) to prevent explosion
 - Topic labels extract root topic only
 - Status codes grouped (2xx, 4xx, 5xx)
-- Estimated cardinality: <500 unique metric series per service
+- `tenant_id` label is bounded by the number of active tenants
+- Estimated cardinality: <500 unique metric series per service per tenant
 
 ## Security Considerations
 

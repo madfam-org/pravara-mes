@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,11 +24,20 @@ import (
 )
 
 var (
-	log      *logrus.Logger
-	upgrader = websocket.Upgrader{
+	log            *logrus.Logger
+	allowedOrigins []string
+	upgrader       = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			// TODO: Implement proper CORS checking
-			return true
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // Same-origin requests
+			}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
 		},
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -55,12 +65,22 @@ func init() {
 	viper.SetDefault("database.sslmode", "disable")
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("cors.allowed_origins", "https://pravara.madfam.io")
 }
 
 func main() {
 	// Load config
 	if err := viper.ReadInConfig(); err != nil {
 		log.Warnf("No config file found, using environment variables: %v", err)
+	}
+
+	// Parse allowed CORS origins
+	originsStr := viper.GetString("cors.allowed_origins")
+	for _, o := range strings.Split(originsStr, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			allowedOrigins = append(allowedOrigins, o)
+		}
 	}
 
 	// Connect to database
@@ -83,6 +103,31 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
+
+	// CORS middleware
+	router.Use(func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		allowed := false
+		for _, o := range allowedOrigins {
+			if origin == o {
+				allowed = true
+				break
+			}
+		}
+		if allowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+			c.Writer.Header().Set("Vary", "Origin")
+		}
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {

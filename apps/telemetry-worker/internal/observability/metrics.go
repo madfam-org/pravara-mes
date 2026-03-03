@@ -20,10 +20,10 @@ var (
 			Name:      "mqtt_messages_received_total",
 			Help:      "Total number of MQTT messages received",
 		},
-		[]string{"topic_root"},
+		[]string{"topic_root", "tenant_id"},
 	)
 
-	// MQTTMessagesProcessed counts successfully processed MQTT messages by metric type.
+	// MQTTMessagesProcessed counts successfully processed MQTT messages by metric type and tenant.
 	MQTTMessagesProcessed = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -31,7 +31,7 @@ var (
 			Name:      "mqtt_messages_processed_total",
 			Help:      "Total number of MQTT messages successfully processed",
 		},
-		[]string{"metric_type"},
+		[]string{"metric_type", "tenant_id"},
 	)
 
 	// MQTTMessagesDropped counts dropped MQTT messages by reason.
@@ -107,14 +107,15 @@ var (
 		},
 	)
 
-	// TelemetryPointsIngested counts total telemetry data points ingested.
-	TelemetryPointsIngested = promauto.NewCounter(
+	// TelemetryPointsIngested counts total telemetry data points ingested per tenant.
+	TelemetryPointsIngested = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "telemetry_points_ingested_total",
 			Help:      "Total number of telemetry data points ingested",
 		},
+		[]string{"tenant_id"},
 	)
 
 	// DBConnectionsOpen tracks the number of established database connections.

@@ -2,12 +2,10 @@ package physics
 
 import (
 	"bufio"
-	"fmt"
 	"math"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -138,13 +136,10 @@ func (p *FullControlGCodeParser) SimulateFullControlGCode(gcode string, material
 		currentPos     = Vector3{X: 0, Y: 0, Z: 0}
 		currentE       float64 = 0 // Extruder position
 		currentLayer   *Layer
-		currentLayerZ  float64 = 0
 		feedRate       float64 = 60 // mm/s default
-		extruding      bool = false
 		absoluteMode   bool = true
 		absoluteEMode  bool = true
 		nozzleTemp     float64 = 200
-		bedTemp        float64 = 60
 		layerHeight    float64 = 0.2 // Default layer height
 		lineWidth      float64 = nozzleDiameter * 1.2
 		filamentDiameter float64 = 1.75 // mm
@@ -199,7 +194,7 @@ func (p *FullControlGCodeParser) SimulateFullControlGCode(gcode string, material
 				if currentLayer != nil {
 					result.Layers = append(result.Layers, *currentLayer)
 				}
-				currentLayerZ = newPos.Z
+				_ = newPos.Z // currentLayerZ tracking
 				currentLayer = &Layer{
 					Number: len(result.Layers) + 1,
 					Height: newPos.Z,
@@ -276,7 +271,6 @@ func (p *FullControlGCodeParser) SimulateFullControlGCode(gcode string, material
 
 		case "M140", "M190": // Set bed temperature
 			if temp, hasS := params["S"]; hasS {
-				bedTemp = temp
 				result.BedTemp = temp
 			}
 

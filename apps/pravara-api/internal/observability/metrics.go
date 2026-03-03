@@ -20,7 +20,7 @@ var (
 			Name:      "http_requests_total",
 			Help:      "Total number of HTTP requests processed",
 		},
-		[]string{"method", "path", "status"},
+		[]string{"method", "path", "status", "tenant_id"},
 	)
 
 	// HTTPRequestDuration tracks HTTP request duration in seconds.
@@ -32,7 +32,7 @@ var (
 			Help:      "HTTP request duration in seconds",
 			Buckets:   []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10},
 		},
-		[]string{"method", "path"},
+		[]string{"method", "path", "tenant_id"},
 	)
 
 	// HTTPRequestsInFlight tracks the number of HTTP requests currently being processed.
@@ -123,7 +123,7 @@ var (
 			Name:      "pubsub_events_published_total",
 			Help:      "Total number of events published to Redis PubSub",
 		},
-		[]string{"event_type", "channel"},
+		[]string{"event_type", "channel", "tenant_id"},
 	)
 
 	// PubSubPublishErrors counts PubSub publish failures.
@@ -134,6 +134,6 @@ var (
 			Name:      "pubsub_publish_errors_total",
 			Help:      "Total number of PubSub publish errors",
 		},
-		[]string{"event_type", "channel"},
+		[]string{"event_type", "channel", "tenant_id"},
 	)
 )

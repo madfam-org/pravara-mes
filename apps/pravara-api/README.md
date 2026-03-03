@@ -9,7 +9,8 @@ The API provides endpoints for:
 - **Tasks** - Kanban board operations and task assignment
 - **Machines** - Machine registration, control, and telemetry
 - **Quality** - Certificates, inspections, and batch lot tracking
-- **Billing** - Usage tracking and tenant billing
+- **Billing** - Usage tracking, tenant billing, and Dhanam invoice webhooks
+- **Webhooks** - Inbound integrations (Cotiza orders, Dhanam invoices with HMAC-SHA256 verification)
 - **Realtime** - WebSocket token generation for live updates
 
 ## Quick Start
@@ -97,7 +98,7 @@ swag init -g cmd/api/main.go -o ../../docs --outputTypes yaml
 ## Metrics
 
 Prometheus metrics available at `/metrics`:
-- HTTP request duration and count
+- HTTP request duration and count (with `tenant_id` label)
 - Database connection pool stats
 - Real-time event publishing stats
 - Usage tracking metrics

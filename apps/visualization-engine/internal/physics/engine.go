@@ -156,7 +156,7 @@ func (e *Engine) SimulateGCode(ctx context.Context, req GCodeSimulationRequest) 
 	currentPos := Vector3{X: 0, Y: 0, Z: 0}
 	feedRate := 100.0 // Default feed rate mm/min
 	spindleSpeed := 0.0
-	rapidMode := true
+	_ = true // rapidMode tracking (reserved for future use)
 	absoluteMode := true
 
 	minPos := Vector3{X: math.MaxFloat64, Y: math.MaxFloat64, Z: math.MaxFloat64}
@@ -191,7 +191,6 @@ func (e *Engine) SimulateGCode(ctx context.Context, req GCodeSimulationRequest) 
 		// Process command
 		switch cmd {
 		case "G0": // Rapid positioning
-			rapidMode = true
 			newPos := updatePosition(currentPos, params, absoluteMode)
 			segment := ToolPathSegment{
 				Start:        currentPos,
@@ -209,7 +208,6 @@ func (e *Engine) SimulateGCode(ctx context.Context, req GCodeSimulationRequest) 
 			updateBounds(&minPos, &maxPos, newPos)
 
 		case "G1": // Linear interpolation
-			rapidMode = false
 			if f, ok := params["F"]; ok {
 				feedRate = f * req.FeedRateScale
 			}
@@ -236,9 +234,125 @@ func (e *Engine) SimulateGCode(ctx context.Context, req GCodeSimulationRequest) 
 			currentPos = newPos
 			updateBounds(&minPos, &maxPos, newPos)
 
-		case "G2", "G3": // Arc interpolation (simplified as linear for now)
-			// TODO: Implement proper arc interpolation
-			result.Warnings = append(result.Warnings, "Arc interpolation simplified to linear")
+		case "G2", "G3": // Arc interpolation (clockwise/counter-clockwise)
+			if f, ok := params["F"]; ok {
+				feedRate = f * req.FeedRateScale
+			}
+			newPos := updatePosition(currentPos, params, absoluteMode)
+
+			// Get arc center offsets (I, J relative to current position)
+			iOffset := 0.0
+			jOffset := 0.0
+			if val, ok := params["I"]; ok {
+				iOffset = val
+			}
+			if val, ok := params["J"]; ok {
+				jOffset = val
+			}
+
+			// Calculate center of arc
+			center := Vector3{
+				X: currentPos.X + iOffset,
+				Y: currentPos.Y + jOffset,
+				Z: currentPos.Z,
+			}
+
+			// Calculate start and end angles
+			startAngle := math.Atan2(currentPos.Y-center.Y, currentPos.X-center.X)
+			endAngle := math.Atan2(newPos.Y-center.Y, newPos.X-center.X)
+			radius := math.Sqrt(iOffset*iOffset + jOffset*jOffset)
+
+			if radius < 0.001 {
+				// Degenerate arc, treat as linear move
+				segment := ToolPathSegment{
+					Start:        currentPos,
+					End:          newPos,
+					Type:         "arc",
+					FeedRate:     feedRate,
+					SpindleSpeed: spindleSpeed,
+					IsCutting:    spindleSpeed > 0 && newPos.Z < 0,
+				}
+				segment.Duration = calculateDuration(currentPos, newPos, feedRate)
+				result.ToolPath = append(result.ToolPath, segment)
+				result.Distance += currentPos.Distance(newPos)
+				if segment.IsCutting {
+					result.CuttingTime += segment.Duration
+				}
+				updateBounds(&minPos, &maxPos, newPos)
+				currentPos = newPos
+				break
+			}
+
+			// Determine sweep direction and angle
+			var sweepAngle float64
+			clockwise := cmd == "G2"
+			if clockwise {
+				sweepAngle = startAngle - endAngle
+				if sweepAngle <= 0 {
+					sweepAngle += 2 * math.Pi
+				}
+			} else {
+				sweepAngle = endAngle - startAngle
+				if sweepAngle <= 0 {
+					sweepAngle += 2 * math.Pi
+				}
+			}
+
+			// Subdivide arc into segments (~1-degree resolution)
+			resolution := math.Pi / 180.0 // 1 degree in radians
+			numSegments := int(math.Ceil(sweepAngle / resolution))
+			if numSegments < 1 {
+				numSegments = 1
+			}
+
+			// Z interpolation per segment
+			zStep := (newPos.Z - currentPos.Z) / float64(numSegments)
+			angleStep := sweepAngle / float64(numSegments)
+
+			prevPoint := currentPos
+			for i := 1; i <= numSegments; i++ {
+				var angle float64
+				if clockwise {
+					angle = startAngle - angleStep*float64(i)
+				} else {
+					angle = startAngle + angleStep*float64(i)
+				}
+
+				var point Vector3
+				if i == numSegments {
+					point = newPos // Ensure we end exactly at target
+				} else {
+					point = Vector3{
+						X: center.X + radius*math.Cos(angle),
+						Y: center.Y + radius*math.Sin(angle),
+						Z: currentPos.Z + zStep*float64(i),
+					}
+				}
+
+				segment := ToolPathSegment{
+					Start:        prevPoint,
+					End:          point,
+					Type:         "arc",
+					FeedRate:     feedRate,
+					SpindleSpeed: spindleSpeed,
+					IsCutting:    spindleSpeed > 0 && point.Z < 0,
+				}
+				segment.Duration = calculateDuration(prevPoint, point, feedRate)
+				result.ToolPath = append(result.ToolPath, segment)
+
+				segDist := prevPoint.Distance(point)
+				result.Distance += segDist
+
+				if segment.IsCutting {
+					result.CuttingTime += segment.Duration
+					result.MaterialRemoved += segDist * req.ToolDiameter * math.Abs(point.Z-prevPoint.Z) / 1000000
+				}
+
+				updateBounds(&minPos, &maxPos, point)
+				prevPoint = point
+			}
+
+			currentPos = newPos
 
 		case "G90": // Absolute positioning
 			absoluteMode = true
@@ -312,7 +426,7 @@ func (e *Engine) CheckCollisions(ctx context.Context, req CollisionCheckRequest)
 
 	// Check each segment of the tool path
 	for i := 0; i < len(req.ToolPath)-1; i++ {
-		start := req.ToolPath[i]
+		_ = req.ToolPath[i] // start point reserved for swept-volume collision
 		end := req.ToolPath[i+1]
 
 		// Create bounding box for tool at each position
@@ -501,7 +615,7 @@ func (e *Engine) simulateAdditive(req MaterialSimulationRequest) *MaterialSimula
 	// Calculate deposition rate
 	pathLength := calculatePathLength(req.ToolPath)
 	depositionVolume := pathLength * layerArea / 1e9 // mm³ to m³
-	depositionTime := pathLength / req.FeedRate * 60 // seconds
+	_ = pathLength / req.FeedRate * 60 // depositionTime (seconds), reserved for thermal model
 
 	// Temperature for thermoplastics
 	extrusionTemp := 200.0 // Default for PLA
@@ -543,7 +657,7 @@ func (e *Engine) simulateThermalCutting(req MaterialSimulationRequest) *Material
 
 	// Laser power and cutting speed relationship
 	cuttingSpeed := req.FeedRate / 60 // mm/s
-	requiredPower := req.Material.Density * cuttingSpeed * 0.001 // Simplified
+	_ = req.Material.Density * cuttingSpeed * 0.001 // requiredPower (simplified), reserved for power analysis
 
 	// Heat affected zone
 	hazWidth := req.ToolDiameter + 0.5 // mm
@@ -634,4 +748,19 @@ func parseFloat(s string) (float64, error) {
 	var result float64
 	_, err := fmt.Sscanf(s, "%f", &result)
 	return result, err
+}
+
+// parseParameters extracts key-value pairs from G-code parameter fields (e.g. ["X10.5", "Y20.3"])
+func parseParameters(fields []string) map[string]float64 {
+	params := make(map[string]float64)
+	for _, field := range fields {
+		if len(field) > 1 {
+			key := string(field[0])
+			value := field[1:]
+			if val, err := parseFloat(value); err == nil {
+				params[key] = val
+			}
+		}
+	}
+	return params
 }

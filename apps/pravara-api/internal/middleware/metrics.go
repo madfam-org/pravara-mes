@@ -35,11 +35,18 @@ func Metrics() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 
+		// Extract tenant_id from context (set by auth middleware)
+		tenantID := c.GetString("tenant_id")
+		if tenantID == "" {
+			tenantID = "unknown"
+		}
+
 		// Record duration
 		duration := time.Since(start).Seconds()
 		observability.HTTPRequestDuration.WithLabelValues(
 			c.Request.Method,
 			path,
+			tenantID,
 		).Observe(duration)
 
 		// Record request count
@@ -48,6 +55,7 @@ func Metrics() gin.HandlerFunc {
 			c.Request.Method,
 			path,
 			status,
+			tenantID,
 		).Inc()
 	}
 }

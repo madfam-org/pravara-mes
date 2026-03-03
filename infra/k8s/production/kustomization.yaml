@@ -6,6 +6,10 @@ namespace: pravara-mes
 resources:
 - ../base
 
+# In production, ExternalSecret CRs (in base/external-secrets/) create the
+# Kubernetes Secrets from Vault. The static secrets.yaml placeholders are
+# kept for local dev but overridden by ESO's Owner creationPolicy.
+
   # Production-specific patches for higher resources
 patches:
 - patch: |-

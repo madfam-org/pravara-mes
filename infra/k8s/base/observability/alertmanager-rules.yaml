@@ -11,6 +11,11 @@ spec:
     - name: pravara-api
       interval: 30s
       rules:
+        # NOTE: Request-scoped metrics (http_requests_total, http_request_duration_seconds,
+        # pubsub_events_published_total, pubsub_publish_errors_total) now include a tenant_id
+        # label. The sum(rate(...)) queries below naturally aggregate across all tenants.
+        # Per-tenant alerting can be added by grouping on tenant_id where needed.
+        #
         # Critical Alerts
         - alert: PravaraAPIHighErrorRate
           expr: |

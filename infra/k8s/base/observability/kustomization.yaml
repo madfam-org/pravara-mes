@@ -6,6 +6,7 @@ resources:
   - podmonitor-telemetry.yaml
   - servicemonitor-centrifugo.yaml
   - alertmanager-rules.yaml
+  - grafana-dashboards/
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize

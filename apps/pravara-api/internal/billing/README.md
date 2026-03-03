@@ -241,6 +241,47 @@ PRAVARA_BILLING_FLUSH_INTERVAL=5m
 - **Redis Load**: 1 INCRBY + 1 EXPIRE per event type per tenant per day
 - **Latency**: <1ms overhead per API request (channel send only)
 
+## Dhanam Invoice Webhooks
+
+PravaraMES receives invoice events from the Dhanam billing service via a webhook endpoint.
+
+### Endpoint
+
+```
+POST /v1/webhooks/dhanam
+```
+
+### Signature Verification
+
+Every incoming request must include an `X-Dhanam-Signature` header containing an HMAC-SHA256 signature computed over the raw request body. The shared secret is stored in the Kubernetes secret referenced by the `dhanam-webhook-secret` ExternalSecret.
+
+### Invoice Storage
+
+Validated invoice payloads are stored in the `invoices` table (created by migration `015_create_invoices.up.sql`). Row-Level Security (RLS) policies ensure tenant isolation: invoices are scoped by `tenant_id` extracted from the webhook payload.
+
+### Payload
+
+```json
+{
+  "event": "invoice.created",
+  "tenant_id": "uuid",
+  "invoice_id": "uuid",
+  "amount_cents": 15000,
+  "currency": "USD",
+  "line_items": [...],
+  "issued_at": "2025-03-01T00:00:00Z"
+}
+```
+
+### Responses
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Invoice processed and stored |
+| 400 | Invalid payload |
+| 401 | Invalid or missing HMAC signature |
+| 500 | Processing error |
+
 ## Future: Dhanam Integration
 
 The `DhanamClient` in `recorder.go` is a stub for future integration:

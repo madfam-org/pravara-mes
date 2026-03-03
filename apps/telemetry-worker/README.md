@@ -126,7 +126,7 @@ docker run --env-file .env telemetry-worker
 
 ## Metrics
 
-Prometheus metrics available at `/metrics`:
+Prometheus metrics available at `/metrics`. Request-scoped metrics include a `tenant_id` label for per-tenant observability:
 
 | Metric | Type | Description |
 |--------|------|-------------|

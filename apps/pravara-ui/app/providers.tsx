@@ -5,6 +5,12 @@ import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { useTokenRefreshGuard } from "@/lib/token-refresh";
+
+function TokenRefreshGuard({ children }: { children: ReactNode }) {
+  useTokenRefreshGuard();
+  return <>{children}</>;
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -28,7 +34,9 @@ export function Providers({ children }: { children: ReactNode }) {
         disableTransitionOnChange
       >
         <QueryClientProvider client={queryClient}>
-          {children}
+          <TokenRefreshGuard>
+            {children}
+          </TokenRefreshGuard>
           <Toaster />
         </QueryClientProvider>
       </ThemeProvider>

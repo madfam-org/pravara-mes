@@ -64,6 +64,20 @@ apps/pravara-ui/
 └── types/                  # TypeScript types
 ```
 
+## Authentication
+
+### Token Refresh
+
+The NextAuth.js configuration requests the `offline_access` scope from Keycloak, enabling automatic token rotation. Access tokens are refreshed with a 60-second buffer before expiry. If token refresh fails, the session is invalidated and the user is redirected to re-login.
+
+## Testing
+
+Unit and component tests use Vitest with React Testing Library. Run with:
+
+```bash
+npm run test
+```
+
 ## Key Patterns
 
 ### Server Components

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -24,14 +25,24 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/video-streaming/internal/camera"
 	"github.com/madfam-org/pravara-mes/apps/video-streaming/internal/recording"
 	"github.com/madfam-org/pravara-mes/apps/video-streaming/internal/rtc"
+	"github.com/madfam-org/pravara-mes/apps/video-streaming/internal/storage"
 )
 
 var (
-	log      *logrus.Logger
-	upgrader = websocket.Upgrader{
+	log            *logrus.Logger
+	allowedOrigins []string
+	upgrader       = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			// TODO: Implement proper CORS checking
-			return true
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // Same-origin requests
+			}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
 		},
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -60,6 +71,9 @@ func init() {
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("webrtc.stun_servers", []string{"stun:stun.l.google.com:19302"})
+	viper.SetDefault("cors.allowed_origins", "https://pravara.madfam.io")
+	viper.SetDefault("storage.endpoint", "")
+	viper.SetDefault("storage.bucket", "pravara-recordings")
 }
 
 func main() {
@@ -67,6 +81,16 @@ func main() {
 	if err := viper.ReadInConfig(); err != nil {
 		log.Warnf("No config file found, using environment variables: %v", err)
 	}
+
+	// Parse allowed CORS origins
+	originsStr := viper.GetString("cors.allowed_origins")
+	for _, o := range strings.Split(originsStr, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			allowedOrigins = append(allowedOrigins, o)
+		}
+	}
+	log.Infof("CORS allowed origins: %v", allowedOrigins)
 
 	// Connect to database
 	db, err := connectDB()
@@ -83,6 +107,25 @@ func main() {
 	cameraManager := camera.NewManager(db, log)
 	rtcManager := rtc.NewManager(log)
 	recordingService := recording.NewService(db, log)
+
+	// Initialize S3/R2 storage if configured
+	storageEndpoint := viper.GetString("storage.endpoint")
+	if storageEndpoint != "" {
+		storageCfg := storage.Config{
+			Endpoint:  storageEndpoint,
+			Bucket:    viper.GetString("storage.bucket"),
+			AccessKey: viper.GetString("storage.access_key"),
+			SecretKey: viper.GetString("storage.secret_key"),
+			Region:    viper.GetString("storage.region"),
+		}
+		storageClient, err := storage.NewClient(storageCfg, log)
+		if err != nil {
+			log.WithError(err).Warn("Failed to initialize storage client, recordings will be local only")
+		} else {
+			recordingService.SetStorage(storageClient)
+			log.Info("Cloud storage (S3/R2) initialized for recordings")
+		}
+	}
 
 	// Initialize WebRTC configuration
 	webrtcConfig := webrtc.Configuration{
@@ -101,9 +144,20 @@ func main() {
 
 	// CORS middleware for WebRTC
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		origin := c.Request.Header.Get("Origin")
+		allowed := false
+		for _, o := range allowedOrigins {
+			if origin == o {
+				allowed = true
+				break
+			}
+		}
+		if allowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+			c.Writer.Header().Set("Vary", "Origin")
+		}
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)

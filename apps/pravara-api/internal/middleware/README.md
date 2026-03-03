@@ -40,6 +40,8 @@ func GetTenantID(c *gin.Context) (string, bool) {
 }
 ```
 
+The extracted `tenant_id` is also propagated to Prometheus metric labels by the Metrics middleware, enabling per-tenant request rate, latency, and error tracking.
+
 ### User Context
 
 ```go

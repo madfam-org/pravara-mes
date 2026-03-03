@@ -14,6 +14,7 @@ resources:
   - ingress.yaml
   - observability/
   - security/
+  - external-secrets/
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize

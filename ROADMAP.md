@@ -4,8 +4,9 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 
 ## Current Status
 
-**Version**: Phase 2.5 Production Readiness (Complete)
-**Last Updated**: March 1, 2026
+**Version**: Phase 2.5b Digital Twin & Connectivity (In Progress)
+**Last Updated**: March 2, 2026
+**Total Services**: 10
 
 | Component | Status | Progress |
 |-----------|--------|----------|
@@ -13,6 +14,12 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 | pravara-ui | Complete | 100% |
 | telemetry-worker | Complete | 100% |
 | pravara-gateway | Complete | 100% |
+| visualization-engine | Complete | 100% |
+| video-streaming | Complete | 100% |
+| ml-orchestrator | Complete | 100% |
+| luban-bridge | Complete | 100% |
+| octoprint-connector | Complete | 100% |
+| machine-adapter | In Progress | 70% |
 | Infrastructure | Complete | 100% |
 | CI/CD Pipeline | Complete | 100% |
 | Observability | Complete | 100% |
@@ -27,12 +34,15 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 ```
 Q1 2026                         Q2 2026                    Q3 2026
 ├── Phase 0: Stabilize ✅       ├── Phase 2.5: Production  ├── Phase 3.0: Compliance
-├── Phase 1: MVP Complete ✅    │   - CI/CD Pipeline       │   - CFDI 4.0 (Mexico)
-├── Phase 2: Real-Time ✅       │   - Observability        │   - Annex 24
-│   - Centrifugo Gateway        │   - Network Security     │   - Tezca Integration
-│   - Redis Pub/Sub             │   - Quality Management   │
-│   - WebSocket Hooks           │   - Dhanam Billing       └── Phase 4.0: AI (Future)
-│   - Live UI Updates           │
+├── Phase 1: MVP Complete ✅    │   ✅ Complete             │   - CFDI 4.0 (Mexico)
+├── Phase 2: Real-Time ✅       ├── Phase 2.5b: Digital    │   - Annex 24
+│   - Centrifugo Gateway        │   Twin & Connectivity    │   - Tezca Integration
+│   - Redis Pub/Sub             │   - 3D Visualization ✅  │
+│   - WebSocket Hooks           │   - Video Streaming ✅   └── Phase 4.0: Future
+│   - Live UI Updates           │   - ML Orchestrator ✅       - Predictive Maintenance
+│                               │   - Luban Bridge ✅          - Intelligent Scheduling
+│                               │   - OctoPrint ✅
+│                               │   - Machine Adapter 🔄
 ```
 
 ---
@@ -154,6 +164,46 @@ Enterprise-grade infrastructure and monitoring.
 
 ---
 
+## Phase 2.5b: Digital Twin & Connectivity
+> **Status**: In Progress | **Timeline**: 2-3 weeks
+
+Digital twin visualization, ML-driven quality prediction, and multi-protocol machine connectivity.
+
+### Visualization Engine ✅
+- [x] 3D visualization and G-code simulation
+- [x] Real-time digital twin rendering
+- [x] Toolpath preview and layer analysis
+
+### Video Streaming ✅
+- [x] Camera management and WebRTC streaming
+- [x] Multi-camera support with tenant isolation
+- [x] Live monitoring feed integration
+
+### ML Orchestrator ✅
+- [x] ML quality prediction models
+- [x] Process optimization recommendations
+- [x] Anomaly detection from telemetry data
+- [x] Model versioning and inference pipeline
+
+### Luban Bridge ✅
+- [x] Snapmaker/Luban integration
+- [x] Job submission and status tracking
+- [x] G-code transfer and machine control
+
+### OctoPrint Connector ✅
+- [x] OctoPrint 3D printer integration
+- [x] Print job management and monitoring
+- [x] Temperature and progress telemetry
+
+### Machine Adapter (In Progress)
+- [x] Multi-protocol architecture (OPC-UA, MQTT, Modbus)
+- [x] Protocol abstraction layer
+- [ ] Full OPC-UA implementation
+- [ ] Modbus TCP/RTU driver completion
+- [ ] Edge gateway deployment
+
+---
+
 ## Phase 3.0: Mexican Compliance
 > **Status**: Planned | **Timeline**: 3-4 weeks
 
@@ -183,54 +233,64 @@ apps/compliance-engine/
 
 ---
 
-## Phase 4.0: AI Orchestration
+## Phase 4.0: Advanced AI & Automation
 > **Status**: Future | **Timeline**: TBD
 
-Intelligent manufacturing operations.
+Advanced intelligent manufacturing operations building on the ml-orchestrator foundation (deployed in Phase 2.5b).
 
 ### Predictive Maintenance
-- [ ] Anomaly detection from telemetry
-- [ ] Failure prediction models
+- [ ] Advanced failure prediction models
 - [ ] Maintenance scheduling optimization
+- [ ] Remaining useful life estimation
 
 ### Intelligent Scheduling
 - [ ] Dynamic task allocation
 - [ ] Material clustering for efficiency
 - [ ] Capacity optimization
 
-### New Service: ml-orchestrator
-- Python/FastAPI for inference
-- Model versioning
-- A/B testing framework
+### ML Orchestrator Enhancements
+- [ ] A/B testing framework for model variants
+- [ ] Federated learning across tenant deployments
+- [ ] AutoML pipeline for custom model training
 
 ---
 
 ## Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                            PravaraMES                                   │
-├────────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐  │
-│  │ pravara-api │ │ pravara-ui  │ │ telemetry-  │ │ pravara-gateway │  │
-│  │  (Go/Gin)   │ │ (Next.js)   │ │   worker    │ │  (Centrifugo)   │  │
-│  │  :4500      │ │  :4501      │ │  (Go/MQTT)  │ │     :8000       │  │
-│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └───────┬─────────┘  │
-│         │               │                │                │           │
-│         │               │ WebSocket      │                │           │
-│         │               └────────────────┼────────────────┘           │
-│         │                                │                            │
-│  ┌──────┴────────────────────────────────┴─────────────────────────┐  │
-│  │                    Shared Infrastructure                         │  │
-│  │  PostgreSQL (RLS) │ Redis (Pub/Sub) │ EMQX (MQTT) │ Janua SSO   │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                                                        │
-│  Future Services:                                                      │
-│  ┌─────────────────┐ ┌─────────────────┐                              │
-│  │ compliance-     │ │ ml-orchestrator │                              │
-│  │ engine (v3.0)   │ │ (v4.0)          │                              │
-│  └─────────────────┘ └─────────────────┘                              │
-└────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              PravaraMES (10 Services)                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Core Services (Phase 1-2.5)                                                 │
+│  ┌─────────────┐ ┌─────────────┐ ┌──────────────┐ ┌─────────────────┐       │
+│  │ pravara-api │ │ pravara-ui  │ │ telemetry-   │ │ pravara-gateway │       │
+│  │  (Go/Gin)   │ │ (Next.js)   │ │   worker     │ │  (Centrifugo)   │       │
+│  │  :4500      │ │  :4501      │ │  (Go/MQTT)   │ │     :8000       │       │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬───────┘ └───────┬─────────┘       │
+│         │               │               │                  │                 │
+│  Digital Twin & Connectivity (Phase 2.5b)                                    │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐                    │
+│  │ visualization- │ │ video-         │ │ ml-            │                    │
+│  │ engine         │ │ streaming      │ │ orchestrator   │                    │
+│  │ (3D/G-code)    │ │ (WebRTC)       │ │ (Python/ML)    │                    │
+│  └────────┬───────┘ └────────┬───────┘ └────────┬───────┘                    │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐                    │
+│  │ luban-bridge   │ │ octoprint-     │ │ machine-       │                    │
+│  │ (Snapmaker)    │ │ connector      │ │ adapter  [WIP] │                    │
+│  └────────┬───────┘ └────────┬───────┘ └────────┬───────┘                    │
+│           │                  │                   │                            │
+│  ┌───────────────────────────────────────────────────────────────────┐        │
+│  │                    Shared Infrastructure                          │        │
+│  │  PostgreSQL (RLS) │ Redis (Pub/Sub) │ EMQX (MQTT) │ Janua SSO    │        │
+│  └───────────────────────────────────────────────────────────────────┘        │
+│                                                                              │
+│  Future Services:                                                            │
+│  ┌─────────────────┐                                                         │
+│  │ compliance-     │                                                         │
+│  │ engine (v3.0)   │                                                         │
+│  └─────────────────┘                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -242,8 +302,10 @@ Intelligent manufacturing operations.
 | **Janua SSO** | 1.0 | ✅ Implemented |
 | **Cloudflare R2** | 1.0 | ✅ Configured |
 | **Centrifugo** | 2.0 | ✅ Implemented |
-| **ForgeSight** | 2.5 | Planned |
-| **Dhanam Billing** | 2.5 | Planned |
+| **Dhanam Billing** | 2.5 | ✅ Implemented |
+| **Snapmaker/Luban** | 2.5b | ✅ Implemented |
+| **OctoPrint** | 2.5b | ✅ Implemented |
+| **ForgeSight** | 2.5b | ✅ Implemented |
 | **Tezca Labs** | 3.0 | Planned |
 
 ---
@@ -274,15 +336,17 @@ enclii deploy --service pravara-api --env production
 
 ## Success Metrics
 
-| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 3.0 |
-|--------|---------|---------|-----------|-----------|
-| Build Status | ✅ Passing | ✅ Passing | Passing | Passing |
-| Test Coverage | >60% | >65% | >80% | >85% |
-| API Uptime | - | - | 99.9% | 99.9% |
-| p95 Latency | - | - | <200ms | <200ms |
-| Real-Time Latency | - | <500ms | <300ms | <300ms |
-| WebSocket Connections | - | 100+ | 1000+ | 1000+ |
-| CFDI Compliance | - | - | - | 100% |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 2.5b | Phase 3.0 |
+|--------|---------|---------|-----------|------------|-----------|
+| Build Status | ✅ Passing | ✅ Passing | ✅ Passing | ✅ Passing | Passing |
+| Test Coverage | >60% | >65% | >80% | >80% | >85% |
+| Total Services | 3 | 4 | 4 | 10 | 11 |
+| API Uptime | - | - | 99.9% | 99.9% | 99.9% |
+| p95 Latency | - | - | <200ms | <200ms | <200ms |
+| Real-Time Latency | - | <500ms | <300ms | <300ms | <300ms |
+| WebSocket Connections | - | 100+ | 1000+ | 1000+ | 1000+ |
+| ML Model Accuracy | - | - | - | >90% | >90% |
+| CFDI Compliance | - | - | - | - | 100% |
 
 ---
 

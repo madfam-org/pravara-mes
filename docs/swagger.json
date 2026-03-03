@@ -3441,6 +3441,76 @@
                 }
             }
         },
+        "/webhooks/dhanam": {
+            "post": {
+                "description": "Receives invoice events from Dhanam billing service, validates HMAC-SHA256 signature, and stores the invoice with RLS tenant isolation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Receive Dhanam invoice webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "HMAC-SHA256 signature for payload verification",
+                        "name": "X-Dhanam-Signature",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Invoice webhook payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.DhanamWebhookPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Invoice processed and stored",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing HMAC signature",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Processing error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/cotiza": {
             "post": {
                 "description": "Processes order events from Cotiza Studio (created, updated, cancelled)",
@@ -3709,6 +3779,38 @@
                     "$ref": "#/definitions/internal_api.CotizaOrderData"
                 },
                 "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.DhanamWebhookPayload": {
+            "type": "object",
+            "required": [
+                "event",
+                "tenant_id",
+                "invoice_id"
+            ],
+            "properties": {
+                "event": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "amount_cents": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {}
+                },
+                "issued_at": {
                     "type": "string"
                 }
             }

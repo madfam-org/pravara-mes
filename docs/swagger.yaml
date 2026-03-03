@@ -133,6 +133,28 @@ definitions:
     - event
     - order
     type: object
+  internal_api.DhanamWebhookPayload:
+    properties:
+      amount_cents:
+        type: integer
+      currency:
+        type: string
+      event:
+        type: string
+      invoice_id:
+        type: string
+      issued_at:
+        type: string
+      line_items:
+        items: {}
+        type: array
+      tenant_id:
+        type: string
+    required:
+    - event
+    - tenant_id
+    - invoice_id
+    type: object
   internal_api.CreateBatchLotRequest:
     properties:
       expiry_date:
@@ -3226,6 +3248,53 @@ paths:
       summary: Get real-time connection token
       tags:
       - realtime
+  /webhooks/dhanam:
+    post:
+      consumes:
+      - application/json
+      description: Receives invoice events from Dhanam billing service, validates HMAC-SHA256
+        signature, and stores the invoice with RLS tenant isolation
+      parameters:
+      - description: HMAC-SHA256 signature for payload verification
+        in: header
+        name: X-Dhanam-Signature
+        type: string
+      - description: Invoice webhook payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.DhanamWebhookPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Invoice processed and stored
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid payload
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid or missing HMAC signature
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Processing error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Receive Dhanam invoice webhook
+      tags:
+      - webhooks
   /webhooks/cotiza:
     post:
       consumes:

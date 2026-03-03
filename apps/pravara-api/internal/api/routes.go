@@ -53,6 +53,10 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
+
+	// Initialize Dhanam webhook handler
+	invoiceRepo := billing.NewInvoiceRepository(database.DB)
+	dhanamWebhookHandler := billing.NewWebhookHandler(invoiceRepo, cfg.Dhanam.WebhookSecret, log)
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
 	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
 
@@ -174,6 +178,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 		webhooks := v1.Group("/webhooks")
 		{
 			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
+			webhooks.POST("/dhanam", dhanamWebhookHandler.HandleWebhook)
 			webhooks.POST("/forgesight", placeholderHandler("forgesight webhook"))
 		}
 

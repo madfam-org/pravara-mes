@@ -95,9 +95,10 @@ func TestMetrics_SkipsMetricsEndpoint(t *testing.T) {
 
 	// Record initial counter value
 	initialCount := findCounterValue("pravara_api_http_requests_total", map[string]string{
-		"method": "GET",
-		"path":   "/metrics",
-		"status": "200",
+		"method":    "GET",
+		"path":      "/metrics",
+		"status":    "200",
+		"tenant_id": "unknown",
 	})
 
 	router := gin.New()
@@ -116,9 +117,10 @@ func TestMetrics_SkipsMetricsEndpoint(t *testing.T) {
 
 	// Assert: Metrics were not incremented (no recursive collection)
 	afterCount := findCounterValue("pravara_api_http_requests_total", map[string]string{
-		"method": "GET",
-		"path":   "/metrics",
-		"status": "200",
+		"method":    "GET",
+		"path":      "/metrics",
+		"status":    "200",
+		"tenant_id": "unknown",
 	})
 	assert.Equal(t, initialCount, afterCount, "Metrics endpoint should not record its own metrics")
 }
@@ -137,8 +139,9 @@ func TestMetrics_RecordsRequestDuration(t *testing.T) {
 
 	// Record initial histogram count
 	initialCount := findHistogramSampleCount("pravara_api_http_request_duration_seconds", map[string]string{
-		"method": "GET",
-		"path":   "/test",
+		"method":    "GET",
+		"path":      "/test",
+		"tenant_id": "unknown",
 	})
 
 	// Test: Make request
@@ -151,8 +154,9 @@ func TestMetrics_RecordsRequestDuration(t *testing.T) {
 
 	// Assert: Duration was recorded
 	afterCount := findHistogramSampleCount("pravara_api_http_request_duration_seconds", map[string]string{
-		"method": "GET",
-		"path":   "/test",
+		"method":    "GET",
+		"path":      "/test",
+		"tenant_id": "unknown",
 	})
 	assert.Greater(t, afterCount, initialCount, "Request duration should be recorded")
 }
@@ -195,9 +199,10 @@ func TestMetrics_RecordsRequestCount(t *testing.T) {
 			// Record initial counter value (status is numeric string, not status text)
 			statusStr := strconv.Itoa(tt.expectedCode)
 			initialCount := findCounterValue("pravara_api_http_requests_total", map[string]string{
-				"method": tt.method,
-				"path":   tt.path,
-				"status": statusStr,
+				"method":    tt.method,
+				"path":      tt.path,
+				"status":    statusStr,
+				"tenant_id": "unknown",
 			})
 
 			// Test: Make request
@@ -210,9 +215,10 @@ func TestMetrics_RecordsRequestCount(t *testing.T) {
 
 			// Assert: Counter was incremented
 			afterCount := findCounterValue("pravara_api_http_requests_total", map[string]string{
-				"method": tt.method,
-				"path":   tt.path,
-				"status": statusStr,
+				"method":    tt.method,
+				"path":      tt.path,
+				"status":    statusStr,
+				"tenant_id": "unknown",
 			})
 			assert.Greater(t, afterCount, initialCount, "Request counter should be incremented")
 		})
@@ -231,8 +237,9 @@ func TestMetrics_UsesRoutePath(t *testing.T) {
 
 	// Record initial counts for route template path
 	initialCountTemplate := findHistogramSampleCount("pravara_api_http_request_duration_seconds", map[string]string{
-		"method": "GET",
-		"path":   "/api/v1/machines/:id",
+		"method":    "GET",
+		"path":      "/api/v1/machines/:id",
+		"tenant_id": "unknown",
 	})
 
 	// Test: Make requests with different IDs
@@ -246,8 +253,9 @@ func TestMetrics_UsesRoutePath(t *testing.T) {
 
 	// Assert: All requests recorded under template path (not individual paths)
 	afterCountTemplate := findHistogramSampleCount("pravara_api_http_request_duration_seconds", map[string]string{
-		"method": "GET",
-		"path":   "/api/v1/machines/:id",
+		"method":    "GET",
+		"path":      "/api/v1/machines/:id",
+		"tenant_id": "unknown",
 	})
 	assert.Equal(t, initialCountTemplate+uint64(len(ids)), afterCountTemplate,
 		"Should use route template path to avoid high cardinality")
