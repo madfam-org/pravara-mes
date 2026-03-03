@@ -1,0 +1,11 @@
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: pravara-mes
+  project: pravara-mes
+spec:
+  runtime:
+    port: 4500
+  domains:
+    - name: api.pravara.madfam.io
+    - name: app.pravara.madfam.io
