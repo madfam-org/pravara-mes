@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play,
@@ -83,7 +83,7 @@ function CommandButton({
 }
 
 export function MachineControlPanel({ machine }: MachineControlPanelProps) {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
   const queryClient = useQueryClient();
   const { toast } = useToast();

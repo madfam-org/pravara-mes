@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { realtimeClient, type EventListener } from "./client";
 import type { ConnectionState, ChannelNamespace, EventType, RealtimeEvent } from "./types";
 import { ChannelNamespaces } from "./types";
@@ -32,7 +32,7 @@ function getNamespaceForEventType(eventType: EventType): ChannelNamespace {
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [eventHandlers] = useState(() => new Map<EventType, Set<EventListener>>());
 

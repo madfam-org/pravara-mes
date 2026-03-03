@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Edit, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ interface MachineDetailPageProps {
 
 export default function MachineDetailPage({ params }: MachineDetailPageProps) {
   const { id } = use(params);
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
 
   // Set up real-time updates for this machine

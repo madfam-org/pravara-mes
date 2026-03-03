@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { User, Bell, Palette, Moon, Sun, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const { theme, setTheme } = useTheme();
   const user = session?.user;
 

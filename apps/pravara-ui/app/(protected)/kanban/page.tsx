@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useToast } from "@/lib/hooks/use-toast";
 import type { CommandStatus } from "@/components/kanban/card";
 
 export default function KanbanPage() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);

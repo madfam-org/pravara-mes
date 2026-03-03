@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, MoreVertical, Edit, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ const priorityLabels: Record<number, string> = {
 };
 
 export default function OrdersPage() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | undefined>();

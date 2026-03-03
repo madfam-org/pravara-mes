@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { pravaraSignOut } from "@/lib/auth";
 import {
   LayoutDashboard,
   Kanban,
@@ -111,7 +111,7 @@ export function Sidebar({ user }: SidebarProps) {
           {collapsed && <span className="sr-only">Settings</span>}
         </Link>
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => pravaraSignOut({ callbackUrl: "/login" })}
           className={cn(
             "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           )}

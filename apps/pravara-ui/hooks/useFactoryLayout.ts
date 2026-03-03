@@ -4,11 +4,11 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { layoutsAPI, type FactoryLayout } from "@/lib/api";
 
 export function useFactoryLayout() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = session?.accessToken as string | undefined;
   const queryClient = useQueryClient();
 

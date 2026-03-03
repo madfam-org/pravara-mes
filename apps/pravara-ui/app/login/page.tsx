@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { pravaraSignIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -17,7 +17,7 @@ export default function LoginPage() {
         <CardContent>
           <Button
             className="w-full"
-            onClick={() => signIn("janua", { callbackUrl: "/dashboard" })}
+            onClick={() => pravaraSignIn("/dashboard")}
           >
             Sign in with Janua SSO
           </Button>

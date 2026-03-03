@@ -1,19 +1,11 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
-import { useEffect } from "react";
-
 /**
- * Hook that detects token refresh failures and redirects to login.
- * Use in a client component that wraps protected routes.
+ * Token refresh guard — Janua SDK handles token refresh automatically.
+ * This module is kept as a no-op for backward compatibility with providers.tsx.
  */
-export function useTokenRefreshGuard() {
-  const { data: session } = useSession();
 
-  useEffect(() => {
-    if ((session as any)?.error === "RefreshAccessTokenError") {
-      // Force re-login when refresh token is invalid/expired
-      signIn("janua", { callbackUrl: window.location.href });
-    }
-  }, [session]);
+export function useTokenRefreshGuard() {
+  // Janua SDK handles token refresh automatically.
+  // No manual refresh guard needed.
 }

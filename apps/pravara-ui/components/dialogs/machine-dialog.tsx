@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -63,7 +63,7 @@ const MACHINE_TYPES = [
 ];
 
 export function MachineDialog({ open, onOpenChange, machine }: MachineDialogProps) {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
   const isEditMode = !!machine;
 
