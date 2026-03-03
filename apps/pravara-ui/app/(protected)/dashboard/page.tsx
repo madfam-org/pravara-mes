@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import {
   Package,
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ordersAPI, machinesAPI, tasksAPI, Task, TaskStatus } from "@/lib/api";
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
 
   const { data: ordersData } = useQuery({

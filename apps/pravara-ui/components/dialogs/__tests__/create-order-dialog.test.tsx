@@ -5,8 +5,8 @@ import { OrderDialog } from '../order-dialog'
 import type { Order } from '@/lib/api'
 
 // Mock next-auth
-vi.mock('next-auth/react', () => ({
-  useSession: () => ({
+vi.mock('@/lib/auth', () => ({
+  usePravaraSession: () => ({
     data: { user: { accessToken: 'test-token' } },
     status: 'authenticated',
   }),

@@ -4,8 +4,8 @@ import { useRealtimeConnection } from '../useRealtimeConnection'
 
 // Mock next-auth
 const mockSession = vi.fn()
-vi.mock('next-auth/react', () => ({
-  useSession: () => mockSession(),
+vi.mock('@/lib/auth', () => ({
+  usePravaraSession: () => mockSession(),
 }))
 
 // Mock realtime client

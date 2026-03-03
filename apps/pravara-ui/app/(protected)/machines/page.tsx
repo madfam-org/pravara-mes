@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Factory, Activity, Wifi, WifiOff, MoreVertical, Edit, Trash, ExternalLink, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ const typeOptions = [
 ];
 
 export default function MachinesPage() {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<Machine | undefined>();

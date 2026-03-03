@@ -4,8 +4,8 @@ import { MachineDialog } from '../machine-dialog'
 import type { Machine } from '@/lib/api'
 
 // Mock next-auth
-vi.mock('next-auth/react', () => ({
-  useSession: () => ({
+vi.mock('@/lib/auth', () => ({
+  usePravaraSession: () => ({
     data: { user: { accessToken: 'test-token' } },
     status: 'authenticated',
   }),

@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react'
 import DashboardPage from '../page'
 
 // Mock next-auth
-vi.mock('next-auth/react', () => ({
-  useSession: () => ({
+vi.mock('@/lib/auth', () => ({
+  usePravaraSession: () => ({
     data: {
       user: {
         name: 'Test User',

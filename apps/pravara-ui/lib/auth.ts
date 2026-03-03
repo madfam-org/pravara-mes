@@ -1,117 +1,89 @@
-import NextAuth from "next-auth";
-import type { NextAuthConfig } from "next-auth";
+"use client";
 
-async function refreshAccessToken(token: any) {
-  try {
-    const response = await fetch(
-      `${process.env.OIDC_ISSUER}/protocol/openid-connect/token`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: process.env.OIDC_CLIENT_ID!,
-          client_secret: process.env.OIDC_CLIENT_SECRET!,
-          grant_type: "refresh_token",
-          refresh_token: token.refreshToken,
-        }),
-      }
-    );
+/**
+ * Auth bridge — maps Janua SDK to the session shape used by Pravara-MES.
+ *
+ * All 20+ consumer files access `session?.accessToken`, `session?.user?.tenantId`,
+ * `session?.user?.role`, etc.  This bridge preserves that interface so every
+ * import { usePravaraSession } from "@/lib/auth" just works.
+ */
 
-    const refreshed = await response.json();
+import { useJanua, useUser, useAuth as useJanuaAuth } from "@janua/nextjs";
 
-    if (!response.ok) {
-      throw new Error(refreshed.error || "Failed to refresh token");
+export interface PravaraUser {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role: string;
+  tenantId: string;
+  accessToken?: string;
+}
+
+export interface PravaraSession {
+  user: PravaraUser;
+  accessToken: string;
+  error?: "RefreshAccessTokenError";
+}
+
+/**
+ * Drop-in replacement for next-auth's usePravaraSession().
+ * Returns { data: session, status } with the same shape.
+ */
+export function usePravaraSession(): {
+  data: PravaraSession | null;
+  status: "loading" | "authenticated" | "unauthenticated";
+} {
+  const janua = useJanua();
+  const { user: januaUser } = useUser();
+  const { isAuthenticated, isLoading } = useJanuaAuth();
+
+  if (isLoading) {
+    return { data: null, status: "loading" };
+  }
+
+  if (!isAuthenticated || !januaUser) {
+    return { data: null, status: "unauthenticated" };
+  }
+
+  const accessToken = janua.client?.getAccessToken?.() || "";
+  const claims = januaUser as Record<string, unknown>;
+
+  const session: PravaraSession = {
+    user: {
+      id: januaUser.id || "",
+      name: januaUser.name || januaUser.display_name,
+      email: januaUser.email || "",
+      image: (claims.picture as string) || (claims.avatar as string) || null,
+      role: (claims.role as string) || "operator",
+      tenantId: (claims.tenant_id as string) || "",
+      accessToken,
+    },
+    accessToken,
+  };
+
+  return { data: session, status: "authenticated" };
+}
+
+/**
+ * Sign in via Janua SDK.
+ */
+export function pravaraSignIn(callbackUrl?: string) {
+  if (typeof window !== "undefined") {
+    if (callbackUrl) {
+      localStorage.setItem("auth_return_url", callbackUrl);
     }
-
-    return {
-      ...token,
-      accessToken: refreshed.access_token,
-      accessTokenExpires: Date.now() + refreshed.expires_in * 1000,
-      refreshToken: refreshed.refresh_token ?? token.refreshToken,
-    };
-  } catch (error) {
-    console.error("Error refreshing access token:", error);
-    return {
-      ...token,
-      error: "RefreshAccessTokenError" as const,
-    };
+    const baseURL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
+    window.location.href = `${baseURL}/authorize?redirect_uri=${encodeURIComponent(window.location.origin)}`;
   }
 }
 
-const config: NextAuthConfig = {
-  providers: [
-    {
-      id: "janua",
-      name: "Janua SSO",
-      type: "oidc",
-      issuer: process.env.OIDC_ISSUER,
-      clientId: process.env.OIDC_CLIENT_ID,
-      clientSecret: process.env.OIDC_CLIENT_SECRET,
-      authorization: {
-        params: {
-          scope: "openid profile email offline_access",
-        },
-      },
-      profile(profile) {
-        return {
-          id: profile.sub,
-          name: profile.name,
-          email: profile.email,
-          image: profile.picture,
-          role: profile.role || "operator",
-          tenantId: profile.tenant_id,
-        };
-      },
-    },
-  ],
-  callbacks: {
-    async jwt({ token, account, profile }) {
-      // Initial sign-in: capture tokens and expiry
-      if (account && profile) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          accessTokenExpires: account.expires_at
-            ? account.expires_at * 1000
-            : Date.now() + 3600 * 1000,
-          refreshToken: account.refresh_token,
-          role: (profile as any).role || "operator",
-          tenantId: (profile as any).tenant_id,
-        };
-      }
-
-      // Return token if still valid (with 60s buffer)
-      if (
-        typeof token.accessTokenExpires === "number" &&
-        Date.now() < token.accessTokenExpires - 60 * 1000
-      ) {
-        return token;
-      }
-
-      // Token expired, attempt refresh
-      if (token.refreshToken) {
-        return refreshAccessToken(token);
-      }
-
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.sub;
-        (session.user as any).accessToken = token.accessToken;
-        (session.user as any).role = token.role;
-        (session.user as any).tenantId = token.tenantId;
-      }
-      if (token.error) {
-        (session as any).error = token.error;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-};
-
-export const { handlers, auth, signIn, signOut } = NextAuth(config);
+/**
+ * Sign out via Janua SDK.
+ */
+export async function pravaraSignOut(options?: { callbackUrl?: string }) {
+  if (typeof window !== "undefined") {
+    const baseURL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
+    window.location.href = `${baseURL}/sign-out?redirect_uri=${encodeURIComponent(options?.callbackUrl || window.location.origin + "/login")}`;
+  }
+}

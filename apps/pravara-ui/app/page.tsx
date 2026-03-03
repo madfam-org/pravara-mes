@@ -1,8 +1,12 @@
+import { getSession } from "@janua/nextjs";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 
 export default async function Home() {
-  const session = await auth();
+  const session = await getSession(
+    process.env.JANUA_APP_ID!,
+    process.env.JANUA_API_KEY!,
+    process.env.JANUA_JWT_SECRET!,
+  );
 
   if (!session) {
     redirect("/login");

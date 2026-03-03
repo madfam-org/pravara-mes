@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ interface ModelUploadProps {
 const ACCEPTED_EXTENSIONS = ".gltf,.glb,.stl";
 
 export const ModelUpload: React.FC<ModelUploadProps> = ({ onUploaded }) => {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = session?.accessToken as string | undefined;
   const { toast } = useToast();
 

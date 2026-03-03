@@ -1,16 +1,14 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SessionProvider } from "next-auth/react";
+import { JanuaProvider } from "@janua/nextjs";
 import { ThemeProvider } from "next-themes";
 import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { useTokenRefreshGuard } from "@/lib/token-refresh";
 
-function TokenRefreshGuard({ children }: { children: ReactNode }) {
-  useTokenRefreshGuard();
-  return <>{children}</>;
-}
+const januaConfig = {
+  baseURL: process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io",
+};
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -26,7 +24,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionProvider>
+    <JanuaProvider config={januaConfig}>
       <ThemeProvider
         attribute="class"
         defaultTheme="system"
@@ -34,12 +32,10 @@ export function Providers({ children }: { children: ReactNode }) {
         disableTransitionOnChange
       >
         <QueryClientProvider client={queryClient}>
-          <TokenRefreshGuard>
-            {children}
-          </TokenRefreshGuard>
+          {children}
           <Toaster />
         </QueryClientProvider>
       </ThemeProvider>
-    </SessionProvider>
+    </JanuaProvider>
   );
 }

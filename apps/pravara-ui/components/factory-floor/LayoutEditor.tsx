@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,7 @@ const FLOOR_WIDTH = 30; // meters
 const FLOOR_HEIGHT = 30; // meters
 
 export const LayoutEditor: React.FC = () => {
-  const { data: session } = useSession();
+  const { data: session } = usePravaraSession();
   const token = session?.accessToken as string | undefined;
   const { toast } = useToast();
   const queryClient = useQueryClient();

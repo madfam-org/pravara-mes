@@ -4,7 +4,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { usePravaraSession } from "@/lib/auth";
 import { realtimeClient } from "@/lib/realtime/client";
 import {
   useRealtimeStore,
@@ -24,7 +24,7 @@ export function useRealtimeConnection(
 ) {
   const { autoConnect = true, maxReconnectAttempts = 5 } = options;
 
-  const { data: session, status } = useSession();
+  const { data: session, status } = usePravaraSession();
   const {
     connectionState,
     error,

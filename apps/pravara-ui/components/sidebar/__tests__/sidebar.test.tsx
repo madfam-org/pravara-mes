@@ -9,8 +9,8 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock next-auth
-vi.mock('next-auth/react', () => ({
-  signOut: vi.fn(),
+vi.mock('@/lib/auth', () => ({
+  pravaraSignOut: vi.fn(),
 }))
 
 // Mock next/link
