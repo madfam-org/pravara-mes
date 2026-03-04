@@ -20,6 +20,28 @@ type Config struct {
 	Dhanam     DhanamConfig     `mapstructure:"dhanam"`
 	Cotiza     CotizaConfig     `mapstructure:"cotiza"`
 	Tezca      TezcaConfig      `mapstructure:"tezca"`
+	Webhooks   WebhooksConfig   `mapstructure:"webhooks"`
+	SSE        SSEConfig        `mapstructure:"sse"`
+	CORS       CORSConfig       `mapstructure:"cors"`
+}
+
+// WebhooksConfig holds webhook dispatcher settings.
+type WebhooksConfig struct {
+	DispatchInterval int `mapstructure:"dispatch_interval"` // seconds, default 5
+	MaxRetries       int `mapstructure:"max_retries"`       // default 5
+	RetentionDays    int `mapstructure:"retention_days"`    // outbox cleanup, default 30
+}
+
+// SSEConfig holds Server-Sent Events settings.
+type SSEConfig struct {
+	MaxConnections   int `mapstructure:"max_connections"`   // default 1000
+	KeepaliveSeconds int `mapstructure:"keepalive_seconds"` // default 30
+}
+
+// CORSConfig holds CORS settings.
+type CORSConfig struct {
+	AllowedOrigins []string `mapstructure:"allowed_origins"` // default: ["https://pravara.madfam.io"]
+	StatusPublic   bool     `mapstructure:"status_public"`   // default: true
 }
 
 // AppConfig holds application-level settings.
@@ -177,6 +199,19 @@ func setDefaults(v *viper.Viper) {
 	// Tezca defaults
 	v.SetDefault("tezca.enabled", false)
 	v.SetDefault("tezca.api_url", "https://tezca.mx/api/v1")
+
+	// Webhooks defaults
+	v.SetDefault("webhooks.dispatch_interval", 5)
+	v.SetDefault("webhooks.max_retries", 5)
+	v.SetDefault("webhooks.retention_days", 30)
+
+	// SSE defaults
+	v.SetDefault("sse.max_connections", 1000)
+	v.SetDefault("sse.keepalive_seconds", 30)
+
+	// CORS defaults
+	v.SetDefault("cors.allowed_origins", []string{"https://mes-app.madfam.io", "https://mes-admin.madfam.io"})
+	v.SetDefault("cors.status_public", true)
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -223,6 +258,14 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("tezca.api_url", "TEZCA_API_URL")
 	v.BindEnv("tezca.api_key", "TEZCA_API_KEY")
 	v.BindEnv("tezca.webhook_secret", "TEZCA_WEBHOOK_SECRET")
+
+	v.BindEnv("webhooks.dispatch_interval", "WEBHOOKS_DISPATCH_INTERVAL")
+	v.BindEnv("webhooks.max_retries", "WEBHOOKS_MAX_RETRIES")
+	v.BindEnv("webhooks.retention_days", "WEBHOOKS_RETENTION_DAYS")
+	v.BindEnv("sse.max_connections", "SSE_MAX_CONNECTIONS")
+	v.BindEnv("sse.keepalive_seconds", "SSE_KEEPALIVE_SECONDS")
+	v.BindEnv("cors.allowed_origins", "CORS_ALLOWED_ORIGINS")
+	v.BindEnv("cors.status_public", "CORS_STATUS_PUBLIC")
 }
 
 // IsDevelopment returns true if running in development mode.

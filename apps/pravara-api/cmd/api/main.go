@@ -52,15 +52,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/api"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/billing"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/observability"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 )
 
 func main() {
@@ -99,6 +102,7 @@ func main() {
 
 	// Initialize Redis publisher for real-time events (optional)
 	var publisher *pubsub.Publisher
+	var redisClient *redis.Client
 	if cfg.Redis.URL != "" {
 		var err error
 		publisher, err = pubsub.NewPublisher(pubsub.PublisherConfig{
@@ -109,6 +113,12 @@ func main() {
 		} else {
 			defer publisher.Close()
 			log.Info("Redis publisher connected for real-time events")
+		}
+
+		// Create a separate Redis client for SSE subscriptions
+		opts, parseErr := redis.ParseURL(cfg.Redis.URL)
+		if parseErr == nil {
+			redisClient = redis.NewClient(opts)
 		}
 	}
 
@@ -129,6 +139,20 @@ func main() {
 		}
 	}
 
+	// Initialize new repositories for external data consumer features
+	outboxRepo := repositories.NewOutboxRepository(database.DB)
+	webhookRepo := repositories.NewWebhookRepository(database.DB)
+	apikeyRepo := repositories.NewAPIKeyRepository(database.DB)
+	feedRepo := repositories.NewFeedRepository(database.DB)
+
+	// Wrap publisher with outbox persistence
+	if publisher != nil {
+		outboxPublisher := pubsub.NewOutboxPublisher(publisher, outboxRepo, log)
+		// The outbox publisher is used internally; the original publisher is still
+		// passed to routes for backwards compat. The outbox publisher wraps it.
+		_ = outboxPublisher // Services that need outbox can use this directly
+	}
+
 	// Set Gin mode
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -142,6 +166,7 @@ func main() {
 	router.Use(requestLogger(log))
 	router.Use(middleware.RateLimiter(log))
 	router.Use(middleware.Metrics())
+	router.Use(middleware.CORSMiddleware(cfg.CORS))
 	if usageRecorder != nil {
 		router.Use(middleware.UsageTracking(usageRecorder, log))
 	}
@@ -149,13 +174,36 @@ func main() {
 	// Add Prometheus metrics endpoint
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Register routes with optional publisher and usage recorder
-	api.RegisterRoutesWithRecorder(router, database, cfg, log, publisher, usageRecorder)
+	// Register routes with full dependency injection
+	routesDeps := api.RoutesDeps{
+		RedisClient: redisClient,
+		OutboxRepo:  outboxRepo,
+		WebhookRepo: webhookRepo,
+		APIKeyRepo:  apikeyRepo,
+		FeedRepo:    feedRepo,
+		StatusDB:    database.DB,
+	}
+	api.RegisterRoutesAll(router, database, cfg, log, publisher, usageRecorder, routesDeps)
 
-	// Start background goroutine to collect database stats
+	// Start background services
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Background: database stats collector
 	go collectDBStats(ctx, database, log)
+
+	// Background: webhook dispatcher
+	webhookDispatcher := services.NewWebhookDispatcher(outboxRepo, webhookRepo, cfg.Webhooks, log)
+	go webhookDispatcher.Start(ctx)
+
+	// Background: health recorder
+	if redisClient != nil {
+		healthRecorder := services.NewHealthRecorder(database.DB, redisClient, cfg.Centrifugo, log)
+		go healthRecorder.Start(ctx)
+	} else {
+		healthRecorder := services.NewHealthRecorder(database.DB, nil, cfg.Centrifugo, log)
+		go healthRecorder.Start(ctx)
+	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -182,6 +230,11 @@ func main() {
 
 	// Cancel background tasks
 	cancel()
+
+	// Close Redis client if created
+	if redisClient != nil {
+		redisClient.Close()
+	}
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)

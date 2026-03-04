@@ -2,7 +2,10 @@
 package api
 
 import (
+	"database/sql"
+
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/auth"
@@ -25,8 +28,24 @@ func RegisterRoutesWithPublisher(router *gin.Engine, database *db.DB, cfg *confi
 	RegisterRoutesWithRecorder(router, database, cfg, log, publisher, nil)
 }
 
+// RoutesDeps holds optional dependencies for route registration.
+type RoutesDeps struct {
+	RedisClient *redis.Client
+	OutboxRepo  *repositories.OutboxRepository
+	WebhookRepo *repositories.WebhookRepository
+	APIKeyRepo  *repositories.APIKeyRepository
+	FeedRepo    *repositories.FeedRepository
+	StatusDB    *sql.DB // raw *sql.DB for status handlers (no RLS)
+}
+
 // RegisterRoutesWithRecorder sets up all API routes with optional event publisher and usage recorder.
 func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher, usageRecorder billing.UsageRecorder) {
+	// Default empty deps for backwards compatibility
+	RegisterRoutesAll(router, database, cfg, log, publisher, usageRecorder, RoutesDeps{})
+}
+
+// RegisterRoutesAll sets up all API routes with full dependency injection.
+func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher, usageRecorder billing.UsageRecorder, deps RoutesDeps) {
 	// Initialize OIDC verifier
 	oidcConfig := auth.OIDCConfig{
 		Issuer:   cfg.OIDC.Issuer,
@@ -139,14 +158,37 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 		billingHandler = NewBillingHandler(usageRecorder, log)
 	}
 
+	// =========================================================================
 	// Health check endpoints (no auth required)
+	// =========================================================================
 	router.GET("/health", healthHandler.Health)
 	router.GET("/health/live", healthHandler.Liveness)
 	router.GET("/health/ready", healthHandler.Readiness)
 
+	// =========================================================================
+	// Public status endpoints (no auth, CORS: *)
+	// =========================================================================
+	if deps.StatusDB != nil {
+		statusHandler := NewStatusHandler(deps.StatusDB, log)
+		router.GET("/status", statusHandler.Status)
+		router.GET("/status/history", statusHandler.StatusHistory)
+	}
+
+	// =========================================================================
+	// Determine auth middleware: dual API key + JWT if apikey repo available
+	// =========================================================================
+	var authMiddleware gin.HandlerFunc
+	if deps.APIKeyRepo != nil {
+		authMiddleware = middleware.APIKeyOrJWTMiddleware(deps.APIKeyRepo, verifier, database, log)
+	} else {
+		authMiddleware = middleware.AuthMiddleware(verifier, database, log)
+	}
+
+	// =========================================================================
 	// API v1 routes (protected)
+	// =========================================================================
 	v1 := router.Group("/v1")
-	v1.Use(middleware.AuthMiddleware(verifier, database, log))
+	v1.Use(authMiddleware)
 	{
 		// Orders endpoints
 		orders := v1.Group("/orders")
@@ -339,13 +381,101 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			}
 		}
 
-		// Webhook endpoints (may need different auth)
-		webhooks := v1.Group("/webhooks")
+		// Inbound webhook endpoints (external services calling us)
+		inboundWebhooks := v1.Group("/webhooks")
 		{
-			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
-			webhooks.POST("/dhanam", dhanamWebhookHandler.HandleWebhook)
-			webhooks.POST("/forgesight", inventoryHandler.ForgeSightWebhook)
-			webhooks.POST("/tezca", tezcaWebhookHandler.HandleWebhook)
+			inboundWebhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
+			inboundWebhooks.POST("/dhanam", dhanamWebhookHandler.HandleWebhook)
+			inboundWebhooks.POST("/forgesight", inventoryHandler.ForgeSightWebhook)
+			inboundWebhooks.POST("/tezca", tezcaWebhookHandler.HandleWebhook)
+		}
+
+		// =====================================================================
+		// Outbound webhook subscription endpoints (new)
+		// =====================================================================
+		if deps.WebhookRepo != nil {
+			webhookSubHandler := NewWebhookSubscriptionHandler(deps.WebhookRepo, log)
+			webhookSubs := v1.Group("/webhooks/subscriptions")
+			{
+				webhookSubs.POST("", webhookSubHandler.Create)
+				webhookSubs.GET("", webhookSubHandler.List)
+				webhookSubs.GET("/:id", webhookSubHandler.GetByID)
+				webhookSubs.PATCH("/:id", webhookSubHandler.Update)
+				webhookSubs.DELETE("/:id", webhookSubHandler.Delete)
+				webhookSubs.GET("/:id/deliveries", webhookSubHandler.ListDeliveries)
+			}
+		}
+
+		// =====================================================================
+		// API key management endpoints (admin only)
+		// =====================================================================
+		if deps.APIKeyRepo != nil {
+			apikeyHandler := NewAPIKeyHandler(deps.APIKeyRepo, log)
+			apikeys := v1.Group("/api-keys")
+			apikeys.Use(middleware.RequireRole("admin"))
+			{
+				apikeys.POST("", apikeyHandler.Create)
+				apikeys.GET("", apikeyHandler.List)
+				apikeys.DELETE("/:id", apikeyHandler.Revoke)
+			}
+		}
+
+		// =====================================================================
+		// Event history endpoints (new)
+		// =====================================================================
+		if deps.OutboxRepo != nil {
+			eventHandler := NewEventHistoryHandler(deps.OutboxRepo, log)
+			events := v1.Group("/events")
+			events.Use(middleware.RequireScope("read:events"))
+			{
+				events.GET("", eventHandler.ListEvents)
+				events.GET("/types", eventHandler.GetEventTypes)
+				events.GET("/:id", eventHandler.GetEventByID)
+			}
+
+			// SSE streaming endpoint
+			if deps.RedisClient != nil {
+				sseHandler := NewSSEHandler(deps.RedisClient, deps.OutboxRepo, cfg.SSE, log)
+				events.GET("/stream", sseHandler.Stream)
+			}
+		}
+
+		// =====================================================================
+		// Feed endpoints (new)
+		// =====================================================================
+		if deps.FeedRepo != nil && deps.OutboxRepo != nil {
+			feedHandler := NewFeedHandler(deps.FeedRepo, deps.OutboxRepo, log)
+
+			// CRM feeds
+			crmFeed := v1.Group("/feeds/crm")
+			crmFeed.Use(middleware.RequireScope("read:feeds"))
+			{
+				crmFeed.GET("/orders", feedHandler.CRMOrders)
+				crmFeed.GET("/orders/:id/timeline", feedHandler.CRMOrderTimeline)
+				crmFeed.GET("/orders/:id/status", feedHandler.CRMOrderStatus)
+			}
+
+			// Social media feeds
+			socialFeed := v1.Group("/feeds/social")
+			socialFeed.Use(middleware.RequireScope("read:feeds"))
+			{
+				socialFeed.GET("/milestones", feedHandler.SocialMilestones)
+				socialFeed.GET("/stats", feedHandler.SocialStats)
+				socialFeed.GET("/highlights", feedHandler.SocialHighlights)
+			}
+		}
+
+		// =====================================================================
+		// Status feeds (authenticated, detailed)
+		// =====================================================================
+		if deps.StatusDB != nil {
+			statusHandler := NewStatusHandler(deps.StatusDB, log)
+			statusFeed := v1.Group("/feeds/status")
+			statusFeed.Use(middleware.RequireScope("read:status"))
+			{
+				statusFeed.GET("/detailed", statusHandler.DetailedStatus)
+				statusFeed.GET("/incidents", statusHandler.Incidents)
+			}
 		}
 
 		// Real-time connection endpoints

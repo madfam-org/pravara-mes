@@ -136,4 +136,36 @@ var (
 		},
 		[]string{"event_type", "channel", "tenant_id"},
 	)
+
+	// WebhookDeliveriesTotal counts webhook delivery attempts by result.
+	WebhookDeliveriesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "webhook_deliveries_total",
+			Help:      "Total number of webhook delivery attempts",
+		},
+		[]string{"result"},
+	)
+
+	// SSEConnectionsActive tracks the number of active SSE connections.
+	SSEConnectionsActive = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "sse_connections_active",
+			Help:      "Number of active SSE connections",
+		},
+	)
+
+	// HealthComponentStatus tracks the status of each system component (1=operational, 0.5=degraded, 0=outage).
+	HealthComponentStatus = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "health_component_status",
+			Help:      "Health status of system components (1=operational, 0.5=degraded, 0=outage)",
+		},
+		[]string{"component"},
+	)
 )
