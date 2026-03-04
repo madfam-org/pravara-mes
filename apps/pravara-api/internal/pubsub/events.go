@@ -45,6 +45,29 @@ const (
 	EventNotificationAlert   EventType = "notification.alert"
 	EventNotificationWarning EventType = "notification.warning"
 	EventNotificationInfo    EventType = "notification.info"
+
+	// Analytics events
+	EventOEEUpdated EventType = "analytics.oee_updated"
+
+	// Maintenance events
+	EventMaintenanceDue       EventType = "maintenance.due"
+	EventMaintenanceOverdue   EventType = "maintenance.overdue"
+	EventMaintenanceStarted   EventType = "maintenance.started"
+	EventMaintenanceCompleted EventType = "maintenance.completed"
+
+	// Genealogy events
+	EventGenealogyCreated EventType = "genealogy.created"
+	EventGenealogySealed  EventType = "genealogy.sealed"
+
+	// Work Instruction events
+	EventWorkInstructionAck EventType = "task.work_instruction_ack"
+
+	// SPC events
+	EventSPCViolation EventType = "analytics.spc_violation"
+
+	// Inventory events
+	EventInventoryLowStock EventType = "inventory.low_stock"
+	EventInventoryUpdated  EventType = "inventory.updated"
 )
 
 // ChannelNamespace defines the Centrifugo channel namespaces.
@@ -56,6 +79,9 @@ const (
 	NamespaceOrders        ChannelNamespace = "orders"
 	NamespaceTelemetry     ChannelNamespace = "telemetry"
 	NamespaceNotifications ChannelNamespace = "notifications"
+	NamespaceAnalytics     ChannelNamespace = "analytics"
+	NamespaceMaintenance   ChannelNamespace = "maintenance"
+	NamespaceInventory     ChannelNamespace = "inventory"
 )
 
 // Event represents a real-time event to be published.
@@ -242,4 +268,60 @@ type EntityDeletedData struct {
 	Name       string    `json:"name"`
 	DeletedBy  uuid.UUID `json:"deleted_by"`
 	DeletedAt  time.Time `json:"deleted_at"`
+}
+
+// OEEUpdatedData contains data for OEE computation events.
+type OEEUpdatedData struct {
+	MachineID    uuid.UUID `json:"machine_id"`
+	MachineName  string    `json:"machine_name,omitempty"`
+	SnapshotDate string    `json:"snapshot_date"`
+	OEE          float64   `json:"oee"`
+	Availability float64   `json:"availability"`
+	Performance  float64   `json:"performance"`
+	Quality      float64   `json:"quality"`
+}
+
+// MaintenanceEventData contains data for maintenance lifecycle events.
+type MaintenanceEventData struct {
+	WorkOrderID     uuid.UUID  `json:"work_order_id"`
+	WorkOrderNumber string     `json:"work_order_number"`
+	MachineID       uuid.UUID  `json:"machine_id"`
+	MachineName     string     `json:"machine_name,omitempty"`
+	Title           string     `json:"title"`
+	Status          string     `json:"status"`
+	AssignedTo      *uuid.UUID `json:"assigned_to,omitempty"`
+	Timestamp       time.Time  `json:"timestamp"`
+}
+
+// GenealogyEventData contains data for genealogy events.
+type GenealogyEventData struct {
+	GenealogyID  uuid.UUID  `json:"genealogy_id"`
+	SerialNumber string     `json:"serial_number,omitempty"`
+	LotNumber    string     `json:"lot_number,omitempty"`
+	ProductSKU   string     `json:"product_sku,omitempty"`
+	Status       string     `json:"status"`
+	TaskID       *uuid.UUID `json:"task_id,omitempty"`
+	Timestamp    time.Time  `json:"timestamp"`
+}
+
+// SPCViolationData contains data for SPC violation events.
+type SPCViolationData struct {
+	ViolationID   uuid.UUID `json:"violation_id"`
+	MachineID     uuid.UUID `json:"machine_id"`
+	MachineName   string    `json:"machine_name,omitempty"`
+	MetricType    string    `json:"metric_type"`
+	ViolationType string    `json:"violation_type"`
+	Value         float64   `json:"value"`
+	LimitValue    float64   `json:"limit_value"`
+	DetectedAt    time.Time `json:"detected_at"`
+}
+
+// InventoryEventData contains data for inventory events.
+type InventoryEventData struct {
+	ItemID            uuid.UUID `json:"item_id"`
+	SKU               string    `json:"sku"`
+	Name              string    `json:"name"`
+	QuantityAvailable float64   `json:"quantity_available"`
+	ReorderPoint      float64   `json:"reorder_point,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
 }

@@ -1006,6 +1006,480 @@ definitions:
       value:
         type: number
     type: object
+  internal_api.ComputeOEERequest:
+    properties:
+      date:
+        type: string
+      machine_id:
+        type: string
+    required:
+    - date
+    type: object
+  internal_api.ComputeLimitsRequest:
+    properties:
+      machine_id:
+        type: string
+      metric_type:
+        type: string
+      sample_days:
+        type: integer
+    required:
+    - machine_id
+    - metric_type
+    type: object
+  internal_api.AcknowledgeViolationRequest:
+    properties:
+      notes:
+        type: string
+    type: object
+  internal_api.CreateScheduleRequest:
+    properties:
+      assigned_to:
+        type: string
+      condition_metric:
+        type: string
+      condition_threshold:
+        type: number
+      description:
+        type: string
+      interval_cycles:
+        type: integer
+      interval_days:
+        type: integer
+      interval_hours:
+        type: number
+      is_active:
+        type: boolean
+      last_done_cycles:
+        type: integer
+      last_done_hours:
+        type: number
+      machine_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      next_due_at:
+        type: string
+      next_due_cycles:
+        type: integer
+      next_due_hours:
+        type: number
+      priority:
+        type: integer
+      trigger_type:
+        type: string
+    required:
+    - machine_id
+    - name
+    - trigger_type
+    type: object
+  internal_api.UpdateScheduleRequest:
+    properties:
+      assigned_to:
+        type: string
+      condition_metric:
+        type: string
+      condition_threshold:
+        type: number
+      description:
+        type: string
+      interval_cycles:
+        type: integer
+      interval_days:
+        type: integer
+      interval_hours:
+        type: number
+      is_active:
+        type: boolean
+      last_done_cycles:
+        type: integer
+      last_done_hours:
+        type: number
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      next_due_at:
+        type: string
+      next_due_cycles:
+        type: integer
+      next_due_hours:
+        type: number
+      priority:
+        type: integer
+      trigger_type:
+        type: string
+    type: object
+  internal_api.CreateWorkOrderRequest:
+    properties:
+      assigned_to:
+        type: string
+      checklist:
+        type: object
+      description:
+        type: string
+      due_at:
+        type: string
+      machine_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      notes:
+        type: string
+      priority:
+        type: integer
+      schedule_id:
+        type: string
+      scheduled_at:
+        type: string
+      title:
+        type: string
+      work_order_number:
+        type: string
+    required:
+    - machine_id
+    - title
+    - work_order_number
+    type: object
+  internal_api.UpdateWorkOrderRequest:
+    properties:
+      assigned_to:
+        type: string
+      checklist:
+        type: object
+      description:
+        type: string
+      due_at:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      notes:
+        type: string
+      parts_used:
+        type: object
+      priority:
+        type: integer
+      scheduled_at:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_api.CompleteWorkOrderRequest:
+    properties:
+      notes:
+        type: string
+    type: object
+  internal_api.CreateProductRequest:
+    properties:
+      cad_file_url:
+        type: string
+      category:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      parametric_specs:
+        additionalProperties: {}
+        type: object
+      sku:
+        type: string
+      version:
+        type: string
+    required:
+    - category
+    - name
+    - sku
+    - version
+    type: object
+  internal_api.UpdateProductRequest:
+    properties:
+      cad_file_url:
+        type: string
+      category:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      parametric_specs:
+        additionalProperties: {}
+        type: object
+      version:
+        type: string
+    type: object
+  internal_api.CreateBOMItemRequest:
+    properties:
+      currency:
+        type: string
+      estimated_cost:
+        type: number
+      material_code:
+        type: string
+      material_name:
+        type: string
+      quantity:
+        type: number
+      sort_order:
+        type: integer
+      supplier:
+        type: string
+      unit:
+        type: string
+    required:
+    - material_name
+    - quantity
+    - unit
+    type: object
+  internal_api.CreateGenealogyRequest:
+    properties:
+      certificate_id:
+        type: string
+      inspection_id:
+        type: string
+      lot_number:
+        type: string
+      machine_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      order_id:
+        type: string
+      order_item_id:
+        type: string
+      product_definition_id:
+        type: string
+      serial_number:
+        type: string
+      status:
+        type: string
+      task_id:
+        type: string
+    type: object
+  internal_api.UpdateGenealogyRequest:
+    properties:
+      certificate_id:
+        type: string
+      inspection_id:
+        type: string
+      lot_number:
+        type: string
+      machine_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      order_id:
+        type: string
+      order_item_id:
+        type: string
+      product_definition_id:
+        type: string
+      serial_number:
+        type: string
+      status:
+        type: string
+      task_id:
+        type: string
+    type: object
+  internal_api.SealGenealogyRequest:
+    properties:
+      sealed_by:
+        type: string
+    required:
+    - sealed_by
+    type: object
+  internal_api.CreateWorkInstructionRequest:
+    properties:
+      category:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      machine_type:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      ppe_required:
+        type: object
+      product_definition_id:
+        type: string
+      steps:
+        type: object
+      title:
+        type: string
+      tools_required:
+        type: object
+      version:
+        type: string
+    required:
+    - category
+    - title
+    - version
+    type: object
+  internal_api.UpdateWorkInstructionRequest:
+    properties:
+      category:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      machine_type:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      ppe_required:
+        type: object
+      product_definition_id:
+        type: string
+      steps:
+        type: object
+      title:
+        type: string
+      tools_required:
+        type: object
+      version:
+        type: string
+    type: object
+  internal_api.AttachWorkInstructionRequest:
+    properties:
+      work_instruction_id:
+        type: string
+    required:
+    - work_instruction_id
+    type: object
+  internal_api.AcknowledgeStepRequest:
+    properties:
+      step_number:
+        type: integer
+    required:
+    - step_number
+    type: object
+  internal_api.CreateInventoryItemRequest:
+    properties:
+      category:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      forgesight_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      quantity_on_hand:
+        type: number
+      reorder_point:
+        type: number
+      reorder_quantity:
+        type: number
+      sku:
+        type: string
+      unit:
+        type: string
+      unit_cost:
+        type: number
+    required:
+    - name
+    - sku
+    - unit
+    type: object
+  internal_api.UpdateInventoryItemRequest:
+    properties:
+      category:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      forgesight_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      reorder_point:
+        type: number
+      reorder_quantity:
+        type: number
+      sku:
+        type: string
+      unit:
+        type: string
+      unit_cost:
+        type: number
+    type: object
+  internal_api.AdjustInventoryRequest:
+    properties:
+      notes:
+        type: string
+      quantity:
+        type: number
+      reference_id:
+        type: string
+      reference_type:
+        type: string
+      transaction_type:
+        type: string
+    required:
+    - quantity
+    - transaction_type
+    type: object
+  internal_api.ForgeSightWebhookPayload:
+    properties:
+      event:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/internal_api.ForgeSightWebhookItem'
+        type: array
+    type: object
+  internal_api.ForgeSightWebhookItem:
+    properties:
+      category:
+        type: string
+      currency:
+        type: string
+      forgesight_id:
+        type: string
+      name:
+        type: string
+      quantity:
+        type: number
+      sku:
+        type: string
+      unit:
+        type: string
+      unit_cost:
+        type: number
+    type: object
 host: localhost:4500
 info:
   contact:
@@ -3339,6 +3813,2074 @@ paths:
               type: string
             type: object
       summary: Receive Cotiza webhook
+      tags:
+      - webhooks
+  /analytics/oee:
+    get:
+      description: Returns paginated OEE snapshots with optional machine and date range
+        filters
+      parameters:
+      - description: Filter by machine ID (UUID)
+        in: query
+        name: machine_id
+        type: string
+      - description: Start date (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: End date (RFC3339)
+        in: query
+        name: to
+        type: string
+      - default: day
+        description: 'Aggregation interval: day, week, month'
+        in: query
+        name: interval
+        type: string
+      - default: 50
+        description: Number of results per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated OEE snapshot list
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get OEE data
+      tags:
+      - analytics
+  /analytics/oee/summary:
+    get:
+      description: Returns aggregated OEE metrics across all machines for a date range
+      parameters:
+      - description: Start date (RFC3339)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End date (RFC3339)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Fleet OEE summary
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Missing required parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get fleet OEE summary
+      tags:
+      - analytics
+  /analytics/oee/compute:
+    post:
+      consumes:
+      - application/json
+      description: Admin trigger to compute OEE for a specific machine and date, or
+        all machines if machine_id is omitted
+      parameters:
+      - description: Computation request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ComputeOEERequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Computed OEE snapshot(s)
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Compute OEE
+      tags:
+      - analytics
+  /analytics/spc/limits:
+    get:
+      description: Returns SPC control limits for a machine
+      parameters:
+      - description: Machine ID (UUID)
+        in: query
+        name: machine_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Control limits for machine
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SPC control limits
+      tags:
+      - analytics
+  /analytics/spc/limits/compute:
+    post:
+      consumes:
+      - application/json
+      description: Triggers SPC limit computation from telemetry data
+      parameters:
+      - description: Limit computation request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ComputeLimitsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Computed SPC limits
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Compute SPC limits
+      tags:
+      - analytics
+  /analytics/spc/chart:
+    get:
+      description: Returns telemetry data formatted for SPC chart rendering
+      parameters:
+      - description: Machine ID (UUID)
+        in: query
+        name: machine_id
+        required: true
+        type: string
+      - description: Metric type
+        in: query
+        name: metric_type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SPC chart data with control limits and violations
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SPC chart data
+      tags:
+      - analytics
+  /analytics/spc/violations:
+    get:
+      description: Returns SPC violations with optional filtering
+      parameters:
+      - description: Machine ID (UUID)
+        in: query
+        name: machine_id
+        required: true
+        type: string
+      - description: Filter to unacknowledged violations only
+        in: query
+        name: unacknowledged_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SPC violations list
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SPC violations
+      tags:
+      - analytics
+  /analytics/spc/violations/{id}/acknowledge:
+    post:
+      consumes:
+      - application/json
+      description: Marks an SPC violation as acknowledged
+      parameters:
+      - description: Violation ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Acknowledgement data
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/internal_api.AcknowledgeViolationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Violation acknowledged
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Violation not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Acknowledge SPC violation
+      tags:
+      - analytics
+  /maintenance/schedules:
+    get:
+      description: Returns paginated list of maintenance schedules with optional filters
+      parameters:
+      - default: 20
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by machine ID (UUID)
+        in: query
+        name: machine_id
+        type: string
+      - description: Filter by trigger type
+        in: query
+        name: trigger_type
+        type: string
+      - description: Filter by active status (true/false)
+        in: query
+        name: is_active
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of schedules
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List maintenance schedules
+      tags:
+      - maintenance
+    post:
+      consumes:
+      - application/json
+      description: Creates a new maintenance schedule for a machine
+      parameters:
+      - description: Schedule data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created schedule
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create maintenance schedule
+      tags:
+      - maintenance
+  /maintenance/schedules/{id}:
+    get:
+      description: Returns a single maintenance schedule by its unique identifier
+      parameters:
+      - description: Schedule ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Schedule details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Schedule not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get maintenance schedule by ID
+      tags:
+      - maintenance
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing maintenance schedule
+      parameters:
+      - description: Schedule ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated schedule data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated schedule
+          schema:
+            type: object
+        "400":
+          description: Invalid ID or validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Schedule not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update maintenance schedule
+      tags:
+      - maintenance
+    delete:
+      description: Permanently removes a maintenance schedule
+      parameters:
+      - description: Schedule ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deletion confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Schedule not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete maintenance schedule
+      tags:
+      - maintenance
+  /maintenance/work-orders:
+    get:
+      description: Returns paginated list of work orders with optional filters
+      parameters:
+      - default: 20
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by machine ID (UUID)
+        in: query
+        name: machine_id
+        type: string
+      - description: Filter by schedule ID (UUID)
+        in: query
+        name: schedule_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by assigned user ID (UUID)
+        in: query
+        name: assigned_to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of work orders
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List maintenance work orders
+      tags:
+      - maintenance
+    post:
+      consumes:
+      - application/json
+      description: Creates a new maintenance work order
+      parameters:
+      - description: Work order data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateWorkOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created work order
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create maintenance work order
+      tags:
+      - maintenance
+  /maintenance/work-orders/{id}:
+    get:
+      description: Returns a single work order by its unique identifier
+      parameters:
+      - description: Work Order ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Work order details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work order not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get maintenance work order by ID
+      tags:
+      - maintenance
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing maintenance work order
+      parameters:
+      - description: Work Order ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated work order data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateWorkOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated work order
+          schema:
+            type: object
+        "400":
+          description: Invalid ID or validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work order not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update maintenance work order
+      tags:
+      - maintenance
+  /maintenance/work-orders/{id}/complete:
+    post:
+      consumes:
+      - application/json
+      description: Marks a work order as completed, advances the associated schedule
+      parameters:
+      - description: Work Order ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Completion data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CompleteWorkOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Completion confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID or validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work order not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Complete maintenance work order
+      tags:
+      - maintenance
+  /machines/{id}/maintenance:
+    get:
+      description: Returns all maintenance work orders for a specific machine
+      parameters:
+      - description: Machine ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Machine maintenance data
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get machine maintenance
+      tags:
+      - maintenance
+  /products:
+    get:
+      description: Returns a paginated list of product definitions with optional filtering
+      parameters:
+      - default: 20
+        description: Number of results per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      - description: Search by SKU or name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated product list
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List product definitions
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      description: Creates a new product definition with BOM support
+      parameters:
+      - description: Product definition data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created product definition
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new product definition
+      tags:
+      - products
+  /products/{id}:
+    get:
+      description: Returns a single product definition with all details
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Product definition details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Product not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get product definition by ID
+      tags:
+      - products
+    patch:
+      consumes:
+      - application/json
+      description: Updates product definition fields
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Product definition update data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated product definition
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Product not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a product definition
+      tags:
+      - products
+    delete:
+      description: Removes a product definition from the system
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deletion confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Product not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a product definition
+      tags:
+      - products
+  /products/{id}/bom:
+    get:
+      description: Returns all BOM items for a product definition
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: BOM items list
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Product not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get product BOM
+      tags:
+      - products
+  /products/{id}/bom/items:
+    post:
+      consumes:
+      - application/json
+      description: Adds a new bill of materials item to a product definition
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: BOM item data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateBOMItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created BOM item
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Product not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add BOM item
+      tags:
+      - products
+  /products/{id}/bom/items/{itemId}:
+    delete:
+      description: Removes a BOM item from a product definition
+      parameters:
+      - description: Product Definition ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: BOM Item ID (UUID)
+        in: path
+        name: itemId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deletion confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: BOM item not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete BOM item
+      tags:
+      - products
+  /genealogy:
+    get:
+      description: Returns a paginated list of product genealogy records with optional
+        filtering
+      parameters:
+      - default: 20
+        description: Number of results per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by product definition ID (UUID)
+        in: query
+        name: product_definition_id
+        type: string
+      - description: Filter by order ID (UUID)
+        in: query
+        name: order_id
+        type: string
+      - description: Filter by task ID (UUID)
+        in: query
+        name: task_id
+        type: string
+      - description: Filter by machine ID (UUID)
+        in: query
+        name: machine_id
+        type: string
+      - description: Filter by status (draft, in_progress, completed, sealed)
+        in: query
+        name: status
+        type: string
+      - description: Filter by serial number
+        in: query
+        name: serial_number
+        type: string
+      - description: Filter by lot number
+        in: query
+        name: lot_number
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated genealogy list
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List genealogy records
+      tags:
+      - genealogy
+    post:
+      consumes:
+      - application/json
+      description: Creates a new product genealogy record
+      parameters:
+      - description: Genealogy record data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateGenealogyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created genealogy record
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a genealogy record
+      tags:
+      - genealogy
+  /genealogy/{id}:
+    get:
+      description: Returns a single product genealogy record with all details
+      parameters:
+      - description: Genealogy ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Genealogy record details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Record not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get genealogy record by ID
+      tags:
+      - genealogy
+    patch:
+      consumes:
+      - application/json
+      description: Updates genealogy record fields
+      parameters:
+      - description: Genealogy ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Genealogy record update data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateGenealogyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated genealogy record
+          schema:
+            type: object
+        "400":
+          description: Validation error or sealed record
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Record not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a genealogy record
+      tags:
+      - genealogy
+  /genealogy/{id}/seal:
+    post:
+      consumes:
+      - application/json
+      description: Computes a cryptographic hash and seals the genealogy record, making
+        it immutable
+      parameters:
+      - description: Genealogy ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Seal request with sealed_by user ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.SealGenealogyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Seal confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request or already sealed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Record not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Seal a genealogy record
+      tags:
+      - genealogy
+  /genealogy/{id}/tree:
+    get:
+      description: Returns the complete genealogy tree including product definition,
+        BOM, and material consumption
+      parameters:
+      - description: Genealogy ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Genealogy tree
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Record not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get genealogy tree
+      tags:
+      - genealogy
+  /work-instructions:
+    get:
+      description: Returns a paginated list of work instructions with optional filtering
+      parameters:
+      - default: 20
+        description: Number of results per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by category (setup, operation, safety, maintenance)
+        in: query
+        name: category
+        type: string
+      - description: Filter by product definition ID (UUID)
+        in: query
+        name: product_definition_id
+        type: string
+      - description: Filter by machine type
+        in: query
+        name: machine_type
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated work instruction list
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List work instructions
+      tags:
+      - work-instructions
+    post:
+      consumes:
+      - application/json
+      description: Creates a new work instruction
+      parameters:
+      - description: Work instruction data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateWorkInstructionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created work instruction
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create work instruction
+      tags:
+      - work-instructions
+  /work-instructions/{id}:
+    get:
+      description: Returns a single work instruction by its unique identifier
+      parameters:
+      - description: Work Instruction ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Work instruction details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work instruction not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get work instruction by ID
+      tags:
+      - work-instructions
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing work instruction
+      parameters:
+      - description: Work Instruction ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated work instruction data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateWorkInstructionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated work instruction
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work instruction not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update work instruction
+      tags:
+      - work-instructions
+    delete:
+      description: Removes a work instruction from the system
+      parameters:
+      - description: Work Instruction ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deletion confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work instruction not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete work instruction
+      tags:
+      - work-instructions
+  /tasks/{id}/work-instructions:
+    post:
+      consumes:
+      - application/json
+      description: Attaches a work instruction to a task
+      parameters:
+      - description: Task ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Work instruction attachment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.AttachWorkInstructionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Attached task work instruction
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Work instruction not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Attach work instruction to task
+      tags:
+      - tasks
+    get:
+      description: Returns work instructions associated with a task
+      parameters:
+      - description: Task ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task work instructions
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get task work instructions
+      tags:
+      - tasks
+  /tasks/{id}/work-instructions/{wiId}/acknowledge:
+    post:
+      consumes:
+      - application/json
+      description: Records that an operator acknowledged a specific work instruction
+        step
+      parameters:
+      - description: Task ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Work Instruction ID (UUID)
+        in: path
+        name: wiId
+        required: true
+        type: string
+      - description: Step acknowledgement data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.AcknowledgeStepRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Step acknowledged
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Task work instruction not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Acknowledge work instruction step
+      tags:
+      - tasks
+  /inventory:
+    get:
+      description: Returns a paginated list of inventory items with optional filtering
+      parameters:
+      - default: 20
+        description: Number of results per page
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Search by SKU or name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated inventory item list
+          schema:
+            $ref: '#/definitions/internal_api.ListResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List inventory items
+      tags:
+      - inventory
+    post:
+      consumes:
+      - application/json
+      description: Creates a new inventory item
+      parameters:
+      - description: Inventory item data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateInventoryItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created inventory item
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create inventory item
+      tags:
+      - inventory
+  /inventory/low-stock:
+    get:
+      description: Returns all inventory items below their reorder point
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Low stock items
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get low stock items
+      tags:
+      - inventory
+  /inventory/{id}:
+    get:
+      description: Returns a single inventory item by its unique identifier
+      parameters:
+      - description: Inventory Item ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Inventory item details
+          schema:
+            type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Inventory item not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get inventory item by ID
+      tags:
+      - inventory
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing inventory item
+      parameters:
+      - description: Inventory Item ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated inventory item data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateInventoryItemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated inventory item
+          schema:
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Inventory item not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update inventory item
+      tags:
+      - inventory
+  /inventory/{id}/adjust:
+    post:
+      consumes:
+      - application/json
+      description: Adjusts inventory quantity and creates a transaction record
+      parameters:
+      - description: Inventory Item ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Adjustment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.AdjustInventoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Adjustment confirmation
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Inventory item not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Adjust inventory quantity
+      tags:
+      - inventory
+  /webhooks/forgesight:
+    post:
+      consumes:
+      - application/json
+      description: Processes inventory sync events from ForgeSight
+      parameters:
+      - description: HMAC-SHA256 signature for payload verification
+        in: header
+        name: X-ForgeSight-Signature
+        type: string
+      - description: Webhook payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ForgeSightWebhookPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook processed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid payload
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid signature
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Processing error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Receive ForgeSight webhook
       tags:
       - webhooks
 securityDefinitions:

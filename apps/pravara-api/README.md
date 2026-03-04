@@ -12,6 +12,12 @@ The API provides endpoints for:
 - **Billing** - Usage tracking, tenant billing, and Dhanam invoice webhooks
 - **Webhooks** - Inbound integrations (Cotiza orders, Dhanam invoices with HMAC-SHA256 verification)
 - **Realtime** - WebSocket token generation for live updates
+- **Analytics** - OEE computation and SPC control charts
+- **Maintenance** - CMMS scheduling and work orders
+- **Products** - Product catalog and bill of materials
+- **Genealogy** - Product traceability and digital birth certificates
+- **Work Instructions** - Step-by-step production procedures
+- **Inventory** - Stock tracking and ForgeSight integration
 
 ## Quick Start
 

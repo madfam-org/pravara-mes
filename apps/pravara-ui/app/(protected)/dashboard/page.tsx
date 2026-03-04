@@ -9,9 +9,11 @@ import {
   Clock,
   AlertTriangle,
   TrendingUp,
+  BarChart3,
+  Wrench,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ordersAPI, machinesAPI, tasksAPI, Task, TaskStatus } from "@/lib/api";
+import { ordersAPI, machinesAPI, tasksAPI, analyticsAPI, maintenanceAPI, Task, TaskStatus } from "@/lib/api";
 
 export default function DashboardPage() {
   const { data: session } = usePravaraSession();
@@ -35,6 +37,18 @@ export default function DashboardPage() {
     enabled: !!token,
   });
 
+  const { data: oeeSummary } = useQuery({
+    queryKey: ["oee-summary"],
+    queryFn: () => analyticsAPI.getOEESummary(token),
+    enabled: !!token,
+  });
+
+  const { data: workOrdersData } = useQuery({
+    queryKey: ["maintenance-work-orders-dashboard"],
+    queryFn: () => maintenanceAPI.listWorkOrders(token, new URLSearchParams({ status: "overdue" })),
+    enabled: !!token,
+  });
+
   const orders = ordersData?.data || [];
   const machines = machinesData?.data || [];
   const board: Partial<Record<TaskStatus, Task[]>> = boardData?.columns || {};
@@ -47,6 +61,12 @@ export default function DashboardPage() {
   const onlineMachines = machines.filter(
     (m) => m.status === "online" || m.status === "running"
   ).length;
+
+  const fleetOEE = oeeSummary && oeeSummary.length > 0
+    ? oeeSummary.reduce((sum, s) => sum + s.oee, 0) / oeeSummary.length
+    : null;
+
+  const overdueCount = workOrdersData?.total || 0;
 
   const stats = [
     {
@@ -74,6 +94,18 @@ export default function DashboardPage() {
       icon: CheckCircle,
       color: "text-emerald-500",
     },
+    {
+      name: "Fleet OEE",
+      value: fleetOEE !== null ? `${(fleetOEE * 100).toFixed(0)}%` : "—",
+      icon: BarChart3,
+      color: "text-purple-500",
+    },
+    {
+      name: "Overdue Maintenance",
+      value: overdueCount,
+      icon: Wrench,
+      color: overdueCount > 0 ? "text-red-500" : "text-gray-400",
+    },
   ];
 
   return (
@@ -85,7 +117,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
           <Card key={stat.name}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

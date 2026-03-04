@@ -90,11 +90,65 @@ func (h *TaskHandler) Move(c *gin.Context) {
 }
 ```
 
+## OEEService
+
+Computes Overall Equipment Effectiveness (availability x performance x quality) for machines:
+
+- Daily OEE snapshots per machine based on telemetry and task data
+- Fleet-wide OEE computation across all machines for a tenant
+- Stores results as `OEESnapshot` records for trend analysis
+
+## MaintenanceService
+
+Manages CMMS work order lifecycle and schedule advancement:
+
+- Completes work orders and advances the parent schedule's next due date
+- Supports calendar, runtime_hours, cycle_count, and condition-based triggers
+- Publishes maintenance events on status transitions
+
+## GenealogyService
+
+Auto-creates product genealogy records from task completion:
+
+- Builds traceability chain: product definition -> order -> task -> machine -> quality certificate
+- Generates digital birth certificates with full production lineage
+- Seals genealogy records with SHA-256 hash for tamper detection
+
+## WorkInstructionService
+
+Auto-attaches work instructions when tasks are queued:
+
+- Matches instructions to tasks by product or machine type
+- Tracks step-by-step acknowledgement by operators
+- Publishes acknowledgement events for compliance auditing
+
+## SPCService
+
+Statistical Process Control with Western Electric rules:
+
+- Computes control limits (UCL/LCL = mean +/- 3 sigma) from telemetry history
+- Checks for violations: above_ucl, below_lcl, run_of_7, trend
+- Publishes `analytics.spc_violation` events for real-time alerting
+
+## InventoryService
+
+Stock management with low-stock alerting and ForgeSight integration:
+
+- Adjusts quantity on hand with transaction logging
+- Triggers `inventory.low_stock` events when quantity falls below reorder point
+- Accepts ForgeSight webhook payloads for external inventory sync
+
 ## Files
 
 | File | Description |
 |------|-------------|
 | `automation.go` | Kanban-machine automation |
+| `oee_service.go` | OEE computation |
+| `maintenance_service.go` | CMMS work order lifecycle |
+| `genealogy_service.go` | Product genealogy and sealing |
+| `work_instruction_service.go` | Work instruction attachment and acknowledgement |
+| `spc_service.go` | SPC violation detection |
+| `inventory_service.go` | Inventory adjustment and alerts |
 
 ## Future Services
 

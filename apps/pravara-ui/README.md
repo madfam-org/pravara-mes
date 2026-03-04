@@ -10,6 +10,12 @@ A modern, real-time manufacturing dashboard featuring:
 - **Order Management** - Order lifecycle visualization
 - **Quality Dashboard** - Certificates and inspections
 - **Real-time Updates** - WebSocket-powered live data
+- **Analytics** - OEE dashboard with gauges and trend charts, SPC control charts
+- **Maintenance** - CMMS with schedules and work orders
+- **Products** - Product catalog with BOM editor
+- **Genealogy** - Product traceability timeline and birth certificates
+- **Work Instructions** - Step-by-step production guides
+- **Inventory** - Stock tracking with low-stock alerts
 
 ## Quick Start
 
@@ -46,7 +52,13 @@ apps/pravara-ui/
 │   │   ├── kanban/        # Kanban board
 │   │   ├── machines/      # Machine management
 │   │   ├── orders/        # Order management
-│   │   └── quality/       # Quality dashboard
+│   │   ├── quality/       # Quality dashboard
+│   │   ├── analytics/     # OEE and SPC analytics
+│   │   ├── maintenance/   # CMMS management
+│   │   ├── products/      # Product catalog
+│   │   ├── genealogy/     # Product genealogy
+│   │   ├── work-instructions/ # Production instructions
+│   │   └── inventory/     # Inventory management
 │   ├── api/               # API routes
 │   └── layout.tsx         # Root layout
 ├── components/
@@ -54,6 +66,9 @@ apps/pravara-ui/
 │   ├── dialogs/           # Modal dialogs
 │   ├── kanban/            # Kanban components
 │   ├── machines/          # Machine components
+│   ├── analytics/          # OEE and SPC components
+│   ├── maintenance/        # Work order components
+│   ├── work-instructions/  # Step list components
 │   └── ui/                # shadcn/ui primitives
 ├── hooks/                  # Custom React hooks
 ├── lib/
@@ -120,6 +135,13 @@ npm run build
 | `/machines` | Machine management |
 | `/orders` | Order management |
 | `/quality` | Quality certificates and inspections |
+| `/analytics` | OEE dashboard and SPC charts |
+| `/maintenance` | Maintenance schedules and work orders |
+| `/products` | Product catalog and BOM editor |
+| `/genealogy` | Product genealogy records |
+| `/genealogy/:id` | Genealogy detail with timeline |
+| `/work-instructions` | Work instruction library |
+| `/inventory` | Inventory management |
 
 ## Components
 

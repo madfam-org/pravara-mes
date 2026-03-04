@@ -49,6 +49,9 @@ pravara:{tenant_id}:tasks       # Task updates
 pravara:{tenant_id}:machines    # Machine status
 pravara:{tenant_id}:orders      # Order updates
 pravara:{tenant_id}:telemetry   # Telemetry data
+pravara:{tenant_id}:analytics    # OEE and SPC updates
+pravara:{tenant_id}:maintenance  # Maintenance events
+pravara:{tenant_id}:inventory    # Inventory alerts
 ```
 
 ## Event Format
@@ -74,6 +77,17 @@ type Event struct {
 | `machine_heartbeat` | machines | Machine heartbeat received |
 | `order_created` | orders | New order created |
 | `order_updated` | orders | Order modified |
+| `analytics.oee_updated` | analytics | OEE computation result |
+| `analytics.spc_violation` | analytics | SPC control limit violation |
+| `maintenance.due` | maintenance | Maintenance schedule due |
+| `maintenance.overdue` | maintenance | Overdue work order |
+| `maintenance.started` | maintenance | Work order started |
+| `maintenance.completed` | maintenance | Work order completed |
+| `genealogy.created` | tasks | Genealogy record created |
+| `genealogy.sealed` | tasks | Genealogy record sealed |
+| `task.work_instruction_ack` | tasks | Work instruction step acknowledged |
+| `inventory.low_stock` | inventory | Low stock alert |
+| `inventory.updated` | inventory | Inventory adjusted |
 
 ## Centrifugo Integration
 

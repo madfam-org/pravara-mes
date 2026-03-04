@@ -19,6 +19,13 @@ This package provides Gin HTTP handlers following the repository pattern. Each h
 | `BillingHandler` | 3 | Usage tracking |
 | `RealtimeHandler` | 3 | WebSocket token generation |
 | `WebhookHandler` | 2 | External webhook processing (Cotiza, Dhanam) |
+| `AnalyticsHandler` | 3 | OEE queries and computation |
+| `SPCHandler` | 5 | SPC control limits and violations |
+| `MaintenanceHandler` | 10 | Maintenance schedules and work orders |
+| `ProductHandler` | 8 | Product catalog and BOM management |
+| `GenealogyHandler` | 6 | Product genealogy and sealing |
+| `WorkInstructionHandler` | 5+3 | Work instruction CRUD and task attachment |
+| `InventoryHandler` | 7 | Inventory management and ForgeSight webhook |
 
 ## Request/Response Pattern
 
@@ -151,3 +158,10 @@ func (h *TaskHandler) Create(c *gin.Context) {
 | `billing_handlers.go` | Usage tracking |
 | `realtime_handlers.go` | WebSocket authentication |
 | `webhook_handlers.go` | External webhooks (Cotiza orders, Dhanam invoices) |
+| `analytics_handlers.go` | OEE analytics |
+| `spc_handlers.go` | SPC control charts |
+| `maintenance_handlers.go` | Maintenance CMMS |
+| `product_handlers.go` | Product catalog and BOM |
+| `genealogy_handlers.go` | Product genealogy |
+| `work_instruction_handlers.go` | Work instructions |
+| `inventory_handlers.go` | Inventory management |

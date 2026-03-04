@@ -116,7 +116,14 @@ internal/db/
 │   ├── telemetry.go   # Telemetry repository
 │   ├── quality.go     # Quality certificate repo
 │   ├── inspection.go  # Inspection repository
-│   └── batch_lot.go   # Batch lot repository
+│   ├── batch_lot.go   # Batch lot repository
+│   ├── oee_repository.go
+│   ├── maintenance_repository.go
+│   ├── product_repository.go
+│   ├── genealogy_repository.go
+│   ├── work_instruction_repository.go
+│   ├── spc_repository.go
+│   └── inventory_repository.go
 └── migrations/        # SQL migration files
 ```
 
@@ -132,6 +139,13 @@ internal/db/
 | `QualityCertificateRepository` | QualityCertificate | - |
 | `InspectionRepository` | Inspection | `Complete` |
 | `BatchLotRepository` | BatchLot | - |
+| `OEERepository` | OEESnapshot | `ComputeForMachine`, `GetFleetSummary` |
+| `MaintenanceRepository` | MaintenanceSchedule, WorkOrder | `ListSchedules`, `CompleteWorkOrder`, `GetByMachine` |
+| `ProductRepository` | ProductDefinition, BOMItem | `GetBySKU`, `AddBOMItem`, `DeleteBOMItem` |
+| `GenealogyRepository` | ProductGenealogy | `Seal`, `GetTree` |
+| `WorkInstructionRepository` | WorkInstruction, TaskWorkInstruction | `AttachToTask`, `AcknowledgeStep` |
+| `SPCRepository` | SPCControlLimit, SPCViolation | `ComputeLimits`, `UpsertLimit`, `AcknowledgeViolation` |
+| `InventoryRepository` | InventoryItem, InventoryTransaction | `AdjustQuantity`, `UpsertByForgeSightID`, `GetLowStock` |
 
 ## Transactions
 

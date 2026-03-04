@@ -1,0 +1,15 @@
+DROP TRIGGER IF EXISTS update_genealogy_updated_at ON product_genealogy;
+DROP TRIGGER IF EXISTS update_bom_items_updated_at ON bom_items;
+DROP TRIGGER IF EXISTS update_product_defs_updated_at ON product_definitions;
+DROP TRIGGER IF EXISTS check_genealogy_sealed ON product_genealogy;
+DROP FUNCTION IF EXISTS prevent_sealed_genealogy_update();
+DROP POLICY IF EXISTS tenant_isolation_genealogy_material ON genealogy_material_consumption;
+DROP POLICY IF EXISTS tenant_isolation_genealogy ON product_genealogy;
+DROP POLICY IF EXISTS tenant_isolation_bom_items ON bom_items;
+DROP POLICY IF EXISTS tenant_isolation_product_defs ON product_definitions;
+DROP TABLE IF EXISTS genealogy_material_consumption;
+DROP TABLE IF EXISTS product_genealogy;
+DROP TABLE IF EXISTS bom_items;
+DROP TABLE IF EXISTS product_definitions;
+DROP TYPE IF EXISTS genealogy_status;
+DROP TYPE IF EXISTS product_category;

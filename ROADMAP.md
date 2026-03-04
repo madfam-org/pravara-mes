@@ -4,8 +4,8 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 
 ## Current Status
 
-**Version**: Phase 2.5b Digital Twin & Connectivity (In Progress)
-**Last Updated**: March 2, 2026
+**Version**: Phase 2.6 MES Industry Standard Features (Complete)
+**Last Updated**: March 3, 2026
 **Total Services**: 10
 
 | Component | Status | Progress |
@@ -26,6 +26,13 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 | Security | Complete | 100% |
 | Quality Management | Complete | 100% |
 | Billing Integration | Complete | 100% |
+| OEE Analytics | Complete | 100% |
+| SPC Control Charts | Complete | 100% |
+| Maintenance CMMS | Complete | 100% |
+| Products & BOM | Complete | 100% |
+| Product Genealogy | Complete | 100% |
+| Work Instructions | Complete | 100% |
+| Inventory Management | Complete | 100% |
 
 ---
 
@@ -43,6 +50,14 @@ Q1 2026                         Q2 2026                    Q3 2026
 │                               │   - Luban Bridge ✅          - Intelligent Scheduling
 │                               │   - OctoPrint ✅
 │                               │   - Machine Adapter 🔄
+│                               ├── Phase 2.6: MES Industry
+│                               │   Standard Features ✅
+│                               │   - OEE Dashboard ✅
+│                               │   - Maintenance CMMS ✅
+│                               │   - Product Genealogy ✅
+│                               │   - Work Instructions ✅
+│                               │   - SPC Control Charts ✅
+│                               │   - Inventory Mgmt ✅
 ```
 
 ---
@@ -204,6 +219,50 @@ Digital twin visualization, ML-driven quality prediction, and multi-protocol mac
 
 ---
 
+## Phase 2.6: MES Industry Standard Features
+> **Status**: Complete ✅ | **Timeline**: 1 week
+
+Core MES capabilities aligned with MESA International standards.
+
+### OEE Dashboard (MESA #11 - Performance Analysis) ✅
+- [x] OEE computation (availability x performance x quality)
+- [x] Fleet-wide OEE summary across all machines
+- [x] Daily OEE snapshots with trend analysis
+- [x] OEE gauge and trend chart UI components
+
+### Maintenance CMMS (MESA #9 - Maintenance Management) ✅
+- [x] Maintenance schedules with multiple trigger types (calendar, runtime_hours, cycle_count, condition)
+- [x] Work order lifecycle (scheduled -> overdue -> in_progress -> completed | cancelled)
+- [x] Machine maintenance history view
+- [x] Real-time maintenance event notifications
+
+### Product Genealogy & BOM (MESA #10 - Product Tracking) ✅
+- [x] Product definitions with SKU, version, and category
+- [x] Flat one-level bill of materials
+- [x] Traceability chain: product -> order -> task -> machine -> quality -> certificate
+- [x] Digital birth certificates with SHA-256 tamper-proof sealing
+- [x] Genealogy timeline visualization
+
+### Work Instructions (MESA #4 - Document Control) ✅
+- [x] Step-by-step production procedures
+- [x] Auto-attachment to tasks on queue
+- [x] Operator acknowledgement tracking per step
+- [x] Task-level work instruction management
+
+### SPC Control Charts (MESA #7 - Quality Management, enhanced) ✅
+- [x] Control limit computation (UCL/LCL = mean +/- 3 sigma)
+- [x] Violation detection (above_ucl, below_lcl, run_of_7, trend)
+- [x] SPC chart data endpoint for visualization
+- [x] Violation acknowledgement workflow
+
+### Inventory Management (MESA #1 - Resource Management) ✅
+- [x] Inventory items with quantity tracking
+- [x] Stock adjustment with transaction logging
+- [x] Low-stock alerts with configurable reorder points
+- [x] ForgeSight webhook integration for external inventory sync
+
+---
+
 ## Phase 3.0: Mexican Compliance
 > **Status**: Planned | **Timeline**: 3-4 weeks
 
@@ -238,15 +297,20 @@ apps/compliance-engine/
 
 Advanced intelligent manufacturing operations building on the ml-orchestrator foundation (deployed in Phase 2.5b).
 
-### Predictive Maintenance
-- [ ] Advanced failure prediction models
-- [ ] Maintenance scheduling optimization
-- [ ] Remaining useful life estimation
+### Predictive Maintenance (builds on Phase 2.6 OEE + Maintenance CMMS)
+- [ ] Advanced failure prediction models using OEE trend data
+- [ ] Maintenance scheduling optimization integrated with CMMS work orders
+- [ ] Remaining useful life estimation from telemetry and maintenance history
 
-### Intelligent Scheduling
-- [ ] Dynamic task allocation
-- [ ] Material clustering for efficiency
-- [ ] Capacity optimization
+### Finite Capacity Scheduling (builds on Phase 2.6 OEE + Maintenance)
+- [ ] Dynamic task allocation considering OEE-weighted machine capacity
+- [ ] Maintenance window awareness for schedule optimization
+- [ ] Material clustering for efficiency using inventory data
+
+### CAPA (Corrective and Preventive Action) (builds on Phase 2.6 SPC)
+- [ ] Automatic CAPA creation from SPC violation patterns
+- [ ] Root cause analysis workflows linked to genealogy records
+- [ ] Preventive action tracking with effectiveness measurement
 
 ### ML Orchestrator Enhancements
 - [ ] A/B testing framework for model variants
@@ -336,17 +400,18 @@ enclii deploy --service pravara-api --env production
 
 ## Success Metrics
 
-| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 2.5b | Phase 3.0 |
-|--------|---------|---------|-----------|------------|-----------|
-| Build Status | ✅ Passing | ✅ Passing | ✅ Passing | ✅ Passing | Passing |
-| Test Coverage | >60% | >65% | >80% | >80% | >85% |
-| Total Services | 3 | 4 | 4 | 10 | 11 |
-| API Uptime | - | - | 99.9% | 99.9% | 99.9% |
-| p95 Latency | - | - | <200ms | <200ms | <200ms |
-| Real-Time Latency | - | <500ms | <300ms | <300ms | <300ms |
-| WebSocket Connections | - | 100+ | 1000+ | 1000+ | 1000+ |
-| ML Model Accuracy | - | - | - | >90% | >90% |
-| CFDI Compliance | - | - | - | - | 100% |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 2.5b | Phase 2.6 | Phase 3.0 |
+|--------|---------|---------|-----------|------------|-----------|-----------|
+| Build Status | ✅ Passing | ✅ Passing | ✅ Passing | ✅ Passing | ✅ Passing | Passing |
+| Test Coverage | >60% | >65% | >80% | >80% | >80% | >85% |
+| Total Services | 3 | 4 | 4 | 10 | 10 | 11 |
+| API Uptime | - | - | 99.9% | 99.9% | 99.9% | 99.9% |
+| p95 Latency | - | - | <200ms | <200ms | <200ms | <200ms |
+| Real-Time Latency | - | <500ms | <300ms | <300ms | <300ms | <300ms |
+| WebSocket Connections | - | 100+ | 1000+ | 1000+ | 1000+ | 1000+ |
+| ML Model Accuracy | - | - | - | >90% | >90% | >90% |
+| MESA Features | - | - | - | - | 6/11 | 6/11 |
+| CFDI Compliance | - | - | - | - | - | 100% |
 
 ---
 

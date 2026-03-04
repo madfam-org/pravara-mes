@@ -46,6 +46,15 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	batchLotRepo := repositories.NewBatchLotRepository(database.DB)
 	taskCmdRepo := repositories.NewTaskCommandRepository(database.DB)
 
+	// Phase 2.6+ repositories
+	oeeRepo := repositories.NewOEERepository(database.DB)
+	maintRepo := repositories.NewMaintenanceRepository(database.DB)
+	productRepo := repositories.NewProductRepository(database.DB)
+	genealogyRepo := repositories.NewGenealogyRepository(database.DB)
+	wiRepo := repositories.NewWorkInstructionRepository(database.DB)
+	spcRepo := repositories.NewSPCRepository(database.DB)
+	inventoryRepo := repositories.NewInventoryRepository(database.DB)
+
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
 	orderHandler := NewOrderHandler(orderRepo, orderItemRepo, log)
@@ -60,6 +69,15 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
 	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
 
+	// Phase 2.6+ handlers
+	analyticsHandler := NewAnalyticsHandler(oeeRepo, log)
+	maintenanceHandler := NewMaintenanceHandler(maintRepo, log)
+	productHandler := NewProductHandler(productRepo, log)
+	genealogyHandler := NewGenealogyHandler(genealogyRepo, log)
+	wiHandler := NewWorkInstructionHandler(wiRepo, log)
+	spcHandler := NewSPCHandler(spcRepo, log)
+	inventoryHandler := NewInventoryHandler(inventoryRepo, log)
+
 	// Set publisher on handlers that support events
 	if publisher != nil {
 		taskHandler.SetPublisher(publisher)
@@ -69,6 +87,31 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 		// Initialize and set automation service for task-machine integration
 		automationService := services.NewAutomationService(taskRepo, machineRepo, taskCmdRepo, publisher, log)
 		taskHandler.SetAutomation(automationService)
+
+		// Phase 2.6+ services
+		oeeService := services.NewOEEService(oeeRepo, publisher, log)
+		analyticsHandler.SetPublisher(publisher)
+		analyticsHandler.SetOEEService(oeeService)
+
+		maintService := services.NewMaintenanceService(maintRepo, publisher, log)
+		maintenanceHandler.SetPublisher(publisher)
+		maintenanceHandler.SetMaintenanceService(maintService)
+
+		genealogyService := services.NewGenealogyService(genealogyRepo, productRepo, publisher, log)
+		genealogyHandler.SetPublisher(publisher)
+		genealogyHandler.SetGenealogyService(genealogyService)
+
+		wiService := services.NewWorkInstructionService(wiRepo, publisher, log)
+		wiHandler.SetPublisher(publisher)
+		wiHandler.SetWIService(wiService)
+
+		spcService := services.NewSPCService(spcRepo, publisher, log)
+		spcHandler.SetPublisher(publisher)
+		spcHandler.SetSPCService(spcService)
+
+		inventoryService := services.NewInventoryService(inventoryRepo, publisher, log)
+		inventoryHandler.SetPublisher(publisher)
+		inventoryHandler.SetInventoryService(inventoryService)
 	}
 
 	// Set usage recorder on handlers that track billable events
@@ -115,6 +158,10 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			tasks.DELETE("/:id", taskHandler.Delete)
 			tasks.POST("/:id/move", taskHandler.Move)
 			tasks.POST("/:id/assign", taskHandler.Assign)
+			// Work instruction endpoints on tasks
+			tasks.POST("/:id/work-instructions", wiHandler.AttachToTask)
+			tasks.GET("/:id/work-instructions", wiHandler.GetTaskWorkInstructions)
+			tasks.POST("/:id/work-instructions/:wiId/acknowledge", wiHandler.AcknowledgeStep)
 		}
 
 		// Machines endpoints
@@ -128,6 +175,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			machines.GET("/:id/telemetry", machineHandler.GetTelemetry)
 			machines.POST("/:id/heartbeat", machineHandler.Heartbeat)
 			machines.POST("/:id/command", machineHandler.SendCommand)
+			machines.GET("/:id/maintenance", maintenanceHandler.GetMachineMaintenance)
 		}
 
 		// Telemetry endpoints
@@ -174,6 +222,85 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			}
 		}
 
+		// Analytics endpoints (OEE + SPC)
+		analytics := v1.Group("/analytics")
+		{
+			analytics.GET("/oee", analyticsHandler.GetOEE)
+			analytics.GET("/oee/summary", analyticsHandler.GetOEESummary)
+			analytics.POST("/oee/compute", analyticsHandler.ComputeOEE)
+			analytics.GET("/spc/limits", spcHandler.GetLimits)
+			analytics.POST("/spc/limits/compute", spcHandler.ComputeLimits)
+			analytics.GET("/spc/chart", spcHandler.GetChart)
+			analytics.GET("/spc/violations", spcHandler.GetViolations)
+			analytics.POST("/spc/violations/:id/acknowledge", spcHandler.AcknowledgeViolation)
+		}
+
+		// Maintenance endpoints
+		maintenance := v1.Group("/maintenance")
+		{
+			schedules := maintenance.Group("/schedules")
+			{
+				schedules.GET("", maintenanceHandler.ListSchedules)
+				schedules.POST("", maintenanceHandler.CreateSchedule)
+				schedules.GET("/:id", maintenanceHandler.GetScheduleByID)
+				schedules.PATCH("/:id", maintenanceHandler.UpdateSchedule)
+				schedules.DELETE("/:id", maintenanceHandler.DeleteSchedule)
+			}
+			workOrders := maintenance.Group("/work-orders")
+			{
+				workOrders.GET("", maintenanceHandler.ListWorkOrders)
+				workOrders.POST("", maintenanceHandler.CreateWorkOrder)
+				workOrders.GET("/:id", maintenanceHandler.GetWorkOrderByID)
+				workOrders.PATCH("/:id", maintenanceHandler.UpdateWorkOrder)
+				workOrders.POST("/:id/complete", maintenanceHandler.CompleteWorkOrder)
+			}
+		}
+
+		// Product endpoints
+		products := v1.Group("/products")
+		{
+			products.GET("", productHandler.ListProducts)
+			products.POST("", productHandler.CreateProduct)
+			products.GET("/:id", productHandler.GetProductByID)
+			products.PATCH("/:id", productHandler.UpdateProduct)
+			products.DELETE("/:id", productHandler.DeleteProduct)
+			products.GET("/:id/bom", productHandler.GetBOM)
+			products.POST("/:id/bom/items", productHandler.AddBOMItem)
+			products.DELETE("/:id/bom/items/:itemId", productHandler.DeleteBOMItem)
+		}
+
+		// Genealogy endpoints
+		genealogy := v1.Group("/genealogy")
+		{
+			genealogy.GET("", genealogyHandler.ListGenealogy)
+			genealogy.POST("", genealogyHandler.CreateGenealogy)
+			genealogy.GET("/:id", genealogyHandler.GetGenealogyByID)
+			genealogy.PATCH("/:id", genealogyHandler.UpdateGenealogy)
+			genealogy.POST("/:id/seal", genealogyHandler.SealGenealogy)
+			genealogy.GET("/:id/tree", genealogyHandler.GetGenealogyTree)
+		}
+
+		// Work Instructions endpoints
+		workInstructions := v1.Group("/work-instructions")
+		{
+			workInstructions.GET("", wiHandler.ListWorkInstructions)
+			workInstructions.POST("", wiHandler.CreateWorkInstruction)
+			workInstructions.GET("/:id", wiHandler.GetWorkInstructionByID)
+			workInstructions.PATCH("/:id", wiHandler.UpdateWorkInstruction)
+			workInstructions.DELETE("/:id", wiHandler.DeleteWorkInstruction)
+		}
+
+		// Inventory endpoints
+		inventory := v1.Group("/inventory")
+		{
+			inventory.GET("", inventoryHandler.ListItems)
+			inventory.POST("", inventoryHandler.CreateItem)
+			inventory.GET("/low-stock", inventoryHandler.GetLowStock)
+			inventory.GET("/:id", inventoryHandler.GetItemByID)
+			inventory.PATCH("/:id", inventoryHandler.UpdateItem)
+			inventory.POST("/:id/adjust", inventoryHandler.AdjustItem)
+		}
+
 		// Factory layout endpoints (proxy to viz-engine)
 		layouts := v1.Group("/layouts")
 		{
@@ -195,7 +322,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 		{
 			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
 			webhooks.POST("/dhanam", dhanamWebhookHandler.HandleWebhook)
-			webhooks.POST("/forgesight", placeholderHandler("forgesight webhook"))
+			webhooks.POST("/forgesight", inventoryHandler.ForgeSightWebhook)
 		}
 
 		// Real-time connection endpoints
@@ -227,16 +354,5 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	{
 		centrifugoProxy.POST("/auth", realtimeHandler.AuthConnect)
 		centrifugoProxy.POST("/subscribe", realtimeHandler.AuthSubscribe)
-	}
-}
-
-// placeholderHandler returns a handler that indicates the endpoint is not yet implemented.
-func placeholderHandler(description string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(501, gin.H{
-			"error":       "not_implemented",
-			"message":     "This endpoint is not yet implemented",
-			"description": description,
-		})
 	}
 }

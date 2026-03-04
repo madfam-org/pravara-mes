@@ -245,6 +245,36 @@ func (p *Publisher) PublishEntityDeleted(ctx context.Context, namespace ChannelN
 	return p.Publish(ctx, namespace, tenantID, event)
 }
 
+// PublishOEEUpdated publishes an OEE computation event.
+func (p *Publisher) PublishOEEUpdated(ctx context.Context, tenantID uuid.UUID, data OEEUpdatedData) error {
+	event := NewEvent(EventOEEUpdated, tenantID, data)
+	return p.Publish(ctx, NamespaceAnalytics, tenantID, event)
+}
+
+// PublishMaintenanceEvent publishes a maintenance lifecycle event.
+func (p *Publisher) PublishMaintenanceEvent(ctx context.Context, tenantID uuid.UUID, eventType EventType, data MaintenanceEventData) error {
+	event := NewEvent(eventType, tenantID, data)
+	return p.Publish(ctx, NamespaceMaintenance, tenantID, event)
+}
+
+// PublishGenealogyEvent publishes a genealogy event.
+func (p *Publisher) PublishGenealogyEvent(ctx context.Context, tenantID uuid.UUID, eventType EventType, data GenealogyEventData) error {
+	event := NewEvent(eventType, tenantID, data)
+	return p.Publish(ctx, NamespaceTasks, tenantID, event)
+}
+
+// PublishSPCViolation publishes an SPC violation event.
+func (p *Publisher) PublishSPCViolation(ctx context.Context, tenantID uuid.UUID, data SPCViolationData) error {
+	event := NewEvent(EventSPCViolation, tenantID, data)
+	return p.Publish(ctx, NamespaceAnalytics, tenantID, event)
+}
+
+// PublishInventoryEvent publishes an inventory event.
+func (p *Publisher) PublishInventoryEvent(ctx context.Context, tenantID uuid.UUID, eventType EventType, data InventoryEventData) error {
+	event := NewEvent(eventType, tenantID, data)
+	return p.Publish(ctx, NamespaceInventory, tenantID, event)
+}
+
 // PublishCommandForDispatch publishes a machine command to the worker dispatch channel.
 // This is separate from Centrifugo - it goes to telemetry-worker for MQTT dispatch.
 func (p *Publisher) PublishCommandForDispatch(ctx context.Context, tenantID uuid.UUID, data MachineCommandData) error {

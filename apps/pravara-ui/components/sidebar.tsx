@@ -14,6 +14,12 @@ import {
   ChevronRight,
   Box,
   FileCode,
+  BarChart3,
+  Wrench,
+  PackageSearch,
+  GitBranch,
+  BookOpen,
+  Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +32,12 @@ const navigation = [
   { name: "Kanban Board", href: "/kanban", icon: Kanban },
   { name: "Orders", href: "/orders", icon: Package },
   { name: "Machines", href: "/machines", icon: Factory },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Maintenance", href: "/maintenance", icon: Wrench },
+  { name: "Products", href: "/products", icon: PackageSearch },
+  { name: "Genealogy", href: "/genealogy", icon: GitBranch },
+  { name: "Instructions", href: "/work-instructions", icon: BookOpen },
+  { name: "Inventory", href: "/inventory", icon: Boxes },
 ];
 
 interface SidebarProps {
