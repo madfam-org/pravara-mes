@@ -34,6 +34,7 @@ The system now features complete multi-tool 3D printing support with real-time p
 - **FullControl GCODE** - Advanced G-code visualization with material physics simulation
 - **Yantra4D Integration** - Import parametric hyperobjects, auto-create products/BOM/work instructions
 - **Dynamic Machine Registration** - Runtime-registerable machine definitions with DB persistence
+- **Tezca Legal Intelligence** - Mexican law compliance via Tezca API with webhook-driven updates
 
 ## Architecture
 

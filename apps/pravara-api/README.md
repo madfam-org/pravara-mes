@@ -10,7 +10,7 @@ The API provides endpoints for:
 - **Machines** - Machine registration, control, and telemetry
 - **Quality** - Certificates, inspections, and batch lot tracking
 - **Billing** - Usage tracking, tenant billing, and Dhanam invoice webhooks
-- **Webhooks** - Inbound integrations (Cotiza orders, Dhanam invoices with HMAC-SHA256 verification)
+- **Webhooks** - Inbound integrations (Cotiza orders, Dhanam invoices, Tezca law changes — all with HMAC-SHA256 verification)
 - **Realtime** - WebSocket token generation for live updates
 - **Analytics** - OEE computation and SPC control charts
 - **Maintenance** - CMMS scheduling and work orders
@@ -19,6 +19,7 @@ The API provides endpoints for:
 - **Work Instructions** - Step-by-step production procedures
 - **Inventory** - Stock tracking and ForgeSight integration
 - **Yantra4D Import** - Import parametric hyperobjects as products with BOM and work instructions
+- **Tezca Integration** - Mexican law search, article lookup, and real-time compliance webhooks
 
 ## Quick Start
 

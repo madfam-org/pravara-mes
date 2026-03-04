@@ -30,6 +30,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Realtime | `/v1/realtime` | WebSocket authentication |
 | Webhooks | `/v1/webhooks` | External integrations |
 | Yantra4D Import | `/v1/import/yantra4d` | Hyperobject import from Yantra4D |
+| Tezca Webhook | `/v1/webhooks/tezca` | Law change notifications from Tezca |
 
 ## Application READMEs
 

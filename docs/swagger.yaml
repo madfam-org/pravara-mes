@@ -5883,6 +5883,50 @@ paths:
       summary: Receive ForgeSight webhook
       tags:
       - webhooks
+  /webhooks/tezca:
+    post:
+      consumes:
+      - application/json
+      description: Receives law-change webhook events from Tezca. Verifies HMAC-SHA256
+        signature via X-Tezca-Signature header (sha256=<hex> format). Events include
+        law.updated, version.created, law.created.
+      parameters:
+      - description: Tezca webhook payload
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            data:
+              additionalProperties: true
+              description: Event-specific data (law_id, domain, etc.)
+              type: object
+            event:
+              description: 'Event type: law.updated, version.created, law.created'
+              type: string
+            timestamp:
+              description: ISO 8601 timestamp
+              type: string
+          required:
+          - event
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook processed
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid or missing signature
+      summary: Receive Tezca law-change webhook
+      tags:
+      - webhooks
   /import/yantra4d:
     post:
       consumes:

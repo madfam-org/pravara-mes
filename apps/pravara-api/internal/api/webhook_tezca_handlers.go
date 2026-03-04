@@ -4,7 +4,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -22,10 +24,11 @@ func NewTezcaWebhookHandler(log *logrus.Logger, secret string) *TezcaWebhookHand
 }
 
 // TezcaWebhookPayload represents a Tezca webhook event.
+// Tezca wraps event data inside a "data" subkey.
 type TezcaWebhookPayload struct {
-	Event  string `json:"event" binding:"required"`
-	LawID  string `json:"law_id"`
-	Domain string `json:"domain"`
+	Event     string                 `json:"event" binding:"required"`
+	Timestamp string                 `json:"timestamp"`
+	Data      map[string]interface{} `json:"data"`
 }
 
 // HandleWebhook processes POST /webhooks/tezca.
@@ -44,10 +47,13 @@ func (h *TezcaWebhookHandler) HandleWebhook(c *gin.Context) {
 			return
 		}
 
+		// Tezca sends "sha256=<hex>" — strip the prefix before comparing
+		sig := strings.TrimPrefix(signature, "sha256=")
+
 		mac := hmac.New(sha256.New, []byte(h.secret))
 		mac.Write(body)
 		expected := hex.EncodeToString(mac.Sum(nil))
-		if !hmac.Equal([]byte(expected), []byte(signature)) {
+		if !hmac.Equal([]byte(expected), []byte(sig)) {
 			h.log.Warn("Invalid Tezca webhook signature")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 			return
@@ -57,15 +63,21 @@ func (h *TezcaWebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	var payload TezcaWebhookPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	if err := json.NewDecoder(c.Request.Body).Decode(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if payload.Event == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "event is required"})
+		return
+	}
 
+	lawID, _ := payload.Data["law_id"].(string)
+	domain, _ := payload.Data["domain"].(string)
 	h.log.WithFields(logrus.Fields{
 		"event":  payload.Event,
-		"law_id": payload.LawID,
-		"domain": payload.Domain,
+		"law_id": lawID,
+		"domain": domain,
 	}).Info("Tezca webhook received")
 
 	// Extensibility: add handlers per event type

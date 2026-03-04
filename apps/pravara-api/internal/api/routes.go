@@ -62,6 +62,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
+	tezcaWebhookHandler := NewTezcaWebhookHandler(log, cfg.Tezca.WebhookSecret)
 
 	// Initialize Dhanam webhook handler
 	invoiceRepo := billing.NewInvoiceRepository(database.DB)
@@ -344,6 +345,7 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 			webhooks.POST("/cotiza", webhookHandler.CotizaWebhook)
 			webhooks.POST("/dhanam", dhanamWebhookHandler.HandleWebhook)
 			webhooks.POST("/forgesight", inventoryHandler.ForgeSightWebhook)
+			webhooks.POST("/tezca", tezcaWebhookHandler.HandleWebhook)
 		}
 
 		// Real-time connection endpoints
