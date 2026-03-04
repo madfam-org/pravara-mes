@@ -19,6 +19,7 @@ type Config struct {
 	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
 	Dhanam     DhanamConfig     `mapstructure:"dhanam"`
 	Cotiza     CotizaConfig     `mapstructure:"cotiza"`
+	Tezca      TezcaConfig      `mapstructure:"tezca"`
 }
 
 // AppConfig holds application-level settings.
@@ -89,6 +90,14 @@ type DhanamConfig struct {
 type CotizaConfig struct {
 	WebhookSecret string `mapstructure:"webhook_secret"`
 	Enabled       bool   `mapstructure:"enabled"`
+}
+
+// TezcaConfig holds Tezca (Mexican law intelligence) integration settings.
+type TezcaConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	APIURL        string `mapstructure:"api_url"`
+	APIKey        string `mapstructure:"api_key"`
+	WebhookSecret string `mapstructure:"webhook_secret"`
 }
 
 // Load reads configuration from environment variables and config files.
@@ -164,6 +173,10 @@ func setDefaults(v *viper.Viper) {
 
 	// Cotiza defaults
 	v.SetDefault("cotiza.enabled", false)
+
+	// Tezca defaults
+	v.SetDefault("tezca.enabled", false)
+	v.SetDefault("tezca.api_url", "https://tezca.mx/api/v1")
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -205,6 +218,11 @@ func bindEnvVars(v *viper.Viper) {
 
 	v.BindEnv("cotiza.enabled", "COTIZA_ENABLED")
 	v.BindEnv("cotiza.webhook_secret", "COTIZA_WEBHOOK_SECRET")
+
+	v.BindEnv("tezca.enabled", "TEZCA_ENABLED")
+	v.BindEnv("tezca.api_url", "TEZCA_API_URL")
+	v.BindEnv("tezca.api_key", "TEZCA_API_KEY")
+	v.BindEnv("tezca.webhook_secret", "TEZCA_WEBHOOK_SECRET")
 }
 
 // IsDevelopment returns true if running in development mode.
