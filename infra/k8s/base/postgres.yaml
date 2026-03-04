@@ -37,9 +37,20 @@ spec:
         app.kubernetes.io/name: postgres
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           ports:
             - containerPort: 5432
           env:

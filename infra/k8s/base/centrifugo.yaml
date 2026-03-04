@@ -111,9 +111,21 @@ spec:
         app.kubernetes.io/name: centrifugo
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: centrifugo
           image: centrifugo/centrifugo:v5
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
           ports:
             - containerPort: 8000
           args:
