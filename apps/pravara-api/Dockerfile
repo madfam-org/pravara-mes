@@ -17,8 +17,11 @@ WORKDIR /build
 # Copy go workspace files
 COPY go.work go.work.sum* ./
 
-# Copy module files for dependency caching
+# Copy module files for all go.work modules (dependency caching)
 COPY apps/pravara-api/go.mod apps/pravara-api/go.sum* ./apps/pravara-api/
+COPY apps/machine-adapter/go.mod apps/machine-adapter/go.sum* ./apps/machine-adapter/
+COPY apps/telemetry-worker/go.mod apps/telemetry-worker/go.sum* ./apps/telemetry-worker/
+COPY apps/visualization-engine/go.mod apps/visualization-engine/go.sum* ./apps/visualization-engine/
 COPY packages/sdk-go/go.mod packages/sdk-go/go.sum* ./packages/sdk-go/
 
 # Download dependencies
