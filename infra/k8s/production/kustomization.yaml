@@ -93,18 +93,18 @@ images:
 - name: postgres
   newName: docker.io/library/postgres
   newTag: 16-alpine
-- name: pravara-api
+- digest: sha256:4b59200bd552f4f7b39c646e8d1371c488f6f85cbe2081d12a02f7b64dc7250b
+  name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
-  newTag: main-acc524a
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
   newTag: main-acc524a
 - name: redis
   newName: docker.io/library/redis
   newTag: 7-alpine
-- name: telemetry-worker
+- digest: sha256:bb6204d8f51fa6ebbe7e5ef0bdd3342aa1cc623b3f979fac23d941eede5a8a56
+  name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
-  newTag: main-ca85bb7
 - name: video-streaming
   newName: ghcr.io/madfam-org/video-streaming
   newTag: latest
