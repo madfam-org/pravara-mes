@@ -22,6 +22,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/physics"
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/renderer"
 	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/storage"
+	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/yantra4d"
 )
 
 var (
@@ -72,6 +73,10 @@ func init() {
 	viper.SetDefault("storage.access_key", "")
 	viper.SetDefault("storage.secret_key", "")
 	viper.SetDefault("storage.region", "auto")
+
+	// Yantra4D integration
+	viper.SetDefault("yantra4d.base_url", "https://yantra4d.madfam.io")
+	viper.SetDefault("yantra4d.timeout", 120)
 }
 
 func main() {
@@ -116,6 +121,21 @@ func main() {
 		} else {
 			log.Info("S3 storage initialized for model uploads")
 		}
+	}
+
+	// Initialize Yantra4D client
+	y4dClient := yantra4d.NewClient(
+		viper.GetString("yantra4d.base_url"),
+		time.Duration(viper.GetInt("yantra4d.timeout"))*time.Second,
+	)
+
+	// Initialize Yantra4D importer (requires S3 storage)
+	var y4dImporter *models.Yantra4DImporter
+	if storageClient != nil {
+		y4dImporter = models.NewYantra4DImporter(y4dClient, storageClient, log)
+		log.Info("Yantra4D importer initialized")
+	} else {
+		log.Warn("Yantra4D importer disabled: S3 storage not configured")
 	}
 
 	// Initialize services
@@ -170,6 +190,9 @@ func main() {
 
 		// Model upload (requires S3 storage)
 		v1.POST("/models/upload", handleModelUpload(modelManager, storageClient))
+
+		// Yantra4D import endpoint
+		v1.POST("/models/import/yantra4d", handleYantra4DImport(modelManager, y4dImporter))
 
 		// Factory layouts
 		v1.GET("/layouts", handleListLayouts(modelManager))
@@ -490,6 +513,50 @@ func handleModelUpload(manager *models.Manager, storageClient *storage.Client) g
 		if err := manager.CreateModel(c.Request.Context(), model); err != nil {
 			log.WithError(err).Error("Failed to create model record")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save model metadata"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, model)
+	}
+}
+
+func handleYantra4DImport(manager *models.Manager, importer *models.Yantra4DImporter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if importer == nil || !importer.IsConfigured() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Yantra4D importer not configured"})
+			return
+		}
+
+		var req models.Yantra4DImportRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Extract JWT from Authorization header
+		jwt := c.GetHeader("Authorization")
+		if len(jwt) > 7 && jwt[:7] == "Bearer " {
+			jwt = jwt[7:]
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Bearer token required"})
+			return
+		}
+
+		opts := models.ImportOptions{
+			MachineType: req.MachineType,
+			Metadata:    map[string]string{"jwt": jwt},
+		}
+
+		model, err := importer.ImportFull(c.Request.Context(), req.Slug, req.Params, jwt, opts)
+		if err != nil {
+			log.WithError(err).Error("Yantra4D import failed")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("import failed: %v", err)})
+			return
+		}
+
+		if err := manager.CreateModel(c.Request.Context(), model); err != nil {
+			log.WithError(err).Error("Failed to save imported model")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save model"})
 			return
 		}
 

@@ -1,0 +1,312 @@
+{
+  "_description": "Maps each machine registry ID to its 3D model source, format, and dimensions",
+  "_tiers": {
+    "1": "Official manufacturer STEP/CAD files",
+    "2": "Community STEP files (GrabCAD, etc.)",
+    "3": "Sketchfab GLTF — no conversion needed",
+    "4": "STL mesh files (community or simplified)",
+    "5": "Manual modeling required or placeholder box"
+  },
+
+  "snapmaker_a350": {
+    "source": "https://grabcad.com/library/snapmaker-2-0-a350t-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 475, "y": 509, "z": 609},
+    "notes": "Community STEP from GrabCAD — priority model for demo"
+  },
+  "bambu_x1c": {
+    "source": "https://grabcad.com/library/bambu-lab-x1-carbon-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 389, "y": 389, "z": 457},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "bambu_p1s": {
+    "source": "https://grabcad.com/library/bambu-lab-p1s-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 386, "y": 389, "z": 458},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "bambu_a1": {
+    "source": "https://grabcad.com/library/bambu-lab-a1-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 400, "y": 400, "z": 480},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "voron_2_4": {
+    "source": "https://github.com/VoronDesign/Voron-2/tree/Voron2.4/CAD",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 450, "y": 450, "z": 500},
+    "notes": "Official open-source CAD from VoronDesign"
+  },
+  "ur_generic": {
+    "source": "https://www.universal-robots.com/download/mechanical-e-series/ur5eur7e/robot-step-file-ur5eur7e-e-series/",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 300, "y": 300, "z": 850},
+    "notes": "Official manufacturer STEP — UR5e"
+  },
+  "lumen_pnp": {
+    "source": "https://github.com/opulo-inc/lumern/tree/main/cad",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 650, "y": 550, "z": 400},
+    "notes": "Official open-source CAD"
+  },
+  "sienci_longmill_mk2": {
+    "source": "https://resources.sienci.com/view/lmk2-cad-model/",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 850, "y": 850, "z": 200},
+    "notes": "Official manufacturer STEP"
+  },
+  "xcarve_pro": {
+    "source": "https://grabcad.com/library/inventables-x-carve-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 750, "y": 750, "z": 165},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "shapeoko_hdm": {
+    "source": "https://grabcad.com/library/shapeoko-pro-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 660, "y": 660, "z": 127},
+    "notes": "Community STEP from GrabCAD (Shapeoko Pro variant)"
+  },
+  "creality_k1_max": {
+    "source": "https://grabcad.com/library/creality-k1-max-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 435, "y": 462, "z": 526},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "prusa_mk4": {
+    "source": "https://grabcad.com/library/prusa-mk4-1",
+    "format": "STL",
+    "tier": 4,
+    "dimensions_mm": {"x": 400, "y": 400, "z": 500},
+    "notes": "Community STL models"
+  },
+  "prusa_core_one": {
+    "source": "https://grabcad.com/library/prusa-core-one-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 400, "y": 450, "z": 450},
+    "notes": "Community STEP"
+  },
+  "prusa_mini_plus": {
+    "source": "https://grabcad.com/library/prusa-mini-plus-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 330, "y": 330, "z": 380},
+    "notes": "Community STEP"
+  },
+  "ultimaker_s5": {
+    "source": "https://sketchfab.com/3d-models/ultimaker-s5",
+    "format": "GLTF",
+    "tier": 3,
+    "dimensions_mm": {"x": 495, "y": 585, "z": 780},
+    "notes": "Sketchfab GLTF — no conversion needed"
+  },
+  "formlabs_form4": {
+    "source": "https://grabcad.com/library/formlabs-form-3-1",
+    "format": "STL",
+    "tier": 4,
+    "dimensions_mm": {"x": 405, "y": 375, "z": 530},
+    "notes": "Community STL (Form 3 proxy — Form 4 similar dimensions)"
+  },
+  "elegoo_saturn4_ultra": {
+    "source": "https://grabcad.com/library/elegoo-saturn-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 287, "y": 165, "z": 400},
+    "notes": "Community STEP (Saturn series)"
+  },
+  "dobot_magician": {
+    "source": "https://grabcad.com/library/dobot-magician-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 300, "y": 300, "z": 350},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "onefinity_woodworker": {
+    "source": "https://grabcad.com/library/onefinity-cnc-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 820, "y": 820, "z": 130},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "trotec_speedy_360": {
+    "source": "https://sketchfab.com/3d-models/trotec-speedy-300",
+    "format": "GLTF",
+    "tier": 3,
+    "dimensions_mm": {"x": 813, "y": 508, "z": 305},
+    "notes": "Sketchfab GLTF — no conversion needed"
+  },
+  "xtool_p2s": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 625, "y": 605, "z": 185},
+    "notes": "Manual modeling needed — no community CAD available"
+  },
+  "xtool_s1": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 672, "y": 433, "z": 280},
+    "notes": "Manual modeling needed"
+  },
+  "xtool_f1_ultra": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 425, "y": 403, "z": 278},
+    "notes": "Manual modeling needed"
+  },
+  "glowforge_pro": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 965, "y": 515, "z": 210},
+    "notes": "Manual modeling needed — proprietary design"
+  },
+  "roland_gr2_640": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 1145, "y": 450, "z": 350},
+    "notes": "Manual modeling needed"
+  },
+  "roland_gs2_24": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 890, "y": 320, "z": 270},
+    "notes": "Manual modeling needed"
+  },
+  "graphtec_ce8000": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 900, "y": 330, "z": 280},
+    "notes": "Manual modeling needed"
+  },
+  "bantam_tools_pcb_mill": {
+    "source": "https://grabcad.com/library/bantam-tools-desktop-cnc-milling-machine-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 330, "y": 270, "z": 360},
+    "notes": "Community STEP from GrabCAD"
+  },
+  "silhouette_cameo_5": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 575, "y": 220, "z": 170},
+    "notes": "Manual modeling needed"
+  },
+  "neoden_yy1": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 400, "y": 350, "z": 400},
+    "notes": "Manual modeling needed"
+  },
+  "brother_pe800": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 533, "y": 303, "z": 419},
+    "notes": "Manual modeling needed"
+  },
+  "anycubic_photon_mono_m7": {
+    "source": "https://grabcad.com/library/anycubic-photon-mono-1",
+    "format": "STL",
+    "tier": 4,
+    "dimensions_mm": {"x": 225, "y": 145, "z": 410},
+    "notes": "Community STL (Photon Mono series)"
+  },
+  "phrozen_sonic_mighty_8k": {
+    "source": "https://grabcad.com/library/phrozen-sonic-mighty-1",
+    "format": "STL",
+    "tier": 4,
+    "dimensions_mm": {"x": 290, "y": 165, "z": 400},
+    "notes": "Community STL"
+  },
+  "ratrig_vcore4": {
+    "source": "https://github.com/Rat-Rig/V-core-4/tree/main/CAD",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 500, "y": 500, "z": 500},
+    "notes": "Official open-source CAD from Rat-Rig"
+  },
+  "creality_falcon2": {
+    "source": "https://grabcad.com/library/creality-falcon2-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 750, "y": 500, "z": 170},
+    "notes": "Community STEP"
+  },
+  "duet_generic": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 300, "y": 300, "z": 300},
+    "notes": "Generic printer — placeholder dimensions"
+  },
+  "grbl_generic": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 300, "y": 300, "z": 100},
+    "notes": "Generic CNC — placeholder dimensions"
+  },
+  "ruida_generic": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 900, "y": 600, "z": 250},
+    "notes": "Generic CO2 laser — placeholder dimensions"
+  },
+  "linuxcnc_generic": {
+    "source": null,
+    "format": "STEP",
+    "tier": 5,
+    "dimensions_mm": {"x": 600, "y": 400, "z": 200},
+    "notes": "Generic CNC — placeholder dimensions"
+  },
+  "index_pnp": {
+    "source": "https://github.com/index-machines/index/tree/main/cad",
+    "format": "STEP",
+    "tier": 1,
+    "dimensions_mm": {"x": 600, "y": 550, "z": 400},
+    "notes": "Official open-source CAD"
+  },
+  "openbuilds_lead": {
+    "source": "https://grabcad.com/library/openbuilds-lead-cnc-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 600, "y": 600, "z": 120},
+    "notes": "Community STEP"
+  },
+  "stepcraft_d840": {
+    "source": "https://grabcad.com/library/stepcraft-d840-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 840, "y": 600, "z": 140},
+    "notes": "Community STEP"
+  },
+  "prusa_sl1s": {
+    "source": "https://grabcad.com/library/prusa-sl1s-1",
+    "format": "STEP",
+    "tier": 2,
+    "dimensions_mm": {"x": 227, "y": 227, "z": 400},
+    "notes": "Community STEP"
+  }
+}

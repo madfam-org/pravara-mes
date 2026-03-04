@@ -68,6 +68,9 @@ const (
 	// Inventory events
 	EventInventoryLowStock EventType = "inventory.low_stock"
 	EventInventoryUpdated  EventType = "inventory.updated"
+
+	// Product import events
+	EventProductImported EventType = "product.imported_from_yantra4d"
 )
 
 // ChannelNamespace defines the Centrifugo channel namespaces.
@@ -82,6 +85,7 @@ const (
 	NamespaceAnalytics     ChannelNamespace = "analytics"
 	NamespaceMaintenance   ChannelNamespace = "maintenance"
 	NamespaceInventory     ChannelNamespace = "inventory"
+	NamespaceProducts      ChannelNamespace = "products"
 )
 
 // Event represents a real-time event to be published.
@@ -321,6 +325,10 @@ type InventoryEventData struct {
 	ItemID            uuid.UUID `json:"item_id"`
 	SKU               string    `json:"sku"`
 	Name              string    `json:"name"`
+	ItemName          string    `json:"item_name,omitempty"`
+	Action            string    `json:"action,omitempty"`
+	Quantity          float64   `json:"quantity,omitempty"`
+	NewOnHand         float64   `json:"new_on_hand,omitempty"`
 	QuantityAvailable float64   `json:"quantity_available"`
 	ReorderPoint      float64   `json:"reorder_point,omitempty"`
 	Timestamp         time.Time `json:"timestamp"`

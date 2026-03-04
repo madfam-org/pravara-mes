@@ -5883,6 +5883,120 @@ paths:
       summary: Receive ForgeSight webhook
       tags:
       - webhooks
+  /import/yantra4d:
+    post:
+      consumes:
+      - application/json
+      description: Imports a parametric hyperobject from Yantra4D, rendering a GLB model
+        and creating product definition, BOM items, and work instructions.
+      parameters:
+      - description: Import request
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            machine_type:
+              description: Target machine type for fabrication
+              type: string
+            mode:
+              description: Rendering mode (e.g. assembled, exploded)
+              type: string
+            parameters:
+              additionalProperties: true
+              description: Hyperobject parameter values
+              type: object
+            slug:
+              description: Yantra4D project slug
+              type: string
+          required:
+          - slug
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Import successful
+          schema:
+            properties:
+              bom_items:
+                items:
+                  type: object
+                type: array
+              model_url:
+                type: string
+              product_definition:
+                type: object
+              work_instruction:
+                type: object
+            type: object
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "502":
+          description: Upstream service error
+      security:
+      - BearerAuth: []
+      summary: Import hyperobject from Yantra4D
+      tags:
+      - yantra4d
+  /import/yantra4d/preview:
+    get:
+      description: Fetches the Yantra4D manifest and returns a preview of the MES
+        objects that would be created without writing to the database.
+      parameters:
+      - description: Yantra4D project slug
+        in: query
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Preview data
+          schema:
+            properties:
+              manifest:
+                type: object
+              preview:
+                properties:
+                  bom_count:
+                    type: integer
+                  category:
+                    type: string
+                  description:
+                    type: string
+                  modes:
+                    items:
+                      type: object
+                    type: array
+                  name:
+                    type: string
+                  parameters:
+                    items:
+                      type: object
+                    type: array
+                  sku:
+                    type: string
+                  step_count:
+                    type: integer
+                  version:
+                    type: string
+                type: object
+            type: object
+        "400":
+          description: Missing slug parameter
+        "401":
+          description: Unauthorized
+        "502":
+          description: Yantra4D unavailable
+      security:
+      - BearerAuth: []
+      summary: Preview Yantra4D import
+      tags:
+      - yantra4d
 securityDefinitions:
   BearerAuth:
     description: 'JWT Bearer token from OIDC provider (format: "Bearer <token>")'

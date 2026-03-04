@@ -16,6 +16,7 @@ A modern, real-time manufacturing dashboard featuring:
 - **Genealogy** - Product traceability timeline and birth certificates
 - **Work Instructions** - Step-by-step production guides
 - **Inventory** - Stock tracking with low-stock alerts
+- **Yantra4D Import** - Import parametric hyperobjects with live preview and parameter editing
 
 ## Quick Start
 

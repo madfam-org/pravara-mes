@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
+	registryapi "github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/api"
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/config"
 	managerpkg "github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/manager"
 	mqttpkg "github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/mqtt"
@@ -94,8 +95,8 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize machine registry
-	machineRegistry := registry.NewRegistry()
+	// Initialize machine registry (with DB persistence for runtime-added definitions)
+	machineRegistry := registry.NewRegistryWithDB(db, log)
 	log.WithField("definitions", len(machineRegistry.ListDefinitions())).Info("Machine registry initialized")
 
 	// Create context for graceful shutdown
@@ -248,6 +249,10 @@ func setupRouter(cfg *config.Config, log *logrus.Logger, db *sql.DB, reg *regist
 			}
 			c.JSON(http.StatusOK, def)
 		})
+
+		// Dynamic machine registration endpoints
+		regHandlers := registryapi.NewRegistryHandlers(reg, log)
+		regHandlers.RegisterRoutes(api)
 
 		// Machine discovery endpoints (to be implemented)
 		api.GET("/discover", func(c *gin.Context) {

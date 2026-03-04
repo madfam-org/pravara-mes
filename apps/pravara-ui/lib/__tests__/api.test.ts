@@ -8,7 +8,7 @@ const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 // Import after mock setup
-import { ordersAPI, machinesAPI, tasksAPI } from '../api'
+import { ordersAPI, machinesAPI, tasksAPI, yantra4dAPI } from '../api'
 
 describe('API client', () => {
   beforeEach(() => {
@@ -210,6 +210,44 @@ describe('API client', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ user_id: 'user-1', machine_id: 'machine-1' }),
+        })
+      )
+    })
+  })
+
+  describe('yantra4dAPI', () => {
+    it('preview calls GET /v1/import/yantra4d/preview with slug', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ manifest: {}, preview: { sku: 'Y4D-gridfinity-assembled' } }),
+      })
+
+      await yantra4dAPI.preview('token', 'gridfinity')
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/import/yantra4d/preview?slug=gridfinity'),
+        expect.any(Object)
+      )
+    })
+
+    it('import calls POST /v1/import/yantra4d with body', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ product_definition: { id: 'prod-1' }, bom_items: [] }),
+      })
+
+      const importData = {
+        slug: 'gridfinity',
+        mode: 'assembled',
+        parameters: { width_units: 4 },
+        machine_type: 'snapmaker_a350',
+      }
+
+      await yantra4dAPI.import('token', importData)
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/import/yantra4d'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify(importData),
         })
       )
     })

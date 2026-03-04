@@ -2,9 +2,14 @@
 package registry
 
 import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // MachineType represents a category of fabrication machine.
@@ -258,15 +263,32 @@ type TelemetryDef struct {
 
 // Registry manages machine definitions and capabilities.
 type Registry struct {
+	mu          sync.RWMutex
 	definitions map[string]*MachineDefinition
+	db          *sql.DB
+	log         *logrus.Logger
 }
 
-// NewRegistry creates a new machine registry.
+// NewRegistry creates a new machine registry with builtin definitions.
 func NewRegistry() *Registry {
 	r := &Registry{
 		definitions: make(map[string]*MachineDefinition),
 	}
 	r.loadBuiltinDefinitions()
+	return r
+}
+
+// NewRegistryWithDB creates a registry that also loads persisted definitions from the database.
+func NewRegistryWithDB(db *sql.DB, log *logrus.Logger) *Registry {
+	r := &Registry{
+		definitions: make(map[string]*MachineDefinition),
+		db:          db,
+		log:         log,
+	}
+	r.loadBuiltinDefinitions()
+	if db != nil {
+		r.loadPersistedDefinitions()
+	}
 	return r
 }
 
@@ -462,16 +484,109 @@ func (r *Registry) loadBuiltinDefinitions() {
 
 // GetDefinition retrieves a machine definition by ID.
 func (r *Registry) GetDefinition(id string) (*MachineDefinition, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	def, ok := r.definitions[id]
 	return def, ok
 }
 
 // ListDefinitions returns all available machine definitions.
 func (r *Registry) ListDefinitions() map[string]*MachineDefinition {
-	return r.definitions
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	// Return a copy to prevent concurrent map access
+	copy := make(map[string]*MachineDefinition, len(r.definitions))
+	for k, v := range r.definitions {
+		copy[k] = v
+	}
+	return copy
 }
 
-// RegisterDefinition adds a new machine definition.
+// RegisterDefinition adds a new machine definition at runtime.
 func (r *Registry) RegisterDefinition(id string, def *MachineDefinition) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.definitions[id] = def
+}
+
+// DeleteDefinition removes a machine definition.
+func (r *Registry) DeleteDefinition(id string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.definitions[id]; !ok {
+		return false
+	}
+	delete(r.definitions, id)
+	return true
+}
+
+// PersistDefinition saves a definition to the database for reload on restart.
+func (r *Registry) PersistDefinition(id string, def *MachineDefinition) error {
+	if r.db == nil {
+		return nil
+	}
+	defJSON, err := json.Marshal(def)
+	if err != nil {
+		return fmt.Errorf("marshal definition: %w", err)
+	}
+
+	query := `INSERT INTO machine_protocols (id, protocol_id, definition)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (protocol_id) DO UPDATE SET definition = $3, updated_at = NOW()`
+	_, err = r.db.Exec(query, def.ID, id, defJSON)
+	if err != nil {
+		return fmt.Errorf("persist definition: %w", err)
+	}
+	return nil
+}
+
+// DeletePersistedDefinition removes a definition from the database.
+func (r *Registry) DeletePersistedDefinition(id string) error {
+	if r.db == nil {
+		return nil
+	}
+	_, err := r.db.Exec(`DELETE FROM machine_protocols WHERE protocol_id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete persisted definition: %w", err)
+	}
+	return nil
+}
+
+// loadPersistedDefinitions loads runtime-added definitions from the database.
+func (r *Registry) loadPersistedDefinitions() {
+	rows, err := r.db.Query(`SELECT protocol_id, definition FROM machine_protocols`)
+	if err != nil {
+		if r.log != nil {
+			r.log.WithError(err).Warn("Failed to load persisted machine definitions (table may not exist)")
+		}
+		return
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var id string
+		var defJSON []byte
+		if err := rows.Scan(&id, &defJSON); err != nil {
+			if r.log != nil {
+				r.log.WithError(err).Warn("Failed to scan persisted definition")
+			}
+			continue
+		}
+
+		var def MachineDefinition
+		if err := json.Unmarshal(defJSON, &def); err != nil {
+			if r.log != nil {
+				r.log.WithError(err).WithField("id", id).Warn("Failed to unmarshal persisted definition")
+			}
+			continue
+		}
+
+		r.definitions[id] = &def
+		count++
+	}
+
+	if r.log != nil && count > 0 {
+		r.log.WithField("count", count).Info("Loaded persisted machine definitions")
+	}
 }

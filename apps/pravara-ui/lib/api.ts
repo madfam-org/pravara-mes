@@ -860,6 +860,84 @@ export const inventoryAPI = {
     fetchAPI<InventoryItem[]>("/v1/inventory/low-stock", { token }),
 };
 
+// ============ Yantra4D Import ============
+
+export interface Yantra4DParameter {
+  id: string;
+  type: string;
+  default: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+  label: Record<string, string>;
+  group: string;
+  visible_in_modes?: string[];
+}
+
+export interface Yantra4DMode {
+  id: string;
+  label: Record<string, string>;
+}
+
+export interface Yantra4DPreview {
+  manifest: {
+    project: {
+      name: string;
+      slug: string;
+      version: string;
+      description: Record<string, string>;
+      tags: string[];
+      engine: string;
+    };
+    modes: Yantra4DMode[];
+    parameters: Yantra4DParameter[];
+    bom: { hardware: { id: string; label: Record<string, string>; quantity_formula: string; unit: string }[] };
+    assembly_steps: unknown[];
+    verification: {
+      geometry: { watertight: boolean; dimensions: [number, number, number] };
+      printability: { thin_wall: number; overhang: number; min_feature_size: number };
+    };
+  };
+  preview: {
+    sku: string;
+    name: string;
+    version: string;
+    category: string;
+    description: string;
+    bom_count: number;
+    step_count: number;
+    modes: Yantra4DMode[];
+    parameters: Yantra4DParameter[];
+  };
+}
+
+export interface Yantra4DImportRequest {
+  slug: string;
+  mode?: string;
+  parameters?: Record<string, unknown>;
+  machine_type?: string;
+}
+
+export interface Yantra4DImportResult {
+  product_definition: ProductDefinition;
+  bom_items: BOMItem[];
+  work_instruction?: WorkInstruction;
+  model_url?: string;
+}
+
+export const yantra4dAPI = {
+  preview: (token: string, slug: string) =>
+    fetchAPI<Yantra4DPreview>(`/v1/import/yantra4d/preview?slug=${encodeURIComponent(slug)}`, { token }),
+
+  import: (token: string, data: Yantra4DImportRequest) =>
+    fetchAPI<Yantra4DImportResult>("/v1/import/yantra4d", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+};
+
 // ============ SPC ============
 
 export interface SPCControlLimit {

@@ -18,6 +18,7 @@ The API provides endpoints for:
 - **Genealogy** - Product traceability and digital birth certificates
 - **Work Instructions** - Step-by-step production procedures
 - **Inventory** - Stock tracking and ForgeSight integration
+- **Yantra4D Import** - Import parametric hyperobjects as products with BOM and work instructions
 
 ## Quick Start
 
@@ -64,7 +65,7 @@ apps/pravara-api/
 │   ├── middleware/   # Auth, rate limiting, metrics
 │   ├── observability/# Prometheus metrics
 │   ├── pubsub/       # Redis pub/sub for real-time events
-│   └── services/     # Business logic and automation
+│   └── services/     # Business logic, automation, and Yantra4D mapping
 └── tests/            # Integration tests
 ```
 

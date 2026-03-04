@@ -32,6 +32,8 @@ The system now features complete multi-tool 3D printing support with real-time p
 - **Snapmaker/Luban Integration** - Native support for Snapmaker 3D printers with Luban slicing
 - **OctoPrint Connectivity** - Full integration with OctoPrint-managed 3D printers
 - **FullControl GCODE** - Advanced G-code visualization with material physics simulation
+- **Yantra4D Integration** - Import parametric hyperobjects, auto-create products/BOM/work instructions
+- **Dynamic Machine Registration** - Runtime-registerable machine definitions with DB persistence
 
 ## Architecture
 
@@ -69,6 +71,7 @@ The system now features complete multi-tool 3D printing support with real-time p
 | **Cache/Pub-Sub** | Redis 7 |
 | **Real-Time Gateway** | Centrifugo v5 (WebSocket) |
 | **Auth** | Janua SSO (OIDC, RS256 JWT) |
+| **Parametric Design** | Yantra4D (hyperobject import) |
 | **IIoT Broker** | EMQX (MQTT 5.0) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
 | **Metrics** | Prometheus + AlertManager |
@@ -193,6 +196,7 @@ pravara-mes/
 │   │   └── internal/
 │   │       ├── models/           # 3D model management
 │   │       ├── physics/          # Physics simulation engine
+│   │       ├── yantra4d/         # Yantra4D API client
 │   │       └── websocket/        # Real-time updates
 │   │
 │   ├── video-streaming/          # WebRTC video service

@@ -29,6 +29,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Billing | `/v1/billing` | Usage tracking |
 | Realtime | `/v1/realtime` | WebSocket authentication |
 | Webhooks | `/v1/webhooks` | External integrations |
+| Yantra4D Import | `/v1/import/yantra4d` | Hyperobject import from Yantra4D |
 
 ## Application READMEs
 
@@ -37,6 +38,8 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | pravara-api | [README](../apps/pravara-api/README.md) | REST API server |
 | pravara-ui | [README](../apps/pravara-ui/README.md) | Next.js dashboard |
 | telemetry-worker | [README](../apps/telemetry-worker/README.md) | MQTT processor |
+| machine-adapter | — | Machine connectivity adapter with dynamic registration |
+| visualization-engine | — | 3D factory floor visualization with Yantra4D import |
 | sdk-go | [README](../packages/sdk-go/README.md) | Shared Go types |
 
 ## Internal Package Documentation

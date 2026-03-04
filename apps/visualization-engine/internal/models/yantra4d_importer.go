@@ -1,26 +1,32 @@
 package models
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+
+	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/storage"
+	"github.com/madfam-org/pravara-mes/apps/visualization-engine/internal/yantra4d"
 )
 
 // Yantra4DImporter imports configured hyperobjects from the Yantra4D platform.
-// This is a stub implementation. The full implementation requires the Yantra4D
-// API documentation to be available.
+// It renders a GLB via the Yantra4D API, uploads to S3, and returns a MachineModel.
 type Yantra4DImporter struct {
-	apiURL string
-	apiKey string
+	client        *yantra4d.Client
+	storageClient *storage.Client
+	log           *logrus.Logger
 }
 
 // NewYantra4DImporter creates a new Yantra4D importer.
-func NewYantra4DImporter(apiURL, apiKey string) *Yantra4DImporter {
+func NewYantra4DImporter(client *yantra4d.Client, storageClient *storage.Client, log *logrus.Logger) *Yantra4DImporter {
 	return &Yantra4DImporter{
-		apiURL: apiURL,
-		apiKey: apiKey,
+		client:        client,
+		storageClient: storageClient,
+		log:           log,
 	}
 }
 
@@ -31,46 +37,142 @@ func (y *Yantra4DImporter) Name() string {
 
 // SupportedFormats returns supported identifiers.
 func (y *Yantra4DImporter) SupportedFormats() []string {
-	return []string{".yantra4d"} // Virtual format identifier
+	return []string{".yantra4d"}
 }
 
-// Import fetches a configured hyperobject from Yantra4D and converts it to GLTF.
+// Yantra4DImportRequest holds parameters for a Yantra4D import.
+type Yantra4DImportRequest struct {
+	Slug        string                 `json:"slug" binding:"required"`
+	Params      map[string]interface{} `json:"params"`
+	MachineType string                 `json:"machine_type"`
+}
+
+// Import fetches a configured hyperobject from Yantra4D, renders it to GLB,
+// uploads to S3, and returns a MachineModel ready for persistence.
 //
-// When the Yantra4D API is available, this will:
-// 1. Authenticate with apiURL using apiKey
-// 2. Fetch the hyperobject configuration by source ID
-// 3. Request GLTF export from Yantra4D
-// 4. Download the exported GLTF file
-// 5. Upload to S3 storage
-// 6. Create a MachineModel DB record
-//
-// For now, this returns a placeholder indicating the integration is pending.
+// The source parameter is the project slug.
+// The JWT must be available in opts.Metadata["jwt"].
 func (y *Yantra4DImporter) Import(ctx context.Context, source string, opts ImportOptions) (*MachineModel, error) {
-	if y.apiURL == "" {
-		return nil, fmt.Errorf("yantra4d integration not configured: API URL required")
+	jwt := opts.Metadata["jwt"]
+	if jwt == "" {
+		return nil, fmt.Errorf("yantra4d import requires JWT in metadata")
 	}
 
-	// Stub: return a placeholder model record
+	params := make(map[string]interface{})
+	if raw, ok := opts.Metadata["params"]; ok && raw != "" {
+		// Params passed as serialized metadata — the handler provides typed params directly via ImportFull
+		_ = raw
+	}
+
+	return y.ImportFull(ctx, source, params, jwt, opts)
+}
+
+// ImportFull performs the full import pipeline with typed parameters.
+func (y *Yantra4DImporter) ImportFull(ctx context.Context, slug string, params map[string]interface{}, jwt string, opts ImportOptions) (*MachineModel, error) {
+	y.log.WithField("slug", slug).Info("Starting Yantra4D import")
+
+	// 1. Fetch manifest
+	manifest, err := y.client.GetManifest(ctx, slug, jwt)
+	if err != nil {
+		return nil, fmt.Errorf("fetch manifest: %w", err)
+	}
+
+	y.log.WithFields(logrus.Fields{
+		"project": manifest.Project.Name,
+		"version": manifest.Project.Version,
+		"engine":  manifest.Project.Engine,
+	}).Info("Manifest fetched")
+
+	// 2. Render GLB
+	glbData, contentType, err := y.client.Render(ctx, slug, params, "glb", jwt)
+	if err != nil {
+		return nil, fmt.Errorf("render GLB: %w", err)
+	}
+
+	y.log.WithField("size_bytes", len(glbData)).Info("GLB rendered")
+
+	// 3. Upload to S3
+	if y.storageClient == nil {
+		return nil, fmt.Errorf("S3 storage not configured")
+	}
+
+	key := fmt.Sprintf("models/yantra4d/%s_%d.glb", slug, time.Now().UnixNano())
+	_, err = y.storageClient.UploadModel(ctx, key, bytes.NewReader(glbData), int64(len(glbData)), contentType)
+	if err != nil {
+		return nil, fmt.Errorf("upload GLB to S3: %w", err)
+	}
+
+	// 4. Get presigned download URL
+	modelURL, err := y.storageClient.GetPresignedURL(ctx, key, 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("generate presigned URL: %w", err)
+	}
+
+	// 5. Build MachineModel from manifest dimensions
 	name := opts.Name
 	if name == "" {
-		name = fmt.Sprintf("Yantra4D Import: %s", source)
+		name = manifest.Project.Name
+	}
+
+	machineType := opts.MachineType
+	if machineType == "" {
+		machineType = inferMachineType(manifest.Project.Engine)
+	}
+
+	scale := opts.Scale
+	if scale == 0 {
+		scale = 1.0
+	}
+
+	bbox := BoundingBox{}
+	dims := manifest.Verification.Geometry.Dimensions
+	if dims[0] > 0 || dims[1] > 0 || dims[2] > 0 {
+		bbox = BoundingBox{
+			Min: Vector3{X: 0, Y: 0, Z: 0},
+			Max: Vector3{X: dims[0], Y: dims[1], Z: dims[2]},
+		}
 	}
 
 	model := &MachineModel{
 		ID:          uuid.New(),
-		MachineType: opts.MachineType,
+		MachineType: machineType,
 		Name:        name,
-		ModelURL:    "", // Will be populated when Yantra4D API integration is complete
-		Scale:       1.0,
-		BoundingBox: BoundingBox{},
+		ModelURL:    modelURL,
+		Scale:       scale,
+		BoundingBox: bbox,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	return model, fmt.Errorf("yantra4d import not yet implemented: awaiting API documentation")
+	y.log.WithFields(logrus.Fields{
+		"model_id":     model.ID,
+		"model_url":    modelURL,
+		"machine_type": machineType,
+	}).Info("Yantra4D import complete")
+
+	return model, nil
 }
 
-// IsConfigured returns true if the Yantra4D API connection is set up.
+// GetManifest exposes manifest fetching for preview endpoints.
+func (y *Yantra4DImporter) GetManifest(ctx context.Context, slug, jwt string) (*yantra4d.Manifest, error) {
+	return y.client.GetManifest(ctx, slug, jwt)
+}
+
+// IsConfigured returns true if the importer has all dependencies.
 func (y *Yantra4DImporter) IsConfigured() bool {
-	return y.apiURL != "" && y.apiKey != ""
+	return y.client != nil && y.storageClient != nil
+}
+
+// inferMachineType maps Yantra4D engine to a MES machine type.
+func inferMachineType(engine string) string {
+	switch engine {
+	case "openscad", "scad":
+		return "3d_printer_fdm"
+	case "cadquery", "cq":
+		return "cnc_3axis"
+	case "freecad":
+		return "cnc_3axis"
+	default:
+		return "3d_printer_fdm"
+	}
 }
