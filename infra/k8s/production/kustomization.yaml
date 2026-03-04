@@ -95,10 +95,10 @@ images:
   newTag: 16-alpine
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
-  newTag: main-3ce0277
+  newTag: main-acc524a
 - name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
-  newTag: main-3ce0277
+  newTag: main-acc524a
 - name: redis
   newName: docker.io/library/redis
   newTag: 7-alpine
