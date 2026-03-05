@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/name: pravara-mes
 data:
   environment: production
-  api_url: "https://api.pravara.madfam.io"
-  ui_url: "https://pravara.madfam.io"
-  gateway_url: "wss://gateway.pravara.madfam.io/connection/websocket"
+  api_url: "https://mes-api.madfam.io"
+  ui_url: "https://mes.madfam.io"
+  gateway_url: "wss://mes-api.madfam.io/connection/websocket"
   database_host: "postgres-pravara"
   redis_host: "redis-pravara"
   mqtt_broker: "emqx-pravara"

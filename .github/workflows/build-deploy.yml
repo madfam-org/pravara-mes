@@ -13,6 +13,7 @@ on:
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'
       - 'infra/k8s/production/kustomization.yaml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -212,7 +213,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=https://api.pravara.madfam.io
+            NEXT_PUBLIC_API_URL=https://mes-api.madfam.io
             NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
           cache-from: type=gha
           cache-to: type=gha,mode=max

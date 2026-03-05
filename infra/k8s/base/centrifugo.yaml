@@ -19,7 +19,7 @@ data:
       "redis_address": "redis://redis-pravara:6379",
       "admin": false,
       "log_level": "info",
-      "allowed_origins": ["https://pravara.madfam.io", "http://localhost:4501"],
+      "allowed_origins": ["https://mes.madfam.io", "http://localhost:4501"],
       "namespaces": [
         {
           "name": "machines",

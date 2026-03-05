@@ -1,75 +1,107 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: pravara-mes
-
 resources:
 - ../base
 
-# In production, ExternalSecret CRs (in base/external-secrets/) create the
-# Kubernetes Secrets from Vault. The static secrets.yaml placeholders are
-# kept for local dev but overridden by ESO's Owner creationPolicy.
-
-  # Production-specific patches for higher resources
 patches:
-- patch: |-
-    apiVersion: apps/v1
+# --- Infrastructure resource overrides ---
+- target:
     kind: StatefulSet
-    metadata:
-      name: postgres-pravara
-    spec:
-      template:
-        spec:
-          containers:
-            - name: postgres
-              resources:
-                requests:
-                  cpu: 500m
-                  memory: 1Gi
-                limits:
-                  cpu: 2000m
-                  memory: 4Gi
-- patch: |-
-    apiVersion: apps/v1
+    name: postgres-pravara
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+- target:
     kind: Deployment
-    metadata:
-      name: redis-pravara
-    spec:
-      template:
-        spec:
-          containers:
-            - name: redis
-              resources:
-                requests:
-                  cpu: 250m
-                  memory: 256Mi
-                limits:
-                  cpu: 500m
-                  memory: 1Gi
-- patch: |-
-    apiVersion: apps/v1
+    name: redis-pravara
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+- target:
     kind: Deployment
-    metadata:
-      name: emqx-pravara
-    spec:
-      replicas: 1
-      template:
-        spec:
-          containers:
-            - name: emqx
-              resources:
-                requests:
-                  cpu: 200m
-                  memory: 512Mi
-                limits:
-                  cpu: 1000m
-                  memory: 1Gi
-
-configMapGenerator:
-- behavior: merge
-  literals:
-  - environment=production
-  name: pravara-config
+    name: emqx-pravara
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 1
+    - op: replace
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+# --- Scale down centrifugo (single node, conserve resources) ---
+- target:
+    kind: HorizontalPodAutoscaler
+    name: centrifugo
+  patch: |-
+    - op: replace
+      path: /spec/minReplicas
+      value: 1
+    - op: replace
+      path: /spec/maxReplicas
+      value: 3
+- target:
+    kind: Deployment
+    name: centrifugo
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 1
+# --- Scale down non-core services (no images available) ---
+- target:
+    kind: Deployment
+    name: visualization-engine
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+- target:
+    kind: Deployment
+    name: video-streaming
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+- target:
+    kind: Deployment
+    name: luban-bridge
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+- target:
+    kind: Deployment
+    name: octoprint-connector
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+- target:
+    kind: Deployment
+    name: machine-adapter
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
 
 images:
 - name: centrifugo/centrifugo
@@ -78,36 +110,33 @@ images:
 - name: emqx/emqx
   newName: docker.io/emqx/emqx
   newTag: "5.4"
+- name: postgres
+  newName: docker.io/library/postgres
+  newTag: 16-alpine
+- name: pravara-api
+  newName: ghcr.io/madfam-org/pravara-api
+  newTag: latest
+- name: pravara-ui
+  newName: ghcr.io/madfam-org/pravara-ui
+  newTag: latest
+- name: redis
+  newName: docker.io/library/redis
+  newTag: 7-alpine
+- name: telemetry-worker
+  newName: ghcr.io/madfam-org/telemetry-worker
+  newTag: latest
+- name: visualization-engine
+  newName: ghcr.io/madfam-org/visualization-engine
+  newTag: latest
+- name: video-streaming
+  newName: ghcr.io/madfam-org/video-streaming
+  newTag: latest
 - name: luban-bridge
   newName: ghcr.io/madfam-org/luban-bridge
-  newTag: latest
-- name: machine-adapter
-  newName: ghcr.io/madfam-org/machine-adapter
-  newTag: latest
-- name: ml-orchestrator
-  newName: ghcr.io/madfam-org/ml-orchestrator
   newTag: latest
 - name: octoprint-connector
   newName: ghcr.io/madfam-org/octoprint-connector
   newTag: latest
-- name: postgres
-  newName: docker.io/library/postgres
-  newTag: 16-alpine
-- digest: sha256:d125bbe5f00e12de5cd6e38a61b2d7c7b5fced12c4acc5766c76e15385c90958
-  name: pravara-api
-  newName: ghcr.io/madfam-org/pravara-api
-- name: pravara-ui
-  newName: ghcr.io/madfam-org/pravara-ui
-  newTag: main-acc524a
-- name: redis
-  newName: docker.io/library/redis
-  newTag: 7-alpine
-- digest: sha256:bb6204d8f51fa6ebbe7e5ef0bdd3342aa1cc623b3f979fac23d941eede5a8a56
-  name: telemetry-worker
-  newName: ghcr.io/madfam-org/telemetry-worker
-- name: video-streaming
-  newName: ghcr.io/madfam-org/video-streaming
-  newTag: latest
-- name: visualization-engine
-  newName: ghcr.io/madfam-org/visualization-engine
+- name: machine-adapter
+  newName: ghcr.io/madfam-org/machine-adapter
   newTag: latest
