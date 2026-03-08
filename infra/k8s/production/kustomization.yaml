@@ -4,12 +4,11 @@ kind: Kustomization
 resources:
 - ../base
 
-patches:
 # --- Infrastructure resource overrides ---
-- target:
-    kind: StatefulSet
-    name: postgres-pravara
-  patch: |-
+# --- Scale down centrifugo (single node, conserve resources) ---
+# --- Scale down non-core services (no images available) ---
+patches:
+- patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/resources
       value:
@@ -19,10 +18,10 @@ patches:
         limits:
           cpu: 2000m
           memory: 4Gi
-- target:
-    kind: Deployment
-    name: redis-pravara
-  patch: |-
+  target:
+    kind: StatefulSet
+    name: postgres-pravara
+- patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/resources
       value:
@@ -32,10 +31,10 @@ patches:
         limits:
           cpu: 500m
           memory: 1Gi
-- target:
+  target:
     kind: Deployment
-    name: emqx-pravara
-  patch: |-
+    name: redis-pravara
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 1
@@ -48,60 +47,61 @@ patches:
         limits:
           cpu: 1000m
           memory: 1Gi
-# --- Scale down centrifugo (single node, conserve resources) ---
-- target:
-    kind: HorizontalPodAutoscaler
-    name: centrifugo
-  patch: |-
+  target:
+    kind: Deployment
+    name: emqx-pravara
+- patch: |-
     - op: replace
       path: /spec/minReplicas
       value: 1
     - op: replace
       path: /spec/maxReplicas
       value: 3
-- target:
-    kind: Deployment
+  target:
+    kind: HorizontalPodAutoscaler
     name: centrifugo
-  patch: |-
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 1
-# --- Scale down non-core services (no images available) ---
-- target:
+  target:
+    kind: Deployment
+    name: centrifugo
+- patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+  target:
     kind: Deployment
     name: visualization-engine
-  patch: |-
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 0
-- target:
+  target:
     kind: Deployment
     name: video-streaming
-  patch: |-
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 0
-- target:
+  target:
     kind: Deployment
     name: luban-bridge
-  patch: |-
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 0
-- target:
+  target:
     kind: Deployment
     name: octoprint-connector
-  patch: |-
+- patch: |-
     - op: replace
       path: /spec/replicas
       value: 0
-- target:
+  target:
     kind: Deployment
     name: machine-adapter
-  patch: |-
-    - op: replace
-      path: /spec/replicas
-      value: 0
 
 images:
 - name: centrifugo/centrifugo
@@ -110,33 +110,33 @@ images:
 - name: emqx/emqx
   newName: docker.io/emqx/emqx
   newTag: "5.4"
+- name: luban-bridge
+  newName: ghcr.io/madfam-org/luban-bridge
+  newTag: latest
+- name: machine-adapter
+  newName: ghcr.io/madfam-org/machine-adapter
+  newTag: latest
+- name: octoprint-connector
+  newName: ghcr.io/madfam-org/octoprint-connector
+  newTag: latest
 - name: postgres
   newName: docker.io/library/postgres
   newTag: 16-alpine
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
   newTag: latest
-- name: pravara-ui
+- digest: sha256:a89db70e8a2280d573321f3fc3aa8adf77660ccc8f4e8dbff3a7c04e5b07446f
+  name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
-  newTag: latest
 - name: redis
   newName: docker.io/library/redis
   newTag: 7-alpine
 - name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
   newTag: latest
-- name: visualization-engine
-  newName: ghcr.io/madfam-org/visualization-engine
-  newTag: latest
 - name: video-streaming
   newName: ghcr.io/madfam-org/video-streaming
   newTag: latest
-- name: luban-bridge
-  newName: ghcr.io/madfam-org/luban-bridge
-  newTag: latest
-- name: octoprint-connector
-  newName: ghcr.io/madfam-org/octoprint-connector
-  newTag: latest
-- name: machine-adapter
-  newName: ghcr.io/madfam-org/machine-adapter
+- name: visualization-engine
+  newName: ghcr.io/madfam-org/visualization-engine
   newTag: latest
