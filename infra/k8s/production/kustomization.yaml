@@ -125,7 +125,7 @@ images:
 - name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
   newTag: latest
-- digest: sha256:a89db70e8a2280d573321f3fc3aa8adf77660ccc8f4e8dbff3a7c04e5b07446f
+- digest: sha256:5d81c3893b9625c18babd7686db7daee15420e52a21b1f3e229915d744c546f6
   name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
 - name: redis
