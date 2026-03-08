@@ -1,16 +1,7 @@
-import { getSession } from "@janua/nextjs";
 import { redirect } from "next/navigation";
 
-export default async function Home() {
-  const session = await getSession(
-    process.env.JANUA_APP_ID!,
-    process.env.JANUA_API_KEY!,
-    process.env.JANUA_JWT_SECRET!,
-  );
-
-  if (!session) {
-    redirect("/login");
-  }
-
+export default function Home() {
+  // The /dashboard route is protected by the (protected) layout,
+  // which checks auth via usePravaraSession and redirects to /login.
   redirect("/dashboard");
 }
