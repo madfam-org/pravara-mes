@@ -343,7 +343,7 @@ export default function GenealogyDetailPage({
           </Card>
 
           {/* Birth Certificate */}
-          {isSealed && record.birth_cert_url && (
+          {isSealed && !!record.birth_cert_url && (
             <Card className="border-purple-200 dark:border-purple-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base text-purple-600 dark:text-purple-400">
@@ -356,7 +356,7 @@ export default function GenealogyDetailPage({
                   This record has been sealed with a cryptographic hash.
                   The birth certificate is immutable.
                 </p>
-                {record.birth_cert_hash && (
+                {!!record.birth_cert_hash && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
                       SHA-256 Hash
