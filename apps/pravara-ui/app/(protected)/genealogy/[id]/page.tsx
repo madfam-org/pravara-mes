@@ -34,6 +34,15 @@ const statusColors: Record<string, string> = {
     "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
 };
 
+interface GenealogyTree {
+  materials?: Array<{
+    material_name: string;
+    batch_lot_number?: string;
+    quantity_used: number;
+    unit: string;
+  }>;
+}
+
 interface TimelineStep {
   label: string;
   icon: LucideIcon;
@@ -52,15 +61,15 @@ export default function GenealogyDetailPage({
   const token = (session?.user as any)?.accessToken;
   const queryClient = useQueryClient();
 
-  const { data: record, isLoading } = useQuery({
+  const { data: record, isLoading } = useQuery<ProductGenealogy>({
     queryKey: ["genealogy", id],
     queryFn: () => genealogyAPI.get(token, id),
     enabled: !!token,
   });
 
-  const { data: tree } = useQuery({
+  const { data: tree } = useQuery<GenealogyTree>({
     queryKey: ["genealogy", id, "tree"],
-    queryFn: () => genealogyAPI.getTree(token, id),
+    queryFn: () => genealogyAPI.getTree(token, id) as Promise<GenealogyTree>,
     enabled: !!token,
   });
 
@@ -378,7 +387,7 @@ export default function GenealogyDetailPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
-                  {tree.materials.map((mat: any, i: number) => (
+                  {tree.materials.map((mat, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between border-b last:border-0 pb-2 last:pb-0"
