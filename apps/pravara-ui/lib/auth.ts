@@ -46,8 +46,8 @@ export function usePravaraSession(): {
     return { data: null, status: "unauthenticated" };
   }
 
-  const accessToken = janua.client?.getAccessToken?.() || "";
-  const claims = januaUser as Record<string, unknown>;
+  const accessToken = String(janua.client?.getAccessToken?.() ?? "");
+  const claims = januaUser as unknown as Record<string, unknown>;
 
   const session: PravaraSession = {
     user: {

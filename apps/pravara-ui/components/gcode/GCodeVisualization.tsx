@@ -111,15 +111,11 @@ const ToolPath: React.FC<{
       <bufferGeometry ref={lineRef}>
         <bufferAttribute
           attach="attributes-position"
-          count={points.length / 3}
-          array={points}
-          itemSize={3}
+          args={[points, 3]}
         />
         <bufferAttribute
           attach="attributes-color"
-          count={colors.length / 3}
-          array={colors}
-          itemSize={3}
+          args={[colors, 3]}
         />
       </bufferGeometry>
       <lineBasicMaterial vertexColors linewidth={2} />
@@ -162,7 +158,7 @@ const MaterialDeposition: React.FC<{
   const meshRef = useRef<THREE.Group>(null);
 
   const depositions = useMemo(() => {
-    const deps: JSX.Element[] = [];
+    const deps: React.JSX.Element[] = [];
 
     segments.slice(0, currentSegment + 1).forEach((segment, index) => {
       if (segment.is_travel || segment.is_retraction) return;

@@ -172,7 +172,7 @@ const FactoryFloorGrid: React.FC<{ size: [number, number] }> = ({ size }) => {
 // Camera controller with presets
 const CameraController: React.FC<{ presets: CameraPreset[] }> = ({ presets }) => {
   const { camera } = useThree();
-  const controlsRef = useRef<any>();
+  const controlsRef = useRef<any>(null);
 
   const { activePreset } = useControls("Camera", {
     activePreset: {
