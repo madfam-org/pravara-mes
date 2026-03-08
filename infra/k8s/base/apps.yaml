@@ -106,6 +106,7 @@ spec:
 
 # -----------------------------------------------------------------------------
 # pravara-ui — Web dashboard (Next.js)
+# NOTE: Scaled to 0 — image not yet published to GHCR
 # -----------------------------------------------------------------------------
 ---
 apiVersion: apps/v1
@@ -118,7 +119,7 @@ metadata:
     app.kubernetes.io/name: pravara-ui
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: pravara-ui
@@ -310,6 +311,7 @@ spec:
 
 # -----------------------------------------------------------------------------
 # visualization-engine — Real-time dashboard rendering (Go)
+# NOTE: Scaled to 0 — image not yet published to GHCR
 # -----------------------------------------------------------------------------
 ---
 apiVersion: apps/v1
@@ -322,7 +324,7 @@ metadata:
     app.kubernetes.io/name: visualization-engine
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: visualization-engine
@@ -424,7 +426,7 @@ metadata:
     app.kubernetes.io/name: video-streaming
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: video-streaming
@@ -526,7 +528,7 @@ metadata:
     app.kubernetes.io/name: luban-bridge
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: luban-bridge
@@ -628,7 +630,7 @@ metadata:
     app.kubernetes.io/name: octoprint-connector
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: octoprint-connector
@@ -730,7 +732,7 @@ metadata:
     app.kubernetes.io/name: machine-adapter
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: machine-adapter
