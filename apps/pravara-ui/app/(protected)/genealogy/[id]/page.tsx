@@ -15,6 +15,7 @@ import {
   Award,
   GitBranch,
   Layers,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,7 @@ const statusColors: Record<string, string> = {
 
 interface TimelineStep {
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   value: string | null;
   status: "completed" | "current" | "pending";
   detail?: string;
