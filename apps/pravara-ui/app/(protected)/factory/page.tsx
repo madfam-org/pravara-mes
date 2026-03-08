@@ -1,3 +1,5 @@
+"use client";
+
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
