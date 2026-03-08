@@ -219,7 +219,7 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("app.env", "APP_ENV")
 	v.BindEnv("app.log_level", "LOG_LEVEL")
 
-	v.BindEnv("server.port", "PRAVARA_API_PORT", "PORT")
+	v.BindEnv("server.port", "PRAVARA_API_PORT")
 
 	v.BindEnv("database.url", "DATABASE_URL")
 	v.BindEnv("database.max_connections", "DATABASE_MAX_CONNECTIONS")

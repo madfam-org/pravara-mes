@@ -85,6 +85,10 @@ func Load() (*Config, error) {
 	viper.SetEnvPrefix("MACHINE_ADAPTER")
 	viper.AutomaticEnv()
 
+	// Explicit env var bindings for K8s deployment
+	viper.BindEnv("mqtt.brokerurl", "MQTT_BROKER_URL")
+	viper.BindEnv("database.url", "DATABASE_URL")
+
 	// Read config file if it exists
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -117,7 +121,7 @@ func setDefaults() {
 	viper.SetDefault("server.writetimeout", "30s")
 
 	// MQTT
-	viper.SetDefault("mqtt.brokerurl", "tcp://localhost:1883")
+	viper.SetDefault("mqtt.brokerurl", "tcp://emqx-pravara:1883")
 	viper.SetDefault("mqtt.clientid", "machine-adapter")
 	viper.SetDefault("mqtt.commandtopic", "pravara/+/machines/+/command")
 	viper.SetDefault("mqtt.telemetrytopic", "pravara/+/machines/+/telemetry")

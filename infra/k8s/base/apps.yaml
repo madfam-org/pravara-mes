@@ -28,6 +28,7 @@ spec:
         app.kubernetes.io/name: pravara-api
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -129,6 +130,7 @@ spec:
         app.kubernetes.io/name: pravara-ui
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -230,6 +232,7 @@ spec:
         app.kubernetes.io/name: telemetry-worker
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -331,6 +334,7 @@ spec:
         app.kubernetes.io/name: visualization-engine
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -432,6 +436,7 @@ spec:
         app.kubernetes.io/name: video-streaming
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -533,6 +538,7 @@ spec:
         app.kubernetes.io/name: luban-bridge
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -634,6 +640,7 @@ spec:
         app.kubernetes.io/name: octoprint-connector
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:
@@ -735,6 +742,7 @@ spec:
         app.kubernetes.io/name: machine-adapter
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr-credentials
       securityContext:

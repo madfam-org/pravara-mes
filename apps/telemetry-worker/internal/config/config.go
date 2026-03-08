@@ -99,7 +99,7 @@ func Load() (*Config, error) {
 	v.SetDefault("log_level", "info")
 
 	// MQTT defaults
-	v.SetDefault("mqtt.broker", "localhost")
+	v.SetDefault("mqtt.broker", "emqx-pravara")
 	v.SetDefault("mqtt.port", 1883)
 	v.SetDefault("mqtt.client_id", "pravara-telemetry-worker")
 	v.SetDefault("mqtt.topic_root", "+/+/+/+/+/#")
@@ -107,14 +107,14 @@ func Load() (*Config, error) {
 	v.SetDefault("mqtt.clean_start", false)
 
 	// Database defaults
-	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.host", "postgres-pravara")
 	v.SetDefault("database.port", 5432)
 	v.SetDefault("database.user", "pravara")
 	v.SetDefault("database.name", "pravara_mes")
 	v.SetDefault("database.ssl_mode", "disable")
 
 	// Redis defaults
-	v.SetDefault("redis.host", "localhost")
+	v.SetDefault("redis.host", "redis-pravara")
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("redis.db", 0)
 
@@ -133,6 +133,20 @@ func Load() (*Config, error) {
 	v.SetEnvPrefix("PRAVARA")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+
+	// Explicit env var bindings for K8s deployment
+	v.BindEnv("mqtt.broker", "MQTT_BROKER")
+	v.BindEnv("mqtt.port", "MQTT_PORT")
+	v.BindEnv("mqtt.username", "MQTT_USERNAME")
+	v.BindEnv("mqtt.password", "MQTT_PASSWORD")
+	v.BindEnv("database.host", "DATABASE_HOST")
+	v.BindEnv("database.port", "DATABASE_PORT")
+	v.BindEnv("database.user", "DATABASE_USER")
+	v.BindEnv("database.password", "DATABASE_PASSWORD")
+	v.BindEnv("database.name", "DATABASE_NAME")
+	v.BindEnv("redis.host", "REDIS_HOST")
+	v.BindEnv("redis.port", "REDIS_PORT")
+	v.BindEnv("redis.password", "REDIS_PASSWORD")
 
 	// Read from config file if present
 	v.SetConfigName("config")

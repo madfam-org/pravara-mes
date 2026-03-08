@@ -111,6 +111,7 @@ spec:
         app.kubernetes.io/name: centrifugo
         app.kubernetes.io/part-of: pravara-mes
     spec:
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
