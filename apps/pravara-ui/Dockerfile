@@ -13,6 +13,11 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
+
+ARG NPM_MADFAM_TOKEN
+RUN echo "@janua:registry=https://npm.madfam.io/" > .npmrc && \
+    echo "//npm.madfam.io/:_authToken=${NPM_MADFAM_TOKEN}" >> .npmrc
+
 RUN npm ci
 
 # -----------------------------------------------------------------------------

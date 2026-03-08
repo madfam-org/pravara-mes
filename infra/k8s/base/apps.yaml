@@ -106,7 +106,6 @@ spec:
 
 # -----------------------------------------------------------------------------
 # pravara-ui — Web dashboard (Next.js)
-# NOTE: Scaled to 0 — image not yet published to GHCR
 # -----------------------------------------------------------------------------
 ---
 apiVersion: apps/v1
@@ -119,7 +118,7 @@ metadata:
     app.kubernetes.io/name: pravara-ui
     app.kubernetes.io/part-of: pravara-mes
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: pravara-ui

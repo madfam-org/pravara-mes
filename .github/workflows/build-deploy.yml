@@ -215,6 +215,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=https://mes-api.madfam.io
             NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
+            NPM_MADFAM_TOKEN=${{ secrets.NPM_MADFAM_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           sbom: true
