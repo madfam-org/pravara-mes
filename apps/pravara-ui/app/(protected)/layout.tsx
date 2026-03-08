@@ -1,16 +1,30 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { usePravaraSession } from "@/lib/auth";
 import { Sidebar } from "@/components/sidebar";
 
-export default async function ProtectedLayout({
+export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const { data: session, status } = usePravaraSession();
+  const router = useRouter();
 
-  if (!session) {
-    redirect("/login");
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
+  if (status === "loading" || !session) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
   }
 
   return (
