@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Providers } from "./providers";
+import { PostHogProvider } from "@/components/PostHogProvider";
 
 export const metadata: Metadata = {
   title: "PravaraMES - Manufacturing Execution System",
@@ -20,7 +22,11 @@ export default function RootLayout({
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Suspense>
+          <PostHogProvider>
+            <Providers>{children}</Providers>
+          </PostHogProvider>
+        </Suspense>
       </body>
     </html>
   );
