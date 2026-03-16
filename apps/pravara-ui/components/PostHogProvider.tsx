@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { initPostHog } from "@/lib/analytics/posthog";
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
@@ -12,8 +13,8 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.posthog) {
-      window.posthog.capture("$pageview");
+    if (typeof window !== "undefined" && posthog.__loaded) {
+      posthog.capture("$pageview");
     }
   }, [pathname, searchParams]);
 
