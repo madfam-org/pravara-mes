@@ -30,4 +30,4 @@ CREATE POLICY invoices_tenant_isolation ON invoices
 CREATE TRIGGER set_invoices_updated_at
     BEFORE UPDATE ON invoices
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at();
+    EXECUTE FUNCTION update_updated_at_column();

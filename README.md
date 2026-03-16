@@ -277,6 +277,47 @@ pravara-mes/
 | POST | `/v1/webhooks/cotiza` | Cotiza Studio order webhook |
 | POST | `/v1/webhooks/forgesight` | ForgeSight integration (planned) |
 
+### Webhook Subscriptions API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/webhooks/subscriptions` | Create webhook subscription |
+| GET | `/v1/webhooks/subscriptions` | List webhook subscriptions |
+| GET | `/v1/webhooks/subscriptions/:id` | Get subscription by ID |
+| PATCH | `/v1/webhooks/subscriptions/:id` | Update subscription |
+| DELETE | `/v1/webhooks/subscriptions/:id` | Delete subscription |
+| GET | `/v1/webhooks/subscriptions/:id/deliveries` | List deliveries for subscription |
+
+### API Keys API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/api-keys` | Create API key |
+| GET | `/v1/api-keys` | List API keys |
+| DELETE | `/v1/api-keys/:id` | Revoke API key |
+
+### Event History API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/events` | List events with pagination |
+| GET | `/v1/events/types` | Get available event types |
+| GET | `/v1/events/:id` | Get event by ID |
+| GET | `/v1/events/stream` | Server-Sent Events stream |
+
+### Data Feeds API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/feeds/crm/orders` | CRM order feed |
+| GET | `/v1/feeds/crm/orders/:id/timeline` | Order timeline |
+| GET | `/v1/feeds/crm/orders/:id/status` | Order status |
+| GET | `/v1/feeds/social/milestones` | Social milestones feed |
+| GET | `/v1/feeds/social/stats` | Social statistics |
+| GET | `/v1/feeds/social/highlights` | Social highlights |
+| GET | `/v1/feeds/status/detailed` | Detailed component status |
+| GET | `/v1/feeds/status/incidents` | Active incidents |
+
 ### Tasks API (Kanban)
 
 | Method | Endpoint | Description |
@@ -560,6 +601,12 @@ CREATE POLICY tenant_isolation ON orders
 - **tasks** - Kanban tasks with position management
 - **machines** - Machine registry with MQTT topics
 - **telemetry** - Time-series machine telemetry
+- **event_outbox** - Persisted events for webhook dispatch
+- **webhook_subscriptions** - Outbound webhook configurations
+- **webhook_deliveries** - Webhook delivery tracking with retry
+- **api_keys** - API key authentication (SHA-256, scope-based, rate-limited)
+- **health_snapshots** - Component health tracking for status page integration
+- **invoices** - Invoice records per order
 
 ### Status Enums
 

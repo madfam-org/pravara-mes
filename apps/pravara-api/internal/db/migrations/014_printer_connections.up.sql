@@ -423,16 +423,16 @@ CREATE POLICY print_jobs_tenant_isolation ON print_jobs
 
 -- Triggers for updated_at
 CREATE TRIGGER printer_profiles_updated_at BEFORE UPDATE ON printer_profiles
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER printer_connections_updated_at BEFORE UPDATE ON printer_connections
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER material_profiles_updated_at BEFORE UPDATE ON material_profiles
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER print_jobs_updated_at BEFORE UPDATE ON print_jobs
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Foreign key to link print_jobs to printer_connections
 ALTER TABLE printer_connections

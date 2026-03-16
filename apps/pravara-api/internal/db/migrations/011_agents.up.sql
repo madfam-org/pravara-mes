@@ -180,10 +180,10 @@ CREATE POLICY agent_notifications_tenant_isolation ON agent_notifications
 
 -- Triggers for updated_at
 CREATE TRIGGER agents_updated_at BEFORE UPDATE ON agents
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER agent_machines_updated_at BEFORE UPDATE ON agent_machines
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER agent_assignments_updated_at BEFORE UPDATE ON agent_assignments
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

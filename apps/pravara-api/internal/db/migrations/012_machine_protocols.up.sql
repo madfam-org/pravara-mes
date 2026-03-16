@@ -268,19 +268,19 @@ INSERT INTO protocol_standards (name, version, organization, specification_url, 
 
 -- Triggers for updated_at
 CREATE TRIGGER protocol_standards_updated_at BEFORE UPDATE ON protocol_standards
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER machine_protocols_updated_at BEFORE UPDATE ON machine_protocols
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER machine_firmwares_updated_at BEFORE UPDATE ON machine_firmwares
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER adapter_compatibility_updated_at BEFORE UPDATE ON adapter_compatibility
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER protocol_compliance_updated_at BEFORE UPDATE ON protocol_compliance
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER discovered_machines_updated_at BEFORE UPDATE ON discovered_machines
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
