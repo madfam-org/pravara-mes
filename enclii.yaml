@@ -9,3 +9,133 @@ spec:
   domains:
     - name: api.pravara.madfam.io
     - name: app.pravara.madfam.io
+  network:
+    services:
+      - name: pravara-ui
+        port: 4501
+        ingress: [cloudflare-tunnel]
+        egress: [dns, https]
+      - name: pravara-api
+        port: 4500
+        ingress: [cloudflare-tunnel]
+        egress: [dns, https]
+      - name: pravara-gateway
+        port: 8000
+        ingress: [cloudflare-tunnel]
+        egress: [dns, https]
+      - name: pravara-worker
+        port: 0
+        egress: [dns, https]
+      - name: telemetry-worker
+        port: 0
+        egress: [dns]
+      - name: mes-mqtt-bridge
+        port: 0
+        egress: [dns, https]
+      - name: inference-service
+        port: 0
+        egress: [dns, https]
+      - name: mes-ha-bridge
+        port: 0
+        egress: [dns, https]
+      - name: postgres
+        port: 0
+        egress: [dns]
+      - name: redis
+        port: 0
+        egress: [dns]
+      - name: emqx
+        port: 0
+        egress: [dns]
+      - name: centrifugo
+        port: 8000
+        ingress: [cloudflare-tunnel]
+        egress: [dns]
+    custom:
+      # API connections to in-namespace infrastructure
+      - name: api-to-postgres
+        from: { app: pravara-api }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: api-to-redis
+        from: { app: pravara-api }
+        to: { app: redis }
+        port: 6379
+        direction: both
+      - name: api-to-centrifugo
+        from: { app: pravara-api }
+        to: { app: centrifugo }
+        port: 8000
+        direction: both
+      # Gateway connections
+      - name: gateway-to-postgres
+        from: { app: pravara-gateway }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: gateway-to-redis
+        from: { app: pravara-gateway }
+        to: { app: redis }
+        port: 6379
+        direction: both
+      # Worker connections
+      - name: worker-to-postgres
+        from: { app: pravara-worker }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: worker-to-redis
+        from: { app: pravara-worker }
+        to: { app: redis }
+        port: 6379
+        direction: both
+      # Telemetry worker connections
+      - name: telemetry-to-postgres
+        from: { app: telemetry-worker }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: telemetry-to-redis
+        from: { app: telemetry-worker }
+        to: { app: redis }
+        port: 6379
+        direction: both
+      - name: telemetry-to-emqx
+        from: { app: telemetry-worker }
+        to: { app: emqx }
+        port: 1883
+        direction: both
+      # MQTT bridge connections
+      - name: mqtt-bridge-to-postgres
+        from: { app: mes-mqtt-bridge }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: mqtt-bridge-to-redis
+        from: { app: mes-mqtt-bridge }
+        to: { app: redis }
+        port: 6379
+        direction: both
+      - name: mqtt-bridge-to-emqx
+        from: { app: mes-mqtt-bridge }
+        to: { app: emqx }
+        port: 1883
+        direction: both
+      # Inference service connections
+      - name: inference-to-postgres
+        from: { app: inference-service }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      # HA bridge connections
+      - name: ha-bridge-to-postgres
+        from: { app: mes-ha-bridge }
+        to: { app: postgres }
+        port: 5432
+        direction: both
+      - name: ha-bridge-to-redis
+        from: { app: mes-ha-bridge }
+        to: { app: redis }
+        port: 6379
+        direction: both
