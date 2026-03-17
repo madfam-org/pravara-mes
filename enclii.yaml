@@ -11,6 +11,10 @@ spec:
     - name: app.pravara.madfam.io
   network:
     services:
+      - name: pravara-admin
+        port: 4503
+        ingress: [cloudflare-tunnel]
+        egress: [dns, https]
       - name: pravara-ui
         port: 4501
         ingress: [cloudflare-tunnel]

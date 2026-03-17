@@ -818,3 +818,108 @@ spec:
   selector:
     app: machine-adapter
     app.kubernetes.io/name: machine-adapter
+
+# -----------------------------------------------------------------------------
+# pravara-admin — Administration console (Next.js)
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravara-admin
+  namespace: pravara-mes
+  labels:
+    app: pravara-admin
+    app.kubernetes.io/name: pravara-admin
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pravara-admin
+      app.kubernetes.io/name: pravara-admin
+  template:
+    metadata:
+      labels:
+        app: pravara-admin
+        app.kubernetes.io/name: pravara-admin
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pravara-admin
+          image: pravara-admin
+          ports:
+            - containerPort: 4503
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pravara-config
+            - secretRef:
+                name: pravara-secrets
+            - secretRef:
+                name: pravara-admin-auth
+                optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 4503
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 4503
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 4503
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravara-admin
+  namespace: pravara-mes
+  labels:
+    app: pravara-admin
+    app.kubernetes.io/name: pravara-admin
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4503
+      name: http
+  selector:
+    app: pravara-admin
+    app.kubernetes.io/name: pravara-admin

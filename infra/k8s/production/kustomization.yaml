@@ -137,6 +137,9 @@ images:
 - name: video-streaming
   newName: ghcr.io/madfam-org/video-streaming
   newTag: latest
+- name: pravara-admin
+  newName: ghcr.io/madfam-org/pravara-admin
+  newTag: latest
 - name: visualization-engine
   newName: ghcr.io/madfam-org/visualization-engine
   newTag: latest
