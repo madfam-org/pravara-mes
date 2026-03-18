@@ -9,6 +9,10 @@ spec:
   domains:
     - name: api.pravara.madfam.io
     - name: app.pravara.madfam.io
+    - name: mes-admin.madfam.io
+      environment: production
+      service: pravara-admin
+      port: 80
   network:
     services:
       - name: pravara-admin

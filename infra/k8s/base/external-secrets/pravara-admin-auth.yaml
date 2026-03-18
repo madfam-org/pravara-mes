@@ -1,0 +1,25 @@
+# ExternalSecret for pravara-admin SSO session signing
+# Vault-ready: will be managed by ESO + ClusterSecretStore when Vault is deployed
+# Interim: create K8s secret manually via kubectl until Vault goes live
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: pravara-admin-auth
+  namespace: pravara-mes
+  labels:
+    app: pravara-admin
+    app.kubernetes.io/managed-by: external-secrets
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: pravara-admin-auth
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  data:
+    - secretKey: JANUA_SECRET_KEY
+      remoteRef:
+        key: secret/data/pravara-mes/admin-auth
+        property: janua_secret_key

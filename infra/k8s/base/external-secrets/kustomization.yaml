@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - external-secrets.yaml
+  - pravara-admin-auth.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
