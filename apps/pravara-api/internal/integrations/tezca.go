@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// DefaultDomain is used when callers don't specify a domain.
+const DefaultDomain = "manufacturing"
+
 // TezcaClient is an HTTP client for the Tezca Mexican-law REST API.
 // Default domains: manufacturing, professional_services (SCIAN 31-33, 54).
 type TezcaClient struct {
@@ -99,4 +102,23 @@ func (c *TezcaClient) GetChangelog(ctx context.Context, since string) (map[strin
 		params.Set("since", since)
 	}
 	return c.doGet(ctx, "/changelog/", params)
+}
+
+// BulkArticles fetches articles by domain via GET /bulk/articles/?domain=<domain>.
+// If cursor is non-empty it is passed as &cursor=<cursor> for pagination.
+func (c *TezcaClient) BulkArticles(ctx context.Context, domain, cursor string) (map[string]interface{}, error) {
+	params := url.Values{"domain": {domain}}
+	if cursor != "" {
+		params.Set("cursor", cursor)
+	}
+	return c.doGet(ctx, "/bulk/articles/", params)
+}
+
+// SearchJudicial searches SCJN jurisprudencia via GET /judicial/?q=<query>.
+func (c *TezcaClient) SearchJudicial(ctx context.Context, query, materia string) (map[string]interface{}, error) {
+	params := url.Values{"q": {query}}
+	if materia != "" {
+		params.Set("materia", materia)
+	}
+	return c.doGet(ctx, "/judicial/", params)
 }
