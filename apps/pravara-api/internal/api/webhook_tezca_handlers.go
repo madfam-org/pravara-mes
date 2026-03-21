@@ -10,17 +10,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 )
 
 // TezcaWebhookHandler handles Tezca law-change webhook events.
 type TezcaWebhookHandler struct {
 	log    *logrus.Logger
 	secret string
+	tezca  *services.TezcaService
 }
 
 // NewTezcaWebhookHandler creates a new Tezca webhook handler.
-func NewTezcaWebhookHandler(log *logrus.Logger, secret string) *TezcaWebhookHandler {
-	return &TezcaWebhookHandler{log: log, secret: secret}
+func NewTezcaWebhookHandler(log *logrus.Logger, secret string, tezca *services.TezcaService) *TezcaWebhookHandler {
+	return &TezcaWebhookHandler{log: log, secret: secret, tezca: tezca}
 }
 
 // TezcaWebhookPayload represents a Tezca webhook event.
@@ -93,6 +96,9 @@ func (h *TezcaWebhookHandler) HandleWebhook(c *gin.Context) {
 				"law_id":   lawID,
 				"category": category,
 			}).Info("Manufacturing-relevant law change detected, invalidating NOM caches")
+			if h.tezca != nil {
+				h.tezca.InvalidateNOMCache()
+			}
 		}
 	case "law.created":
 		h.log.WithField("law_id", lawID).Info("New law detected")

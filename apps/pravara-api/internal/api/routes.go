@@ -81,7 +81,8 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
-	tezcaWebhookHandler := NewTezcaWebhookHandler(log, cfg.Tezca.WebhookSecret)
+	tezcaSvc := services.NewTezcaService(cfg.Tezca, log)
+	tezcaWebhookHandler := NewTezcaWebhookHandler(log, cfg.Tezca.WebhookSecret, tezcaSvc)
 
 	// Initialize Dhanam webhook handler
 	invoiceRepo := billing.NewInvoiceRepository(database.DB)
