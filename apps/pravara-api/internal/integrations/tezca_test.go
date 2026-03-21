@@ -120,6 +120,52 @@ func TestGetChangelog(t *testing.T) {
 	}
 }
 
+func TestBulkArticles(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/bulk/articles/" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("domain") != "manufacturing" {
+			t.Errorf("expected domain=manufacturing, got %s", r.URL.Query().Get("domain"))
+		}
+		if r.Header.Get("X-API-Key") != "tzk_test" {
+			t.Errorf("missing or wrong API key")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"results": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	client := NewTezcaClient(srv.URL, "tzk_test")
+	_, err := client.BulkArticles(context.Background(), "manufacturing", "")
+	if err != nil {
+		t.Fatalf("BulkArticles error: %v", err)
+	}
+}
+
+func TestSearchJudicial(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/judicial/" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("q") != "NOM-001" {
+			t.Errorf("expected q=NOM-001, got %s", r.URL.Query().Get("q"))
+		}
+		if r.URL.Query().Get("materia") != "administrativa" {
+			t.Errorf("expected materia=administrativa, got %s", r.URL.Query().Get("materia"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"results": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	client := NewTezcaClient(srv.URL, "tzk_test")
+	_, err := client.SearchJudicial(context.Background(), "NOM-001", "administrativa")
+	if err != nil {
+		t.Fatalf("SearchJudicial error: %v", err)
+	}
+}
+
 func TestHTTPErrorReturnsError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

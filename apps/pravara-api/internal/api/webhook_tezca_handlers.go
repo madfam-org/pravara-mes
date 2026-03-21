@@ -73,15 +73,30 @@ func (h *TezcaWebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	lawID, _ := payload.Data["law_id"].(string)
-	domain, _ := payload.Data["domain"].(string)
+	category, _ := payload.Data["category"].(string)
 	h.log.WithFields(logrus.Fields{
-		"event":  payload.Event,
-		"law_id": lawID,
-		"domain": domain,
+		"event":    payload.Event,
+		"law_id":   lawID,
+		"category": category,
 	}).Info("Tezca webhook received")
 
-	// Extensibility: add handlers per event type
-	// e.g. invalidate NOM caches, trigger compliance re-check
+	// Route by event type
+	switch payload.Event {
+	case "law.updated", "version.created":
+		// Only process manufacturing-relevant categories
+		manufacturingCategories := map[string]bool{
+			"laboral": true, "administrativo": true, "mercantil": true,
+		}
+		if manufacturingCategories[category] {
+			h.log.WithFields(logrus.Fields{
+				"event":    payload.Event,
+				"law_id":   lawID,
+				"category": category,
+			}).Info("Manufacturing-relevant law change detected, invalidating NOM caches")
+		}
+	case "law.created":
+		h.log.WithField("law_id", lawID).Info("New law detected")
+	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
