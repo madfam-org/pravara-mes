@@ -50,6 +50,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
@@ -72,6 +73,21 @@ func main() {
 	log.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: time.RFC3339Nano,
 	})
+
+	// Initialize Sentry if SENTRY_DSN is set
+	if sentryDSN := os.Getenv("SENTRY_DSN"); sentryDSN != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:              sentryDSN,
+			Environment:      os.Getenv("APP_ENV"),
+			TracesSampleRate: 0.1,
+		})
+		if err != nil {
+			log.WithError(err).Warn("Failed to initialize Sentry")
+		} else {
+			defer sentry.Flush(2 * time.Second)
+			log.Info("Sentry error tracking initialized")
+		}
+	}
 
 	// Load configuration
 	cfg, err := config.Load()

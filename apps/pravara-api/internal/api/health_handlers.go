@@ -30,6 +30,7 @@ func NewHealthHandler(db *db.DB, log *logrus.Logger) *HealthHandler {
 // HealthResponse represents the full health check response.
 type HealthResponse struct {
 	Status     string                   `json:"status"`
+	Service    string                   `json:"service"`
 	Timestamp  string                   `json:"timestamp"`
 	Uptime     string                   `json:"uptime"`
 	Version    string                   `json:"version"`
@@ -52,7 +53,8 @@ type ComponentHealth struct {
 // @Router /health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
 	response := HealthResponse{
-		Status:     "healthy",
+		Status:     "ok",
+		Service:    "pravara-mes",
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 		Uptime:     time.Since(startTime).String(),
 		Version:    "0.1.0",
