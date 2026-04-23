@@ -6,7 +6,10 @@ namespace: pravara-mes
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
+  # secrets.example.yaml intentionally omitted — it documents expected
+  # keys but its values are REPLACE_WITH_* literals. Real values must
+  # be created out-of-band (`kubectl create secret` or ExternalSecrets
+  # in infra/k8s/base/external-secrets/). Audit 2026-04-23 H11.
   - postgres.yaml
   - redis.yaml
   - emqx.yaml
