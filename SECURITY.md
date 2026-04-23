@@ -34,3 +34,11 @@ Pravara MES handles sensitive manufacturing and operational data including:
 | Version | Supported |
 |---------|-----------|
 | 0.1.x   | Yes       |
+
+## Known Issues — Audit 2026-04-23
+
+See `/Users/aldoruizluna/labspace/claudedocs/ECOSYSTEM_AUDIT_2026-04-23.md` for the full ecosystem audit.
+
+- ~~**🔴 R2: `eval()` on untrusted Redis pubsub data**~~ — Fixed 2026-04-23 in `apps/ml-orchestrator/main.py`: `json.loads` with malformed-payload drop + type guard.
+- **🟠 H11: Placeholder secrets in kustomize base** — `infra/k8s/base/secrets.yaml:18-26` contain `REPLACE_WITH_JWT_SECRET`-style literals. If overlay doesn't override, the literal string becomes the prod secret. Move to SealedSecrets/External Secrets; add CI grep for `REPLACE_WITH_` outside `tests/`.
+- **🟡 M5: Path traversal on gcode uploads** — `apps/luban-bridge/src/routes/gcode.ts:30, 52, 74` reads `req.file.path` without verifying resolved path stays under allowlisted upload dir. Use `path.resolve(UPLOAD_DIR, path.basename(req.file.filename))` with prefix check.

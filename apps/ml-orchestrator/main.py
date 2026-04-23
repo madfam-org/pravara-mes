@@ -5,6 +5,7 @@ Provides predictive analytics, anomaly detection, and process optimization
 
 import os
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -333,8 +334,21 @@ async def websocket_predictions(websocket: WebSocket):
             # Get telemetry update
             message = await pubsub.get_message(ignore_subscribe_messages=True)
             if message:
-                # Parse telemetry
-                telemetry = eval(message['data'])  # In production, use proper JSON parsing
+                # Parse telemetry. Redis pubsub payloads are untrusted — never eval().
+                try:
+                    telemetry = json.loads(message['data'])
+                except (TypeError, ValueError) as parse_err:
+                    logger.warning(
+                        "Dropping malformed telemetry payload on %s: %s",
+                        message.get('channel'), parse_err
+                    )
+                    continue
+                if not isinstance(telemetry, dict):
+                    logger.warning(
+                        "Dropping non-object telemetry payload on %s: type=%s",
+                        message.get('channel'), type(telemetry).__name__
+                    )
+                    continue
                 machine_id = message['channel'].split(':')[1]
 
                 # Check for anomalies
