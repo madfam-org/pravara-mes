@@ -1,10 +1,19 @@
 import { Router } from 'express';
 import multer from 'multer';
 import winston from 'winston';
+import * as path from 'path';
+import { promises as fsp } from 'fs';
 import { GCodeAnalyzer } from '../services/gcode-analyzer';
 
+// Audit 2026-04-23 M5: force multer to drop files under a resolved
+// absolute upload directory and re-check each `req.file.path` against
+// that prefix before reading. Today multer generates random hashes for
+// `dest: 'uploads/'`, but a future config (`dest: './'`, custom filename,
+// disk-storage factory) could introduce path traversal. This locks it.
+const UPLOAD_DIR = path.resolve(process.env.GCODE_UPLOAD_DIR || 'uploads');
+
 const upload = multer({
-  dest: 'uploads/',
+  dest: UPLOAD_DIR,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
     const ext = file.originalname.toLowerCase();
@@ -16,6 +25,20 @@ const upload = multer({
   }
 });
 
+async function readUploadedGcode(filePath: string): Promise<string> {
+  const resolved = path.resolve(filePath);
+  const prefix = UPLOAD_DIR.endsWith(path.sep) ? UPLOAD_DIR : UPLOAD_DIR + path.sep;
+  if (!resolved.startsWith(prefix)) {
+    throw new Error('Upload path outside the allowed directory');
+  }
+  try {
+    return await fsp.readFile(resolved, 'utf-8');
+  } finally {
+    // Fire-and-forget cleanup so uploads/ doesn't accumulate on every call.
+    fsp.unlink(resolved).catch(() => {});
+  }
+}
+
 export function gcodeRouter(analyzer: GCodeAnalyzer, logger: winston.Logger): Router {
   const router = Router();
 
@@ -25,9 +48,7 @@ export function gcodeRouter(analyzer: GCodeAnalyzer, logger: winston.Logger): Ro
       let gcodeContent: string;
 
       if (req.file) {
-        // Read file content
-        const fs = require('fs').promises;
-        gcodeContent = await fs.readFile(req.file.path, 'utf-8');
+        gcodeContent = await readUploadedGcode(req.file.path);
       } else if (req.body.gcode) {
         gcodeContent = req.body.gcode;
       } else {
@@ -48,8 +69,7 @@ export function gcodeRouter(analyzer: GCodeAnalyzer, logger: winston.Logger): Ro
       let gcodeContent: string;
 
       if (req.file) {
-        const fs = require('fs').promises;
-        gcodeContent = await fs.readFile(req.file.path, 'utf-8');
+        gcodeContent = await readUploadedGcode(req.file.path);
       } else if (req.body.gcode) {
         gcodeContent = req.body.gcode;
       } else {
@@ -70,8 +90,7 @@ export function gcodeRouter(analyzer: GCodeAnalyzer, logger: winston.Logger): Ro
       let gcodeContent: string;
 
       if (req.file) {
-        const fs = require('fs').promises;
-        gcodeContent = await fs.readFile(req.file.path, 'utf-8');
+        gcodeContent = await readUploadedGcode(req.file.path);
       } else if (req.body.gcode) {
         gcodeContent = req.body.gcode;
       } else {
