@@ -17,13 +17,13 @@ import (
 
 // Ruida binary command bytes.
 var (
-	ruidaCmdStart     = []byte{0xD7, 0x00}
-	ruidaCmdStop      = []byte{0xD7, 0x01}
-	ruidaCmdPause     = []byte{0xD7, 0x02}
-	ruidaCmdResume    = []byte{0xD7, 0x03}
-	ruidaCmdStatus    = []byte{0xDA, 0x00, 0x04}
-	ruidaCmdPosition  = []byte{0xDA, 0x00, 0x00}
-	ruidaCmdEStop     = []byte{0xD7, 0x01} // Same as stop; controller treats rapid stop identically
+	ruidaCmdStart    = []byte{0xD7, 0x00}
+	ruidaCmdStop     = []byte{0xD7, 0x01}
+	ruidaCmdPause    = []byte{0xD7, 0x02}
+	ruidaCmdResume   = []byte{0xD7, 0x03}
+	ruidaCmdStatus   = []byte{0xDA, 0x00, 0x04}
+	ruidaCmdPosition = []byte{0xDA, 0x00, 0x00}
+	ruidaCmdEStop    = []byte{0xD7, 0x01} // Same as stop; controller treats rapid stop identically
 )
 
 // Ruida machine state codes returned in status response.
@@ -40,9 +40,9 @@ const ruidaScrambleXOR byte = 0x88
 
 // RuidaStatus represents the current state of a Ruida laser controller.
 type RuidaStatus struct {
-	State      string     // idle, running, paused, finished, error, unknown
-	PositionX  float64    // Laser head X position in mm
-	PositionY  float64    // Laser head Y position in mm
+	State      string  // idle, running, paused, finished, error, unknown
+	PositionX  float64 // Laser head X position in mm
+	PositionY  float64 // Laser head Y position in mm
 	LastUpdate time.Time
 }
 

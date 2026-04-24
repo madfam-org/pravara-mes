@@ -23,9 +23,9 @@ func NewStatusHandler(db *sql.DB, log *logrus.Logger) *StatusHandler {
 
 // ComponentStatus represents the health status of a component.
 type ComponentStatus struct {
-	Name   string         `json:"name"`
-	Status string         `json:"status"`
-	Uptime *float64       `json:"uptime_percent,omitempty"`
+	Name   string   `json:"name"`
+	Status string   `json:"status"`
+	Uptime *float64 `json:"uptime_percent,omitempty"`
 }
 
 // StatusResponse is the public status endpoint response.

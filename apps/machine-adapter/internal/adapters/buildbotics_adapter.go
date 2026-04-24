@@ -18,25 +18,25 @@ import (
 
 // BuildboticsStatus represents the current state of a Buildbotics/Onefinity CNC.
 type BuildboticsStatus struct {
-	State        string    // ready, running, holding, stopping, estopped
-	MachineState string    // Raw machine state string from the controller
-	PositionX    float64   // Current X position in mm
-	PositionY    float64   // Current Y position in mm
-	PositionZ    float64   // Current Z position in mm
-	SpindleSpeed float64   // Current spindle speed in RPM
-	FeedRate     float64   // Current feed rate in mm/min
-	Line         int       // Current G-code line number
-	Progress     float64   // Job progress percentage
+	State        string  // ready, running, holding, stopping, estopped
+	MachineState string  // Raw machine state string from the controller
+	PositionX    float64 // Current X position in mm
+	PositionY    float64 // Current Y position in mm
+	PositionZ    float64 // Current Z position in mm
+	SpindleSpeed float64 // Current spindle speed in RPM
+	FeedRate     float64 // Current feed rate in mm/min
+	Line         int     // Current G-code line number
+	Progress     float64 // Job progress percentage
 	LastUpdate   time.Time
 }
 
 // buildboticsStatusResponse represents the JSON response from GET /api/status.
 type buildboticsStatusResponse struct {
-	State   string `json:"state"`
-	Cycle   string `json:"cycle"`
-	Line    int    `json:"line"`
-	Feed    float64 `json:"feed"`
-	Speed   float64 `json:"speed"`
+	State    string  `json:"state"`
+	Cycle    string  `json:"cycle"`
+	Line     int     `json:"line"`
+	Feed     float64 `json:"feed"`
+	Speed    float64 `json:"speed"`
 	Position struct {
 		X float64 `json:"x"`
 		Y float64 `json:"y"`
@@ -186,7 +186,7 @@ func (a *BuildboticsAdapter) MapCommand(command string, params map[string]interf
 		}
 		status := a.GetStatus()
 		return map[string]interface{}{
-			"state":        status.State,
+			"state":         status.State,
 			"machine_state": status.MachineState,
 			"position": map[string]float64{
 				"x": status.PositionX,

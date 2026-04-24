@@ -17,13 +17,13 @@ import (
 
 // UltimakerStatus represents the current state of an Ultimaker printer.
 type UltimakerStatus struct {
-	State          string     // idle, running, paused, error
-	ExtruderTemp   float64    // Current hotend temperature (celsius)
-	ExtruderTarget float64    // Target hotend temperature
-	BedTemp        float64    // Current bed temperature
-	BedTarget      float64    // Target bed temperature
-	PrintProgress  float64    // Print progress (0.0-1.0)
-	PrintState     string     // Raw print job state from the API
+	State          string  // idle, running, paused, error
+	ExtruderTemp   float64 // Current hotend temperature (celsius)
+	ExtruderTarget float64 // Target hotend temperature
+	BedTemp        float64 // Current bed temperature
+	BedTarget      float64 // Target bed temperature
+	PrintProgress  float64 // Print progress (0.0-1.0)
+	PrintState     string  // Raw print job state from the API
 	LastUpdate     time.Time
 }
 

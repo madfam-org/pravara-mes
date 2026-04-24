@@ -49,12 +49,12 @@ func (s *OEEService) ComputeDaily(ctx context.Context, tenantID, machineID uuid.
 	// Publish analytics event
 	if s.publisher != nil {
 		event := pubsub.NewEvent("analytics.oee_updated", tenantID, map[string]interface{}{
-			"machine_id":   machineID,
+			"machine_id":    machineID,
 			"snapshot_date": snapshot.SnapshotDate,
-			"availability": snapshot.Availability,
-			"performance":  snapshot.Performance,
-			"quality":      snapshot.Quality,
-			"oee":          snapshot.OEE,
+			"availability":  snapshot.Availability,
+			"performance":   snapshot.Performance,
+			"quality":       snapshot.Quality,
+			"oee":           snapshot.OEE,
 		})
 		if err := s.publisher.Publish(ctx, pubsub.NamespaceMachines, tenantID, event); err != nil {
 			s.log.WithError(err).Warn("Failed to publish OEE updated event")

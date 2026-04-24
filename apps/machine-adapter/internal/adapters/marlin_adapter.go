@@ -20,21 +20,21 @@ import (
 
 // MarlinStatus represents the current state of a Marlin 3D printer.
 type MarlinStatus struct {
-	State           string    // Printing, Idle, Paused, Error
-	Progress        int       // Print progress percentage (0-100)
-	ExtruderTemp    float64   // Current extruder temperature
-	ExtruderTarget  float64   // Target extruder temperature
-	BedTemp         float64   // Current bed temperature
-	BedTarget       float64   // Target bed temperature
-	Position        [3]float64 // Current X, Y, Z position
-	FeedRate        float64   // Current feed rate
-	FlowRate        int       // Flow rate percentage
-	FanSpeed        int       // Fan speed (0-255)
-	SDPrinting      bool      // Printing from SD card
-	SDFileName      string    // Current SD file name
-	PrintTime       int       // Print time in seconds
-	FilamentUsed    float64   // Filament used in mm
-	LastUpdate      time.Time
+	State          string     // Printing, Idle, Paused, Error
+	Progress       int        // Print progress percentage (0-100)
+	ExtruderTemp   float64    // Current extruder temperature
+	ExtruderTarget float64    // Target extruder temperature
+	BedTemp        float64    // Current bed temperature
+	BedTarget      float64    // Target bed temperature
+	Position       [3]float64 // Current X, Y, Z position
+	FeedRate       float64    // Current feed rate
+	FlowRate       int        // Flow rate percentage
+	FanSpeed       int        // Fan speed (0-255)
+	SDPrinting     bool       // Printing from SD card
+	SDFileName     string     // Current SD file name
+	PrintTime      int        // Print time in seconds
+	FilamentUsed   float64    // Filament used in mm
+	LastUpdate     time.Time
 }
 
 // TelemetryCallback is called when new telemetry data is available.

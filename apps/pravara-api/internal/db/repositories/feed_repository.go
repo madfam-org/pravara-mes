@@ -49,11 +49,11 @@ type SocialMilestone struct {
 
 // SocialStats represents production statistics for social media.
 type SocialStats struct {
-	MachinesRunning     int     `json:"machines_running"`
-	OrdersCompletedDay  int     `json:"orders_completed_today"`
-	OrdersCompletedWeek int     `json:"orders_completed_this_week"`
-	OrdersCompletedMonth int    `json:"orders_completed_this_month"`
-	AverageOEE          float64 `json:"average_oee"`
+	MachinesRunning      int     `json:"machines_running"`
+	OrdersCompletedDay   int     `json:"orders_completed_today"`
+	OrdersCompletedWeek  int     `json:"orders_completed_this_week"`
+	OrdersCompletedMonth int     `json:"orders_completed_this_month"`
+	AverageOEE           float64 `json:"average_oee"`
 }
 
 // SocialHighlight represents a curated interesting moment.

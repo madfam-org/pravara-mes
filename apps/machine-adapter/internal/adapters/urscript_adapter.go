@@ -17,27 +17,27 @@ import (
 
 // Universal Robots robot mode constants decoded from the 1116-byte state packet.
 const (
-	urModeDisconnected   = -1
-	urModeConfirmSafety  = 1
-	urModeBooting        = 2
-	urModePowerOff       = 3
-	urModePowerOn        = 4
-	urModeIdle           = 5
-	urModeBackdrive      = 6
-	urModeRunning        = 7
+	urModeDisconnected  = -1
+	urModeConfirmSafety = 1
+	urModeBooting       = 2
+	urModePowerOff      = 3
+	urModePowerOn       = 4
+	urModeIdle          = 5
+	urModeBackdrive     = 6
+	urModeRunning       = 7
 )
 
 // Universal Robots safety mode constants.
 const (
-	urSafetyNormal           = 1
-	urSafetyReduced          = 2
-	urSafetyProtectiveStop   = 3
-	urSafetyRecovery         = 4
-	urSafetySafeguardStop    = 5
-	urSafetySystemEmergency  = 6
-	urSafetyRobotEmergency   = 7
-	urSafetyViolation        = 8
-	urSafetyFault            = 9
+	urSafetyNormal          = 1
+	urSafetyReduced         = 2
+	urSafetyProtectiveStop  = 3
+	urSafetyRecovery        = 4
+	urSafetySafeguardStop   = 5
+	urSafetySystemEmergency = 6
+	urSafetyRobotEmergency  = 7
+	urSafetyViolation       = 8
+	urSafetyFault           = 9
 )
 
 // URScriptStatus represents the current state of a Universal Robots arm.

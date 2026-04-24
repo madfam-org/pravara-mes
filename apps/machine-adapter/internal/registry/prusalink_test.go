@@ -32,8 +32,8 @@ func TestPrusaCoreOneDefinition_Commands(t *testing.T) {
 	def := PrusaCoreOneDefinition()
 
 	expectedCommands := []struct {
-		key      string
-		name     string
+		key  string
+		name string
 	}{
 		{"home", "Home All Axes"},
 		{"pause", "Pause Print"},

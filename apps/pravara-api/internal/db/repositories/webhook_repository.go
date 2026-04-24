@@ -25,16 +25,16 @@ type WebhookSubscription struct {
 
 // WebhookDelivery represents a delivery attempt for a webhook.
 type WebhookDelivery struct {
-	ID             uuid.UUID `json:"id"`
-	SubscriptionID uuid.UUID `json:"subscription_id"`
-	EventID        uuid.UUID `json:"event_id"`
-	Status         string    `json:"status"`
-	HTTPStatus     *int      `json:"http_status,omitempty"`
-	AttemptCount   int       `json:"attempt_count"`
+	ID             uuid.UUID  `json:"id"`
+	SubscriptionID uuid.UUID  `json:"subscription_id"`
+	EventID        uuid.UUID  `json:"event_id"`
+	Status         string     `json:"status"`
+	HTTPStatus     *int       `json:"http_status,omitempty"`
+	AttemptCount   int        `json:"attempt_count"`
 	NextRetryAt    *time.Time `json:"next_retry_at,omitempty"`
-	LastError      *string   `json:"last_error,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	LastError      *string    `json:"last_error,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // WebhookRepository handles webhook subscription and delivery database operations.

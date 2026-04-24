@@ -15,11 +15,11 @@ import (
 
 // Service handles 3D rendering coordination
 type Service struct {
-	log         *logrus.Logger
-	clients     map[uuid.UUID]*Client
-	clientsMu   sync.RWMutex
-	sceneState  *SceneState
-	stateMu     sync.RWMutex
+	log        *logrus.Logger
+	clients    map[uuid.UUID]*Client
+	clientsMu  sync.RWMutex
+	sceneState *SceneState
+	stateMu    sync.RWMutex
 }
 
 // NewService creates a new renderer service
@@ -42,7 +42,7 @@ type Client struct {
 
 // SceneState represents the current state of the 3D scene
 type SceneState struct {
-	Machines  map[uuid.UUID]*MachineState `json:"machines"`
+	Machines  map[uuid.UUID]*MachineState  `json:"machines"`
 	Cameras   map[string]*CameraState      `json:"cameras"`
 	Telemetry map[uuid.UUID]*TelemetryData `json:"telemetry"`
 	UpdatedAt time.Time                    `json:"updated_at"`
@@ -60,18 +60,18 @@ func NewSceneState() *SceneState {
 
 // MachineState represents a machine's state in the 3D scene
 type MachineState struct {
-	ID           uuid.UUID   `json:"id"`
-	Position     Vector3     `json:"position"`
-	Rotation     Vector3     `json:"rotation"`
-	Scale        Vector3     `json:"scale"`
-	Status       string      `json:"status"`
-	ToolPosition Vector3     `json:"tool_position"`
-	ModelURL     string      `json:"model_url"`
-	Color        string      `json:"color"`
-	Opacity      float64     `json:"opacity"`
-	Visible      bool        `json:"visible"`
-	Selected     bool        `json:"selected"`
-	Animation    *Animation  `json:"animation,omitempty"`
+	ID           uuid.UUID  `json:"id"`
+	Position     Vector3    `json:"position"`
+	Rotation     Vector3    `json:"rotation"`
+	Scale        Vector3    `json:"scale"`
+	Status       string     `json:"status"`
+	ToolPosition Vector3    `json:"tool_position"`
+	ModelURL     string     `json:"model_url"`
+	Color        string     `json:"color"`
+	Opacity      float64    `json:"opacity"`
+	Visible      bool       `json:"visible"`
+	Selected     bool       `json:"selected"`
+	Animation    *Animation `json:"animation,omitempty"`
 }
 
 // Vector3 represents a 3D vector

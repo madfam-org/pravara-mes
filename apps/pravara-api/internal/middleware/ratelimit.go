@@ -221,8 +221,8 @@ func RateLimiter(logger *logrus.Logger) gin.HandlerFunc {
 
 			c.Header("Retry-After", "60") // Suggest retry after 60 seconds
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate_limit_exceeded",
-				"message": "Too many requests from this IP address. Please try again later.",
+				"error":               "rate_limit_exceeded",
+				"message":             "Too many requests from this IP address. Please try again later.",
 				"retry_after_seconds": 60,
 			})
 			c.Abort()
@@ -246,8 +246,8 @@ func RateLimiter(logger *logrus.Logger) gin.HandlerFunc {
 
 					c.Header("Retry-After", "60")
 					c.JSON(http.StatusTooManyRequests, gin.H{
-						"error":   "rate_limit_exceeded",
-						"message": "Too many requests for this tenant. Please try again later.",
+						"error":               "rate_limit_exceeded",
+						"message":             "Too many requests for this tenant. Please try again later.",
 						"retry_after_seconds": 60,
 					})
 					c.Abort()
@@ -291,8 +291,8 @@ func RateLimiterWithConfig(config RateLimiterConfig, logger *logrus.Logger) gin.
 
 			c.Header("Retry-After", "60")
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate_limit_exceeded",
-				"message": "Too many requests from this IP address. Please try again later.",
+				"error":               "rate_limit_exceeded",
+				"message":             "Too many requests from this IP address. Please try again later.",
 				"retry_after_seconds": 60,
 			})
 			c.Abort()
@@ -315,8 +315,8 @@ func RateLimiterWithConfig(config RateLimiterConfig, logger *logrus.Logger) gin.
 
 					c.Header("Retry-After", "60")
 					c.JSON(http.StatusTooManyRequests, gin.H{
-						"error":   "rate_limit_exceeded",
-						"message": "Too many requests for this tenant. Please try again later.",
+						"error":               "rate_limit_exceeded",
+						"message":             "Too many requests for this tenant. Please try again later.",
 						"retry_after_seconds": 60,
 					})
 					c.Abort()

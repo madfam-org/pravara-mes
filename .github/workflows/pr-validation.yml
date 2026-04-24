@@ -44,12 +44,42 @@ jobs:
             apps/telemetry-worker/go.sum
             packages/sdk-go/go.sum
 
-      - name: Run golangci-lint
+      # go.work uses per-module `use (...)` layout, so `./...` from repo
+      # root doesn't resolve. Run golangci-lint per module.
+      - name: Run golangci-lint (pravara-api)
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
           args: --timeout=5m
-          working-directory: .
+          working-directory: apps/pravara-api
+
+      - name: Run golangci-lint (machine-adapter)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: apps/machine-adapter
+
+      - name: Run golangci-lint (telemetry-worker)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: apps/telemetry-worker
+
+      - name: Run golangci-lint (visualization-engine)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: apps/visualization-engine
+
+      - name: Run golangci-lint (sdk-go)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: packages/sdk-go
 
   # ===========================================================================
   # Go Testing with Database

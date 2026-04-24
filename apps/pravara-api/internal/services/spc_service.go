@@ -106,7 +106,7 @@ func (s *SPCService) CheckViolation(ctx context.Context, machineID uuid.UUID, me
 			Source:   "machine",
 			SourceID: &machineID,
 			Metadata: map[string]interface{}{
-				"violation_id":    violation.ID,
+				"violation_id":   violation.ID,
 				"machine_id":     machineID,
 				"metric_type":    metricType,
 				"violation_type": violationType,
@@ -122,7 +122,7 @@ func (s *SPCService) CheckViolation(ctx context.Context, machineID uuid.UUID, me
 
 		// Also publish to the analytics namespace
 		event := pubsub.NewEvent(pubsub.EventSPCViolation, activeLimit.TenantID, map[string]interface{}{
-			"violation_id":    violation.ID,
+			"violation_id":   violation.ID,
 			"machine_id":     machineID,
 			"metric_type":    metricType,
 			"violation_type": violationType,

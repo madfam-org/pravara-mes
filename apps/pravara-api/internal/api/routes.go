@@ -105,8 +105,8 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		hyperobjectMapper := services.NewHyperobjectMapper(productRepo, wiRepo, publisher, log)
 		yantra4dHandler = NewYantra4DHandler(
 			hyperobjectMapper,
-			"http://localhost:4502",        // viz-engine URL (override via config)
-			"https://yantra4d.madfam.io",   // Yantra4D URL
+			"http://localhost:4502",      // viz-engine URL (override via config)
+			"https://yantra4d.madfam.io", // Yantra4D URL
 			log,
 		)
 	}

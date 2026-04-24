@@ -663,7 +663,7 @@ func TestMachineRepository_GetOfflineMachines(t *testing.T) {
 		AddRow(
 			uuid.New(), uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
 			"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
-			time.Now().Add(-10 * time.Minute), time.Now(), time.Now(),
+			time.Now().Add(-10*time.Minute), time.Now(), time.Now(),
 		).
 		AddRow(
 			uuid.New(), uuid.New(), "Machine B", "MACH-002", "3D Printer", "Description B", types.MachineStatusOnline,

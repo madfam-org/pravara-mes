@@ -50,7 +50,7 @@ type HyperobjectImportRequest struct {
 type HyperobjectImportResult struct {
 	ProductDefinition *repositories.ProductDefinition `json:"product_definition"`
 	BOMItems          []repositories.BOMItem          `json:"bom_items"`
-	WorkInstruction   *repositories.WorkInstruction    `json:"work_instruction,omitempty"`
+	WorkInstruction   *repositories.WorkInstruction   `json:"work_instruction,omitempty"`
 }
 
 // Yantra4DManifest mirrors the manifest structure from the viz-engine yantra4d client.
@@ -70,11 +70,11 @@ type Yantra4DManifest struct {
 		Label map[string]string `json:"label"`
 	} `json:"modes"`
 	Parameters []struct {
-		ID      string      `json:"id"`
-		Type    string      `json:"type"`
-		Default interface{} `json:"default"`
+		ID      string            `json:"id"`
+		Type    string            `json:"type"`
+		Default interface{}       `json:"default"`
 		Label   map[string]string `json:"label"`
-		Group   string      `json:"group"`
+		Group   string            `json:"group"`
 	} `json:"parameters"`
 	BOM struct {
 		Hardware []struct {
@@ -203,10 +203,10 @@ func (m *HyperobjectMapper) Import(ctx context.Context, req HyperobjectImportReq
 			CreatedBy:  uuid.Nil,
 			CreatedAt:  time.Now().UTC(),
 			Metadata: map[string]interface{}{
-				"source":  "yantra4d",
-				"slug":    manifest.Project.Slug,
-				"sku":     sku,
-				"bom_count": len(bomItems),
+				"source":               "yantra4d",
+				"slug":                 manifest.Project.Slug,
+				"sku":                  sku,
+				"bom_count":            len(bomItems),
 				"has_work_instruction": wi != nil,
 			},
 		})

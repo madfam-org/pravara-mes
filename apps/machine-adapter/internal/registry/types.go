@@ -23,7 +23,7 @@ const (
 	MachineType3DPrinterSLA   MachineType = "3d_printer_sla"
 	MachineType3DPrinterSLS   MachineType = "3d_printer_sls"
 	MachineTypeWaterjet       MachineType = "waterjet"
-	MachineTypePlasmaCutter MachineType = "plasma_cutter"
+	MachineTypePlasmaCutter   MachineType = "plasma_cutter"
 	MachineTypeVinylCutter    MachineType = "vinyl_cutter"
 	MachineTypeEmbroidery     MachineType = "embroidery"
 	MachineTypePickAndPlace   MachineType = "pick_place"
@@ -38,10 +38,10 @@ const (
 type Protocol string
 
 const (
-	ProtocolGCode     Protocol = "gcode"      // Standard G-code over serial/TCP
-	ProtocolGRBL      Protocol = "grbl"       // GRBL-specific commands
-	ProtocolMarlin    Protocol = "marlin"     // Marlin firmware (3D printers)
-	ProtocolSmoothie  Protocol = "smoothie"   // Smoothieboard
+	ProtocolGCode       Protocol = "gcode"       // Standard G-code over serial/TCP
+	ProtocolGRBL        Protocol = "grbl"        // GRBL-specific commands
+	ProtocolMarlin      Protocol = "marlin"      // Marlin firmware (3D printers)
+	ProtocolSmoothie    Protocol = "smoothie"    // Smoothieboard
 	ProtocolDuet        Protocol = "duet"        // Duet3D RepRapFirmware
 	ProtocolHaas        Protocol = "haas"        // Haas CNC protocol
 	ProtocolFanuc       Protocol = "fanuc"       // Fanuc CNC protocol
@@ -62,7 +62,7 @@ const (
 	ProtocolURScript    Protocol = "urscript"    // Universal Robots TCP :30002
 	ProtocolXTool       Protocol = "xtool"       // xTool WiFi/Ethernet
 	ProtocolFormlabs    Protocol = "formlabs"    // Formlabs Fleet Control REST
-	ProtocolBuildbotics  Protocol = "buildbotics"  // Buildbotics controller REST
+	ProtocolBuildbotics Protocol = "buildbotics" // Buildbotics controller REST
 	ProtocolLinuxCNC    Protocol = "linuxcnc"    // LinuxCNC command API (TCP)
 	ProtocolDobot       Protocol = "dobot"       // Dobot serial API
 )
@@ -71,12 +71,12 @@ const (
 type ConnectionType string
 
 const (
-	ConnectionSerial   ConnectionType = "serial"    // USB/RS232/RS485
-	ConnectionTCP      ConnectionType = "tcp"       // Direct TCP/IP
-	ConnectionHTTP     ConnectionType = "http"      // REST API
+	ConnectionSerial    ConnectionType = "serial"    // USB/RS232/RS485
+	ConnectionTCP       ConnectionType = "tcp"       // Direct TCP/IP
+	ConnectionHTTP      ConnectionType = "http"      // REST API
 	ConnectionWebSocket ConnectionType = "websocket" // WebSocket
-	ConnectionMQTT     ConnectionType = "mqtt"      // MQTT broker
-	ConnectionUDP      ConnectionType = "udp"       // UDP datagrams (e.g. Ruida)
+	ConnectionMQTT      ConnectionType = "mqtt"      // MQTT broker
+	ConnectionUDP       ConnectionType = "udp"       // UDP datagrams (e.g. Ruida)
 )
 
 // MachineCapability describes what a machine can do.
@@ -231,26 +231,26 @@ var Capabilities = map[string]MachineCapability{
 
 // MachineDefinition defines a specific machine model's capabilities.
 type MachineDefinition struct {
-	ID             uuid.UUID                `json:"id"`
-	Manufacturer   string                   `json:"manufacturer"`
-	Model          string                   `json:"model"`
-	Type           MachineType              `json:"type"`
-	Protocol       Protocol                 `json:"protocol"`
-	Connection     ConnectionType           `json:"connection"`
-	Capabilities   map[string]interface{}   `json:"capabilities"`
-	Commands       map[string]CommandDef    `json:"commands"`
-	StatusMapping  map[string]string        `json:"status_mapping"`
-	TelemetryParse map[string]TelemetryDef  `json:"telemetry_parse"`
+	ID             uuid.UUID               `json:"id"`
+	Manufacturer   string                  `json:"manufacturer"`
+	Model          string                  `json:"model"`
+	Type           MachineType             `json:"type"`
+	Protocol       Protocol                `json:"protocol"`
+	Connection     ConnectionType          `json:"connection"`
+	Capabilities   map[string]interface{}  `json:"capabilities"`
+	Commands       map[string]CommandDef   `json:"commands"`
+	StatusMapping  map[string]string       `json:"status_mapping"`
+	TelemetryParse map[string]TelemetryDef `json:"telemetry_parse"`
 }
 
 // CommandDef defines how to send a command to a machine.
 type CommandDef struct {
-	Name        string                 `json:"name"`
-	Template    string                 `json:"template"`     // Command template with placeholders
-	Parameters  []string               `json:"parameters"`   // Required parameters
-	Response    string                 `json:"response"`     // Expected response pattern
-	Timeout     time.Duration          `json:"timeout"`
-	Validation  map[string]interface{} `json:"validation"`   // Parameter validation rules
+	Name       string                 `json:"name"`
+	Template   string                 `json:"template"`   // Command template with placeholders
+	Parameters []string               `json:"parameters"` // Required parameters
+	Response   string                 `json:"response"`   // Expected response pattern
+	Timeout    time.Duration          `json:"timeout"`
+	Validation map[string]interface{} `json:"validation"` // Parameter validation rules
 }
 
 // TelemetryDef defines how to parse telemetry data.

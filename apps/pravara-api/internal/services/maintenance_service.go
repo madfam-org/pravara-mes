@@ -131,10 +131,10 @@ func (s *MaintenanceService) CheckOverdue(ctx context.Context, machineID uuid.UU
 		}
 
 		s.log.WithFields(logrus.Fields{
-			"schedule_id":    sched.ID,
-			"work_order_id":  wo.ID,
-			"machine_id":     machineID,
-			"current_hours":  currentHours,
+			"schedule_id":   sched.ID,
+			"work_order_id": wo.ID,
+			"machine_id":    machineID,
+			"current_hours": currentHours,
 		}).Warn("Maintenance schedule overdue, work order created")
 
 		// Publish maintenance.overdue notification
@@ -145,10 +145,10 @@ func (s *MaintenanceService) CheckOverdue(ctx context.Context, machineID uuid.UU
 				Severity: "warning",
 				Source:   "maintenance",
 				Metadata: map[string]interface{}{
-					"schedule_id":    sched.ID.String(),
-					"work_order_id":  wo.ID.String(),
-					"machine_id":     machineID.String(),
-					"current_hours":  currentHours,
+					"schedule_id":   sched.ID.String(),
+					"work_order_id": wo.ID.String(),
+					"machine_id":    machineID.String(),
+					"current_hours": currentHours,
 				},
 			})
 		}

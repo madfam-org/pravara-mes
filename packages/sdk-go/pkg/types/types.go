@@ -48,13 +48,13 @@ const (
 
 // Tenant represents a customer organization in the multi-tenant system.
 type Tenant struct {
-	ID        uuid.UUID         `json:"id"`
-	Name      string            `json:"name"`
-	Slug      string            `json:"slug"`
-	Plan      string            `json:"plan"`
-	Settings  map[string]any    `json:"settings,omitempty"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	ID        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Plan      string         `json:"plan"`
+	Settings  map[string]any `json:"settings,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // User represents a user within a tenant.
@@ -72,19 +72,19 @@ type User struct {
 
 // Order represents a manufacturing order (typically from Cotiza).
 type Order struct {
-	ID           uuid.UUID      `json:"id"`
-	TenantID     uuid.UUID      `json:"tenant_id"`
-	ExternalID   string         `json:"external_id,omitempty"`
-	CustomerName string         `json:"customer_name"`
-	CustomerEmail string        `json:"customer_email,omitempty"`
-	Status       OrderStatus    `json:"status"`
-	Priority     int            `json:"priority"`
-	DueDate      *time.Time     `json:"due_date,omitempty"`
-	TotalAmount  float64        `json:"total_amount,omitempty"`
-	Currency     string         `json:"currency"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID            uuid.UUID      `json:"id"`
+	TenantID      uuid.UUID      `json:"tenant_id"`
+	ExternalID    string         `json:"external_id,omitempty"`
+	CustomerName  string         `json:"customer_name"`
+	CustomerEmail string         `json:"customer_email,omitempty"`
+	Status        OrderStatus    `json:"status"`
+	Priority      int            `json:"priority"`
+	DueDate       *time.Time     `json:"due_date,omitempty"`
+	TotalAmount   float64        `json:"total_amount,omitempty"`
+	Currency      string         `json:"currency"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 // OrderItem represents a line item within an order.

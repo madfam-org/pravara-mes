@@ -30,9 +30,9 @@ func SnapmakerA350Definition() *MachineDefinition {
 				"max_celsius": 80.0,
 			},
 			"multi_tool": map[string]interface{}{
-				"modes":   []string{"3dp", "laser", "cnc"},
-				"detect":  "M1005",
-				"switch":  "M605",
+				"modes":  []string{"3dp", "laser", "cnc"},
+				"detect": "M1005",
+				"switch": "M605",
 			},
 			"laser_power": map[string]interface{}{
 				"watts": 1.6,

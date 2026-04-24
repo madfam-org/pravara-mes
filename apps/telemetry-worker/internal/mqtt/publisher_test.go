@@ -176,24 +176,24 @@ func TestChannelNameFormat(t *testing.T) {
 
 func TestPublisherConfig_Validation(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  PublisherConfig
-		valid   bool
+		name   string
+		config PublisherConfig
+		valid  bool
 	}{
 		{
-			name:    "valid redis URL",
-			config:  PublisherConfig{RedisURL: "redis://localhost:6379"},
-			valid:   true,
+			name:   "valid redis URL",
+			config: PublisherConfig{RedisURL: "redis://localhost:6379"},
+			valid:  true,
 		},
 		{
-			name:    "valid redis URL with password",
-			config:  PublisherConfig{RedisURL: "redis://:password@localhost:6379"},
-			valid:   true,
+			name:   "valid redis URL with password",
+			config: PublisherConfig{RedisURL: "redis://:password@localhost:6379"},
+			valid:  true,
 		},
 		{
-			name:    "empty redis URL",
-			config:  PublisherConfig{RedisURL: ""},
-			valid:   false,
+			name:   "empty redis URL",
+			config: PublisherConfig{RedisURL: ""},
+			valid:  false,
 		},
 	}
 

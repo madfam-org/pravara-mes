@@ -19,7 +19,7 @@ func GlowforgeProDefinition() *MachineDefinition {
 				"z_mm": 0.0,
 			},
 			"laser_power": map[string]interface{}{
-				"watts":     45.0,
+				"watts":      45.0,
 				"laser_type": "CO2",
 			},
 		},
@@ -58,7 +58,7 @@ func TrotecSpeedyDefinition() *MachineDefinition {
 				"z_mm": 0.0,
 			},
 			"laser_power": map[string]interface{}{
-				"watts":     120.0,
+				"watts":      120.0,
 				"laser_type": "CO2",
 			},
 		},

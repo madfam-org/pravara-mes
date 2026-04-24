@@ -130,13 +130,13 @@ type AssemblyStep struct {
 
 // MaterialDef describes a compatible material.
 type MaterialDef struct {
-	Slug             string                `json:"slug"`
-	Name             string                `json:"name"`
-	Category         string                `json:"category"`
-	AMTechnology     string                `json:"am_technology"`
-	Vendor           string                `json:"vendor"`
-	AMCompensations  AMCompensations       `json:"am_compensations"`
-	Thermodynamics   MaterialThermodynamics `json:"thermodynamics"`
+	Slug            string                 `json:"slug"`
+	Name            string                 `json:"name"`
+	Category        string                 `json:"category"`
+	AMTechnology    string                 `json:"am_technology"`
+	Vendor          string                 `json:"vendor"`
+	AMCompensations AMCompensations        `json:"am_compensations"`
+	Thermodynamics  MaterialThermodynamics `json:"thermodynamics"`
 }
 
 // AMCompensations holds additive manufacturing compensation values.
@@ -161,10 +161,10 @@ type VerificationStages struct {
 
 // GeometryChecks are pre-fabrication geometry validations.
 type GeometryChecks struct {
-	Watertight bool     `json:"watertight"`
-	BodyCount  int      `json:"body_count"`
+	Watertight bool       `json:"watertight"`
+	BodyCount  int        `json:"body_count"`
 	Dimensions [3]float64 `json:"dimensions"`
-	FacetCount int      `json:"facet_count"`
+	FacetCount int        `json:"facet_count"`
 }
 
 // PrintabilityChecks are AM-specific validations.

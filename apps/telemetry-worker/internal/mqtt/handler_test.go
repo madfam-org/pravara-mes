@@ -8,44 +8,44 @@ import (
 
 func TestTelemetryPayload_Parsing(t *testing.T) {
 	tests := []struct {
-		name    string
-		json    string
-		valid   bool
-		value   float64
-		unit    string
-		metric  string
+		name   string
+		json   string
+		valid  bool
+		value  float64
+		unit   string
+		metric string
 	}{
 		{
-			name:    "valid temperature payload",
-			json:    `{"timestamp": "2026-03-01T15:30:00Z", "machine_id": "cnc-01", "metric_type": "temperature", "value": 45.2, "unit": "celsius"}`,
-			valid:   true,
-			value:   45.2,
-			unit:    "celsius",
-			metric:  "temperature",
+			name:   "valid temperature payload",
+			json:   `{"timestamp": "2026-03-01T15:30:00Z", "machine_id": "cnc-01", "metric_type": "temperature", "value": 45.2, "unit": "celsius"}`,
+			valid:  true,
+			value:  45.2,
+			unit:   "celsius",
+			metric: "temperature",
 		},
 		{
-			name:    "valid power payload",
-			json:    `{"machine_id": "cnc-01", "metric_type": "power", "value": 1500.0, "unit": "watts"}`,
-			valid:   true,
-			value:   1500.0,
-			unit:    "watts",
-			metric:  "power",
+			name:   "valid power payload",
+			json:   `{"machine_id": "cnc-01", "metric_type": "power", "value": 1500.0, "unit": "watts"}`,
+			valid:  true,
+			value:  1500.0,
+			unit:   "watts",
+			metric: "power",
 		},
 		{
-			name:    "valid spindle speed",
-			json:    `{"machine_id": "cnc-01", "metric_type": "spindle_speed", "value": 12000, "unit": "rpm"}`,
-			valid:   true,
-			value:   12000,
-			unit:    "rpm",
-			metric:  "spindle_speed",
+			name:   "valid spindle speed",
+			json:   `{"machine_id": "cnc-01", "metric_type": "spindle_speed", "value": 12000, "unit": "rpm"}`,
+			valid:  true,
+			value:  12000,
+			unit:   "rpm",
+			metric: "spindle_speed",
 		},
 		{
-			name:    "payload with metadata",
-			json:    `{"machine_id": "cnc-01", "metric_type": "temperature", "value": 45.2, "unit": "celsius", "metadata": {"sensor_id": "S001", "location": "spindle"}}`,
-			valid:   true,
-			value:   45.2,
-			unit:    "celsius",
-			metric:  "temperature",
+			name:   "payload with metadata",
+			json:   `{"machine_id": "cnc-01", "metric_type": "temperature", "value": 45.2, "unit": "celsius", "metadata": {"sensor_id": "S001", "location": "spindle"}}`,
+			valid:  true,
+			value:  45.2,
+			unit:   "celsius",
+			metric: "temperature",
 		},
 		{
 			name:  "invalid json",
@@ -83,21 +83,21 @@ func TestTelemetryPayload_Parsing(t *testing.T) {
 
 func TestTelemetryPayload_Timestamp(t *testing.T) {
 	tests := []struct {
-		name          string
-		json          string
-		hasTimestamp  bool
-		expectedYear  int
+		name         string
+		json         string
+		hasTimestamp bool
+		expectedYear int
 	}{
 		{
-			name:          "with timestamp",
-			json:          `{"timestamp": "2026-03-01T15:30:00Z", "machine_id": "cnc-01", "metric_type": "temp", "value": 25, "unit": "c"}`,
-			hasTimestamp:  true,
-			expectedYear:  2026,
+			name:         "with timestamp",
+			json:         `{"timestamp": "2026-03-01T15:30:00Z", "machine_id": "cnc-01", "metric_type": "temp", "value": 25, "unit": "c"}`,
+			hasTimestamp: true,
+			expectedYear: 2026,
 		},
 		{
-			name:          "without timestamp",
-			json:          `{"machine_id": "cnc-01", "metric_type": "temp", "value": 25, "unit": "c"}`,
-			hasTimestamp:  false,
+			name:         "without timestamp",
+			json:         `{"machine_id": "cnc-01", "metric_type": "temp", "value": 25, "unit": "c"}`,
+			hasTimestamp: false,
 		},
 	}
 
@@ -125,11 +125,11 @@ func TestTelemetryPayload_Timestamp(t *testing.T) {
 
 func TestTelemetryMessage_TopicParsing(t *testing.T) {
 	tests := []struct {
-		name         string
-		topic        string
-		expectedLen  int
-		tenant       string
-		machine      string
+		name        string
+		topic       string
+		expectedLen int
+		tenant      string
+		machine     string
 	}{
 		{
 			name:        "valid UNS topic",
@@ -283,11 +283,11 @@ func TestRetryLogic_ExponentialBackoff(t *testing.T) {
 		attempt         int
 		expectedBackoff time.Duration
 	}{
-		{attempt: 0, expectedBackoff: 100 * time.Millisecond},  // 100ms * 2^0 = 100ms
-		{attempt: 1, expectedBackoff: 200 * time.Millisecond},  // 100ms * 2^1 = 200ms
-		{attempt: 2, expectedBackoff: 400 * time.Millisecond},  // 100ms * 2^2 = 400ms
-		{attempt: 3, expectedBackoff: 800 * time.Millisecond},  // 100ms * 2^3 = 800ms
-		{attempt: 4, expectedBackoff: 1600 * time.Millisecond}, // 100ms * 2^4 = 1.6s
+		{attempt: 0, expectedBackoff: 100 * time.Millisecond},   // 100ms * 2^0 = 100ms
+		{attempt: 1, expectedBackoff: 200 * time.Millisecond},   // 100ms * 2^1 = 200ms
+		{attempt: 2, expectedBackoff: 400 * time.Millisecond},   // 100ms * 2^2 = 400ms
+		{attempt: 3, expectedBackoff: 800 * time.Millisecond},   // 100ms * 2^3 = 800ms
+		{attempt: 4, expectedBackoff: 1600 * time.Millisecond},  // 100ms * 2^4 = 1.6s
 		{attempt: 8, expectedBackoff: 25600 * time.Millisecond}, // 100ms * 2^8 = 25.6s
 		{attempt: 9, expectedBackoff: 30 * time.Second},         // Capped at 30s
 		{attempt: 10, expectedBackoff: 30 * time.Second},        // Capped at 30s
@@ -310,9 +310,9 @@ func TestRetryLogic_ExponentialBackoff(t *testing.T) {
 func TestRetryLogic_MaxRetries(t *testing.T) {
 	// Test retry attempt limits
 	tests := []struct {
-		maxRetries   int
-		attempt      int
-		shouldRetry  bool
+		maxRetries  int
+		attempt     int
+		shouldRetry bool
 	}{
 		{maxRetries: 3, attempt: 0, shouldRetry: true},
 		{maxRetries: 3, attempt: 1, shouldRetry: true},

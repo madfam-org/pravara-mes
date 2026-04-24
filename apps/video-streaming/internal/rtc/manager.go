@@ -56,20 +56,20 @@ type PeerConnection struct {
 
 // OfferRequest represents an offer request
 type OfferRequest struct {
-	SessionID string                     `json:"session_id"`
-	CameraID  string                     `json:"camera_id"`
-	Offer     webrtc.SessionDescription  `json:"offer"`
+	SessionID string                    `json:"session_id"`
+	CameraID  string                    `json:"camera_id"`
+	Offer     webrtc.SessionDescription `json:"offer"`
 }
 
 // AnswerRequest represents an answer request
 type AnswerRequest struct {
-	SessionID string                     `json:"session_id"`
-	Answer    webrtc.SessionDescription  `json:"answer"`
+	SessionID string                    `json:"session_id"`
+	Answer    webrtc.SessionDescription `json:"answer"`
 }
 
 // ICECandidateRequest represents an ICE candidate
 type ICECandidateRequest struct {
-	SessionID string                   `json:"session_id"`
+	SessionID string                  `json:"session_id"`
 	Candidate webrtc.ICECandidateInit `json:"candidate"`
 }
 

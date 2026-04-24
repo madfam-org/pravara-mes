@@ -214,43 +214,43 @@ func TestQualityCertStatus_Values(t *testing.T) {
 
 func TestCertificate_OptionalFields(t *testing.T) {
 	tests := []struct {
-		name      string
-		json      string
-		hasOrder  bool
-		hasTask   bool
-		hasBatch  bool
+		name       string
+		json       string
+		hasOrder   bool
+		hasTask    bool
+		hasBatch   bool
 		hasMachine bool
 	}{
 		{
-			name:      "certificate with order only",
-			json:      `{"order_id": "550e8400-e29b-41d4-a716-446655440000"}`,
-			hasOrder:  true,
-			hasTask:   false,
-			hasBatch:  false,
+			name:       "certificate with order only",
+			json:       `{"order_id": "550e8400-e29b-41d4-a716-446655440000"}`,
+			hasOrder:   true,
+			hasTask:    false,
+			hasBatch:   false,
 			hasMachine: false,
 		},
 		{
-			name:      "certificate with task only",
-			json:      `{"task_id": "550e8400-e29b-41d4-a716-446655440001"}`,
-			hasOrder:  false,
-			hasTask:   true,
-			hasBatch:  false,
+			name:       "certificate with task only",
+			json:       `{"task_id": "550e8400-e29b-41d4-a716-446655440001"}`,
+			hasOrder:   false,
+			hasTask:    true,
+			hasBatch:   false,
 			hasMachine: false,
 		},
 		{
-			name:      "certificate with all optional IDs",
-			json:      `{"order_id": "550e8400-e29b-41d4-a716-446655440000", "task_id": "550e8400-e29b-41d4-a716-446655440001", "batch_lot_id": "550e8400-e29b-41d4-a716-446655440002", "machine_id": "550e8400-e29b-41d4-a716-446655440003"}`,
-			hasOrder:  true,
-			hasTask:   true,
-			hasBatch:  true,
+			name:       "certificate with all optional IDs",
+			json:       `{"order_id": "550e8400-e29b-41d4-a716-446655440000", "task_id": "550e8400-e29b-41d4-a716-446655440001", "batch_lot_id": "550e8400-e29b-41d4-a716-446655440002", "machine_id": "550e8400-e29b-41d4-a716-446655440003"}`,
+			hasOrder:   true,
+			hasTask:    true,
+			hasBatch:   true,
 			hasMachine: true,
 		},
 		{
-			name:      "certificate with no optional IDs",
-			json:      `{}`,
-			hasOrder:  false,
-			hasTask:   false,
-			hasBatch:  false,
+			name:       "certificate with no optional IDs",
+			json:       `{}`,
+			hasOrder:   false,
+			hasTask:    false,
+			hasBatch:   false,
 			hasMachine: false,
 		},
 	}
@@ -513,39 +513,39 @@ func TestInspectionResult_Values(t *testing.T) {
 
 func TestInspection_OptionalFields(t *testing.T) {
 	tests := []struct {
-		name          string
-		json          string
-		hasOrder      bool
-		hasTask       bool
-		hasMachine    bool
-		hasInspector  bool
+		name           string
+		json           string
+		hasOrder       bool
+		hasTask        bool
+		hasMachine     bool
+		hasInspector   bool
 		hasCertificate bool
 	}{
 		{
-			name:          "inspection with order only",
-			json:          `{"order_id": "550e8400-e29b-41d4-a716-446655440000"}`,
-			hasOrder:      true,
-			hasTask:       false,
-			hasMachine:    false,
-			hasInspector:  false,
+			name:           "inspection with order only",
+			json:           `{"order_id": "550e8400-e29b-41d4-a716-446655440000"}`,
+			hasOrder:       true,
+			hasTask:        false,
+			hasMachine:     false,
+			hasInspector:   false,
 			hasCertificate: false,
 		},
 		{
-			name:          "inspection with task and inspector",
-			json:          `{"task_id": "550e8400-e29b-41d4-a716-446655440001", "inspector_id": "550e8400-e29b-41d4-a716-446655440004"}`,
-			hasOrder:      false,
-			hasTask:       true,
-			hasMachine:    false,
-			hasInspector:  true,
+			name:           "inspection with task and inspector",
+			json:           `{"task_id": "550e8400-e29b-41d4-a716-446655440001", "inspector_id": "550e8400-e29b-41d4-a716-446655440004"}`,
+			hasOrder:       false,
+			hasTask:        true,
+			hasMachine:     false,
+			hasInspector:   true,
 			hasCertificate: false,
 		},
 		{
-			name:          "inspection with all optional IDs",
-			json:          `{"order_id": "550e8400-e29b-41d4-a716-446655440000", "task_id": "550e8400-e29b-41d4-a716-446655440001", "machine_id": "550e8400-e29b-41d4-a716-446655440003", "inspector_id": "550e8400-e29b-41d4-a716-446655440004"}`,
-			hasOrder:      true,
-			hasTask:       true,
-			hasMachine:    true,
-			hasInspector:  true,
+			name:           "inspection with all optional IDs",
+			json:           `{"order_id": "550e8400-e29b-41d4-a716-446655440000", "task_id": "550e8400-e29b-41d4-a716-446655440001", "machine_id": "550e8400-e29b-41d4-a716-446655440003", "inspector_id": "550e8400-e29b-41d4-a716-446655440004"}`,
+			hasOrder:       true,
+			hasTask:        true,
+			hasMachine:     true,
+			hasInspector:   true,
 			hasCertificate: false,
 		},
 	}
@@ -758,36 +758,36 @@ func TestUpdateBatchLotRequest_Fields(t *testing.T) {
 
 func TestBatchLot_OptionalDates(t *testing.T) {
 	now := time.Now()
-	expiry := now.AddDate(0, 6, 0) // 6 months from now
+	expiry := now.AddDate(0, 6, 0)    // 6 months from now
 	received := now.AddDate(0, 0, -7) // 7 days ago
 
 	tests := []struct {
-		name             string
-		json             string
-		hasManufactured  bool
-		hasExpiry        bool
-		hasReceived      bool
+		name            string
+		json            string
+		hasManufactured bool
+		hasExpiry       bool
+		hasReceived     bool
 	}{
 		{
-			name:             "batch lot with manufactured date only",
-			json:             `{"manufactured_date": "2024-01-01T00:00:00Z"}`,
-			hasManufactured:  true,
-			hasExpiry:        false,
-			hasReceived:      false,
+			name:            "batch lot with manufactured date only",
+			json:            `{"manufactured_date": "2024-01-01T00:00:00Z"}`,
+			hasManufactured: true,
+			hasExpiry:       false,
+			hasReceived:     false,
 		},
 		{
-			name:             "batch lot with all dates",
-			json:             `{"manufactured_date": "2024-01-01T00:00:00Z", "expiry_date": "2024-12-31T00:00:00Z", "received_date": "2024-01-15T00:00:00Z"}`,
-			hasManufactured:  true,
-			hasExpiry:        true,
-			hasReceived:      true,
+			name:            "batch lot with all dates",
+			json:            `{"manufactured_date": "2024-01-01T00:00:00Z", "expiry_date": "2024-12-31T00:00:00Z", "received_date": "2024-01-15T00:00:00Z"}`,
+			hasManufactured: true,
+			hasExpiry:       true,
+			hasReceived:     true,
 		},
 		{
-			name:             "batch lot with no dates",
-			json:             `{}`,
-			hasManufactured:  false,
-			hasExpiry:        false,
-			hasReceived:      false,
+			name:            "batch lot with no dates",
+			json:            `{}`,
+			hasManufactured: false,
+			hasExpiry:       false,
+			hasReceived:     false,
 		},
 	}
 

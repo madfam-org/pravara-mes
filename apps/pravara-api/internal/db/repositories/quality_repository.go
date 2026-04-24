@@ -350,15 +350,15 @@ func NewInspectionRepository(db *sql.DB) *InspectionRepository {
 
 // InspectionFilter defines filtering options for listing inspections.
 type InspectionFilter struct {
-	Type       *string
-	Result     *types.InspectionResult
-	OrderID    *uuid.UUID
-	TaskID     *uuid.UUID
-	MachineID  *uuid.UUID
-	FromDate   *time.Time
-	ToDate     *time.Time
-	Limit      int
-	Offset     int
+	Type      *string
+	Result    *types.InspectionResult
+	OrderID   *uuid.UUID
+	TaskID    *uuid.UUID
+	MachineID *uuid.UUID
+	FromDate  *time.Time
+	ToDate    *time.Time
+	Limit     int
+	Offset    int
 }
 
 // List retrieves inspections matching the given filter with pagination.

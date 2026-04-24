@@ -450,9 +450,9 @@ func (a *OctoPrintAdapter) pollTelemetry() {
 			var jobData struct {
 				State    string `json:"state"`
 				Progress struct {
-					Completion  float64 `json:"completion"`
-					PrintTime   int     `json:"printTime"`
-					PrintTimeLeft int   `json:"printTimeLeft"`
+					Completion    float64 `json:"completion"`
+					PrintTime     int     `json:"printTime"`
+					PrintTimeLeft int     `json:"printTimeLeft"`
 				} `json:"progress"`
 				Job struct {
 					File struct {

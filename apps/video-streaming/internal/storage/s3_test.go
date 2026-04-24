@@ -94,10 +94,10 @@ func TestNewClient_MinimalConfig(t *testing.T) {
 
 func TestConfig_Fields(t *testing.T) {
 	tests := []struct {
-		name     string
-		cfg      Config
-		wantBkt  string
-		wantRgn  string
+		name    string
+		cfg     Config
+		wantBkt string
+		wantRgn string
 	}{
 		{
 			name:    "full config",
@@ -256,7 +256,7 @@ func TestMultipartUploadThreshold(t *testing.T) {
 		{"1 byte", 1, false},
 		{"1 KB", 1024, false},
 		{"1 MB", 1024 * 1024, false},
-		{"exactly 5MB", threshold, false},                // > 5MB check, so exactly 5MB is NOT multipart
+		{"exactly 5MB", threshold, false}, // > 5MB check, so exactly 5MB is NOT multipart
 		{"5MB + 1 byte", threshold + 1, true},
 		{"10 MB", 10 * 1024 * 1024, true},
 		{"100 MB", 100 * 1024 * 1024, true},

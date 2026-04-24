@@ -180,21 +180,21 @@ func TestOutboxPublisher_PersistsCorrectData(t *testing.T) {
 
 	tenantID := uuid.New()
 	event := NewEvent(EventOrderStatus, tenantID, OrderStatusData{
-		OrderID:     uuid.New(),
-		OldStatus:   "confirmed",
-		NewStatus:   "in_production",
+		OrderID:      uuid.New(),
+		OldStatus:    "confirmed",
+		NewStatus:    "in_production",
 		CustomerName: "Test Corp",
-		UpdatedAt:   time.Now(),
+		UpdatedAt:    time.Now(),
 	})
 
 	// Verify the correct event type and namespace are passed to the outbox
 	mock.ExpectQuery("INSERT INTO event_outbox").
 		WithArgs(
-			sqlmock.AnyArg(),                       // id
-			tenantID,                                // tenant_id
-			string(EventOrderStatus),                // event_type
-			string(NamespaceOrders),                 // channel_namespace
-			sqlmock.AnyArg(),                        // payload (JSON)
+			sqlmock.AnyArg(),         // id
+			tenantID,                 // tenant_id
+			string(EventOrderStatus), // event_type
+			string(NamespaceOrders),  // channel_namespace
+			sqlmock.AnyArg(),         // payload (JSON)
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(time.Now()))
 
@@ -246,11 +246,11 @@ func TestOutboxPublisher_EventPayloadIsValidJSON(t *testing.T) {
 	// Capture the payload argument to verify it is valid JSON
 	mock.ExpectQuery("INSERT INTO event_outbox").
 		WithArgs(
-			sqlmock.AnyArg(), // id
-			tenantID,         // tenant_id
+			sqlmock.AnyArg(),            // id
+			tenantID,                    // tenant_id
 			string(EventMachineCreated), // event_type
 			string(NamespaceMachines),   // channel_namespace
-			sqlmock.AnyArg(), // payload
+			sqlmock.AnyArg(),            // payload
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(time.Now()))
 

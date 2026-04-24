@@ -19,7 +19,7 @@ func RolandGS2Definition() *MachineDefinition {
 				"max_grams": 350,
 			},
 		},
-		Commands:       rolandCommonCommands(),
+		Commands: rolandCommonCommands(),
 		StatusMapping: map[string]string{
 			"ready":   "idle",
 			"cutting": "running",

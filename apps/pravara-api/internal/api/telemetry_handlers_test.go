@@ -67,10 +67,10 @@ func TestTelemetryQueryResponse_Fields(t *testing.T) {
 
 func TestBatchTelemetryRequest_Validation(t *testing.T) {
 	tests := []struct {
-		name         string
-		request      BatchTelemetryRequest
-		recordCount  int
-		hasRecords   bool
+		name        string
+		request     BatchTelemetryRequest
+		recordCount int
+		hasRecords  bool
 	}{
 		{
 			name: "single record",
@@ -206,9 +206,9 @@ func TestTelemetryRecord_Fields(t *testing.T) {
 func TestBatchTelemetryRequest_SizeLimits(t *testing.T) {
 	// Test batch size limits
 	batchLimits := []struct {
-		size       int
+		size        int
 		withinLimit bool
-		maxSize    int
+		maxSize     int
 	}{
 		{size: 1, withinLimit: true, maxSize: 1000},
 		{size: 500, withinLimit: true, maxSize: 1000},

@@ -40,7 +40,7 @@ func NewRealtimeHandler(cfg *config.CentrifugoConfig, log *logrus.Logger) *Realt
 // CentrifugoClaims represents the JWT claims for Centrifugo connection token.
 type CentrifugoClaims struct {
 	jwt.RegisteredClaims
-	Sub      string                 `json:"sub"`               // User ID
+	Sub      string                 `json:"sub"`                // User ID
 	Channels []string               `json:"channels,omitempty"` // Allowed channels
 	Info     map[string]interface{} `json:"info,omitempty"`     // User info attached to connection
 }
@@ -226,17 +226,17 @@ type SubscribeResponse struct {
 
 // SubscribeResult contains the subscription result.
 type SubscribeResult struct {
-	Info      map[string]interface{} `json:"info,omitempty"`
-	ExpireAt  int64                  `json:"expire_at,omitempty"`
-	Override  *SubscribeOverride     `json:"override,omitempty"`
+	Info     map[string]interface{} `json:"info,omitempty"`
+	ExpireAt int64                  `json:"expire_at,omitempty"`
+	Override *SubscribeOverride     `json:"override,omitempty"`
 }
 
 // SubscribeOverride allows overriding channel options.
 type SubscribeOverride struct {
-	Presence         *bool `json:"presence,omitempty"`
-	JoinLeave        *bool `json:"join_leave,omitempty"`
-	Position         *bool `json:"position,omitempty"`
-	Recover          *bool `json:"recover,omitempty"`
+	Presence  *bool `json:"presence,omitempty"`
+	JoinLeave *bool `json:"join_leave,omitempty"`
+	Position  *bool `json:"position,omitempty"`
+	Recover   *bool `json:"recover,omitempty"`
 }
 
 // AuthSubscribe handles Centrifugo proxy subscribe authorization.

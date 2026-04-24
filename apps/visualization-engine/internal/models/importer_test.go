@@ -13,7 +13,7 @@ type stubImporter struct {
 	formats []string
 }
 
-func (s *stubImporter) Name() string              { return s.name }
+func (s *stubImporter) Name() string               { return s.name }
 func (s *stubImporter) SupportedFormats() []string { return s.formats }
 func (s *stubImporter) Import(_ context.Context, _ string, _ ImportOptions) (*MachineModel, error) {
 	return nil, nil

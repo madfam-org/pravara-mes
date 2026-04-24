@@ -51,11 +51,11 @@ func newTestYantra4DHandler() (*Yantra4DHandler, *httptest.Server, *httptest.Ser
 				{ID: "assembled", Label: map[string]string{"en": "Assembled"}},
 			}
 			manifest.Parameters = []struct {
-				ID      string      `json:"id"`
-				Type    string      `json:"type"`
-				Default interface{} `json:"default"`
+				ID      string            `json:"id"`
+				Type    string            `json:"type"`
+				Default interface{}       `json:"default"`
 				Label   map[string]string `json:"label"`
-				Group   string      `json:"group"`
+				Group   string            `json:"group"`
 			}{
 				{ID: "width_units", Type: "int", Default: float64(3), Label: map[string]string{"en": "Width"}, Group: "dimensions"},
 			}

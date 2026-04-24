@@ -99,10 +99,10 @@ func TestAgentService_CalculateAgentScore_Unavailable(t *testing.T) {
 	}
 
 	unavailableAgent := &Agent{
-		ID:               uuid.New(),
-		Name:             "Unavailable Agent",
-		Status:           AgentStatusOffline,
-		Skills:           []string{"cnc_operation"},
+		ID:     uuid.New(),
+		Name:   "Unavailable Agent",
+		Status: AgentStatusOffline,
+		Skills: []string{"cnc_operation"},
 	}
 
 	req := AssignmentRequest{

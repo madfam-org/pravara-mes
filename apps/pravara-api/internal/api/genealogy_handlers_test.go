@@ -190,13 +190,13 @@ func TestUpdateGenealogyRequest_Fields(t *testing.T) {
 
 func TestGenealogy_OptionalFields(t *testing.T) {
 	tests := []struct {
-		name              string
-		json              string
-		hasProductDef     bool
-		hasOrder          bool
-		hasMachine        bool
-		hasSerialNumber   bool
-		hasLotNumber      bool
+		name            string
+		json            string
+		hasProductDef   bool
+		hasOrder        bool
+		hasMachine      bool
+		hasSerialNumber bool
+		hasLotNumber    bool
 	}{
 		{
 			name:            "genealogy with product definition only",

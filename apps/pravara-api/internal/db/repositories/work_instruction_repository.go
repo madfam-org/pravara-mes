@@ -23,21 +23,21 @@ func NewWorkInstructionRepository(db *sql.DB) *WorkInstructionRepository {
 
 // WorkInstruction represents a work instruction document for operator guidance.
 type WorkInstruction struct {
-	ID                  uuid.UUID        `json:"id"`
-	TenantID            uuid.UUID        `json:"tenant_id"`
-	Title               string           `json:"title"`
-	Version             string           `json:"version"`
-	Category            string           `json:"category"` // setup, operation, safety, maintenance
-	Description         string           `json:"description"`
-	ProductDefinitionID *uuid.UUID       `json:"product_definition_id,omitempty"`
-	MachineType         *string          `json:"machine_type,omitempty"`
-	Steps               json.RawMessage  `json:"steps,omitempty"`
-	ToolsRequired       json.RawMessage  `json:"tools_required,omitempty"`
-	PPERequired         json.RawMessage  `json:"ppe_required,omitempty"`
-	IsActive            bool             `json:"is_active"`
-	Metadata            map[string]any   `json:"metadata,omitempty"`
-	CreatedAt           time.Time        `json:"created_at"`
-	UpdatedAt           time.Time        `json:"updated_at"`
+	ID                  uuid.UUID       `json:"id"`
+	TenantID            uuid.UUID       `json:"tenant_id"`
+	Title               string          `json:"title"`
+	Version             string          `json:"version"`
+	Category            string          `json:"category"` // setup, operation, safety, maintenance
+	Description         string          `json:"description"`
+	ProductDefinitionID *uuid.UUID      `json:"product_definition_id,omitempty"`
+	MachineType         *string         `json:"machine_type,omitempty"`
+	Steps               json.RawMessage `json:"steps,omitempty"`
+	ToolsRequired       json.RawMessage `json:"tools_required,omitempty"`
+	PPERequired         json.RawMessage `json:"ppe_required,omitempty"`
+	IsActive            bool            `json:"is_active"`
+	Metadata            map[string]any  `json:"metadata,omitempty"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
 }
 
 // TaskWorkInstruction represents the association between a task and a work instruction.

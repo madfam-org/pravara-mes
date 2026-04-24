@@ -89,6 +89,7 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 //   - sent → acknowledged: Machine received the command
 //   - acknowledged → completed: Command executed successfully
 //   - any → failed: Command execution failed
+//
 // Automatically sets acked_at timestamp when status is 'acknowledged',
 // and completed_at when status is 'completed' or 'failed'.
 // Returns an error if the command is not found or update fails.
@@ -208,6 +209,7 @@ func (r *TaskCommandRepository) GetActiveByMachineID(ctx context.Context, machin
 //   - Auditing task execution history
 //   - Debugging command failures
 //   - Analyzing task-machine interaction patterns
+//
 // Returns an empty slice if no commands exist for the task.
 // Results are ordered by creation time, most recent first.
 func (r *TaskCommandRepository) GetByTaskID(ctx context.Context, taskID uuid.UUID) ([]TaskCommand, error) {

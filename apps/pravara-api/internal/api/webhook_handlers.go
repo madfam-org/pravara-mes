@@ -35,22 +35,22 @@ func NewWebhookHandler(orderRepo *repositories.OrderRepository, orderItemRepo *r
 
 // CotizaWebhookPayload represents the incoming payload from Cotiza.
 type CotizaWebhookPayload struct {
-	Event     string           `json:"event" binding:"required"`
-	Timestamp string           `json:"timestamp"`
-	Order     CotizaOrderData  `json:"order" binding:"required"`
+	Event     string          `json:"event" binding:"required"`
+	Timestamp string          `json:"timestamp"`
+	Order     CotizaOrderData `json:"order" binding:"required"`
 }
 
 // CotizaOrderData represents the order data from Cotiza.
 type CotizaOrderData struct {
-	ID            string              `json:"id" binding:"required"`
-	CustomerName  string              `json:"customer_name" binding:"required"`
-	CustomerEmail string              `json:"customer_email"`
-	TotalAmount   float64             `json:"total_amount"`
-	Currency      string              `json:"currency"`
-	DueDate       *time.Time          `json:"due_date"`
-	Priority      int                 `json:"priority"`
-	Items         []CotizaItemData    `json:"items"`
-	Metadata      map[string]any      `json:"metadata"`
+	ID            string           `json:"id" binding:"required"`
+	CustomerName  string           `json:"customer_name" binding:"required"`
+	CustomerEmail string           `json:"customer_email"`
+	TotalAmount   float64          `json:"total_amount"`
+	Currency      string           `json:"currency"`
+	DueDate       *time.Time       `json:"due_date"`
+	Priority      int              `json:"priority"`
+	Items         []CotizaItemData `json:"items"`
+	Metadata      map[string]any   `json:"metadata"`
 }
 
 // CotizaItemData represents an order item from Cotiza.

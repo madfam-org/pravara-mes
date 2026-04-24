@@ -288,10 +288,10 @@ func (a *SnapmakerAdapter) wifiGetStatus() error {
 	}
 
 	var status struct {
-		Model     string  `json:"model"`
-		State     string  `json:"state"`
-		ToolHead  string  `json:"toolhead"`
-		Position  struct {
+		Model    string `json:"model"`
+		State    string `json:"state"`
+		ToolHead string `json:"toolhead"`
+		Position struct {
 			X float64 `json:"x"`
 			Y float64 `json:"y"`
 			Z float64 `json:"z"`

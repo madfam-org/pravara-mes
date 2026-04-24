@@ -38,9 +38,9 @@ func (h *OrderHandler) SetUsageRecorder(r billing.UsageRecorder) {
 // NewOrderHandler creates a new order handler.
 func NewOrderHandler(repo *repositories.OrderRepository, orderItemRepo *repositories.OrderItemRepository, log *logrus.Logger) *OrderHandler {
 	return &OrderHandler{
-		repo:         repo,
+		repo:          repo,
 		orderItemRepo: orderItemRepo,
-		log:          log,
+		log:           log,
 	}
 }
 

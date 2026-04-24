@@ -50,12 +50,12 @@ type Orientation struct {
 
 // Features represents camera capabilities
 type Features struct {
-	PTZ          bool `json:"ptz"`           // Pan-Tilt-Zoom
-	NightVision  bool `json:"night_vision"`
-	Motion       bool `json:"motion"`
-	Audio        bool `json:"audio"`
-	Resolution   string `json:"resolution"`   // e.g., "1920x1080"
-	FPS          int  `json:"fps"`
+	PTZ         bool   `json:"ptz"` // Pan-Tilt-Zoom
+	NightVision bool   `json:"night_vision"`
+	Motion      bool   `json:"motion"`
+	Audio       bool   `json:"audio"`
+	Resolution  string `json:"resolution"` // e.g., "1920x1080"
+	FPS         int    `json:"fps"`
 }
 
 // ONVIFDevice represents an ONVIF-compliant camera
@@ -70,11 +70,11 @@ type ONVIFDevice struct {
 
 // Manager handles camera operations
 type Manager struct {
-	db           *sql.DB
-	log          *logrus.Logger
-	cameras      map[uuid.UUID]*Camera
-	camerasMu    sync.RWMutex
-	discoveryMu  sync.Mutex
+	db          *sql.DB
+	log         *logrus.Logger
+	cameras     map[uuid.UUID]*Camera
+	camerasMu   sync.RWMutex
+	discoveryMu sync.Mutex
 }
 
 // NewManager creates a new camera manager

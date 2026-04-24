@@ -310,7 +310,7 @@ func (r *RedisUsageRecorder) flushToDhanam(ctx context.Context) error {
 			Date:      yesterday.Format("2006-01-02"),
 			UsageData: usage,
 			Metadata: map[string]string{
-				"source":    "pravara-mes",
+				"source":     "pravara-mes",
 				"flush_time": time.Now().UTC().Format(time.RFC3339),
 			},
 		}
@@ -504,4 +504,3 @@ func (r *RedisUsageRecorder) Close() error {
 	// Close Redis connection
 	return r.client.Close()
 }
-
