@@ -97,7 +97,14 @@ jobs:
             packages/sdk-go/go.sum
 
       - name: Run tests
-        run: go test ./... -v -race -cover -coverprofile=coverage.out
+        run: |
+          # go.work uses per-module `use (...)` layout, so `./...` from repo
+          # root doesn't resolve. Iterate each workspace module explicitly.
+          set -e
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+            echo "=== go test $mod ==="
+            (cd "$mod" && go test ./... -v -race -cover -coverprofile=coverage.out)
+          done
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
@@ -105,7 +112,7 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         with:
-          files: ./coverage.out
+          files: apps/pravara-api/coverage.out
           flags: go
           fail_ci_if_error: false
 

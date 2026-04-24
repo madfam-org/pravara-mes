@@ -51,10 +51,22 @@ jobs:
             packages/sdk-go/go.sum
 
       - name: Vet
-        run: go vet ./...
+        run: |
+          # go.work uses per-module `use (...)` layout, so `./...` from repo
+          # root doesn't resolve. Iterate each workspace module explicitly.
+          set -e
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+            echo "=== go vet $mod ==="
+            (cd "$mod" && go vet ./...)
+          done
 
       - name: Test
-        run: go test ./... -race -short
+        run: |
+          set -e
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+            echo "=== go test $mod ==="
+            (cd "$mod" && go test ./... -race -short)
+          done
         env:
           DATABASE_URL: postgres://pravara:test@localhost:5432/pravara_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
