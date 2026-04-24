@@ -436,9 +436,9 @@ export function CNCControls({ onSettingsChange }: CNCControlsProps) {
             <SelectContent>
               <SelectItem value="1">1.0 mm</SelectItem>
               <SelectItem value="2">2.0 mm</SelectItem>
-              <SelectItem value="3.175">3.175 mm (1/8")</SelectItem>
+              <SelectItem value="3.175">3.175 mm (1/8&quot;)</SelectItem>
               <SelectItem value="6">6.0 mm</SelectItem>
-              <SelectItem value="6.35">6.35 mm (1/4")</SelectItem>
+              <SelectItem value="6.35">6.35 mm (1/4&quot;)</SelectItem>
             </SelectContent>
           </Select>
         </div>

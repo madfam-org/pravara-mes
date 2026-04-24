@@ -50,6 +50,26 @@ interface CameraPreset {
   target: [number, number, number];
 }
 
+// GLTF model renderer — only mounted when modelUrl is set, so useGLTF is
+// called unconditionally within this component (stable hook order).
+const GLTFMachineModel: React.FC<{
+  modelUrl: string;
+  meshRef: React.RefObject<THREE.Mesh | null>;
+  onSelect: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ modelUrl, meshRef, onSelect, onHover }) => {
+  const model = useGLTF(modelUrl, true);
+  return (
+    <primitive
+      ref={meshRef}
+      object={model.scene.clone()}
+      onClick={onSelect}
+      onPointerOver={() => onHover(true)}
+      onPointerOut={() => onHover(false)}
+    />
+  );
+};
+
 // Machine component with GLTF model or fallback box
 const Machine: React.FC<{
   machine: MachinePosition;
@@ -58,9 +78,6 @@ const Machine: React.FC<{
 }> = ({ machine, selected, onSelect }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-
-  // Load GLTF model if available
-  const model = machine.modelUrl ? useGLTF(machine.modelUrl, true) : null;
 
   // Animate machine when running
   useFrame((state, delta) => {
@@ -80,13 +97,12 @@ const Machine: React.FC<{
 
   return (
     <group position={machine.position} rotation={machine.rotation} scale={machine.scale}>
-      {model ? (
-        <primitive
-          ref={meshRef}
-          object={model.scene.clone()}
-          onClick={onSelect}
-          onPointerOver={() => setHovered(true)}
-          onPointerOut={() => setHovered(false)}
+      {machine.modelUrl ? (
+        <GLTFMachineModel
+          modelUrl={machine.modelUrl}
+          meshRef={meshRef}
+          onSelect={onSelect}
+          onHover={setHovered}
         />
       ) : (
         <Box

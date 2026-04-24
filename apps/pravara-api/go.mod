@@ -13,6 +13,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/madfam-org/pravara-mes/packages/sdk-go v0.0.0-00010101000000-000000000000
+	github.com/getsentry/sentry-go v0.46.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2

@@ -67,7 +67,7 @@ export default function MachineDetailPage({ params }: MachineDetailPageProps) {
               Machine Not Found
             </h3>
             <p className="text-muted-foreground mt-2">
-              The machine you're looking for doesn't exist or you don't have access.
+              The machine you&apos;re looking for doesn&apos;t exist or you don&apos;t have access.
             </p>
             <Button className="mt-4" asChild>
               <Link href="/machines">Return to Machines</Link>
