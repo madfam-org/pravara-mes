@@ -263,6 +263,42 @@ jobs:
           echo "- **Denied licenses**: GPL-3.0, AGPL-3.0" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
+  # Placeholder Secret Scan (audit 2026-04-23 H11)
+  # Fails the build if `REPLACE_WITH_` appears in any file outside
+  # *.example.yaml or tests/. Stops the kustomize-base placeholder-leak
+  # class of bug cold.
+  # ===========================================================================
+  placeholder-scan:
+    name: Placeholder Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: grep for REPLACE_WITH_ leaks
+        run: |
+          set -euo pipefail
+          # Include every tracked file EXCEPT
+          #   - *.example.yaml / -example.yaml (documented key templates)
+          #   - tests/*                        (fixtures)
+          #   - *.md / *.mdx                   (docs may reference the pattern)
+          #   - SECURITY.md                    (audit notes may cite placeholders)
+          #   - .github/workflows/security-scan.yml (this file itself)
+          # Then also strip YAML-style comment lines (leading-# lines) from matches,
+          # since comments legitimately reference the pattern without leaking secrets.
+          matches=$(git ls-files \
+            | grep -v -E '((\.example\.yaml$|-example\.yaml$)|^tests/|\.(md|mdx)$|\.github/workflows/security-scan\.yml$)' \
+            | xargs -I{} grep -Hn 'REPLACE_WITH_' {} 2>/dev/null \
+            | grep -v -E ':[[:space:]]*#' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "::error::REPLACE_WITH_ placeholder leaked outside *.example.yaml, tests/, or *.md:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "No placeholder leaks found."
+
+  # ===========================================================================
   # Security Scan Summary
   # ===========================================================================
   security-summary:
@@ -273,6 +309,7 @@ jobs:
       - npm-audit
       - trivy-scan
       - trivy-fs
+      - placeholder-scan
     if: always()
     steps:
       - name: Check scan results
@@ -285,6 +322,7 @@ jobs:
           echo "| NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Scan (Trivy) | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Filesystem Scan (Trivy) | ${{ needs.trivy-fs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Placeholder Secret Scan | ${{ needs.placeholder-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Review detailed findings in the Security tab." >> $GITHUB_STEP_SUMMARY
 
