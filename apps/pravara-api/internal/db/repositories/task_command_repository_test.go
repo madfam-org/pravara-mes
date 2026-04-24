@@ -229,11 +229,11 @@ func TestTaskCommandRepository_GetByCommandID(t *testing.T) {
 	repo := NewTaskCommandRepository(db)
 
 	tests := []struct {
-		name       string
-		commandID  uuid.UUID
-		mockSetup  func(sqlmock.Sqlmock, uuid.UUID)
-		wantCmd    bool
-		wantError  bool
+		name      string
+		commandID uuid.UUID
+		mockSetup func(sqlmock.Sqlmock, uuid.UUID)
+		wantCmd   bool
+		wantError bool
 	}{
 		{
 			name:      "command found",

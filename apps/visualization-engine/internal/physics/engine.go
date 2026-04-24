@@ -103,24 +103,24 @@ type GCodeSimulationRequest struct {
 
 // MaterialProps represents material properties
 type MaterialProps struct {
-	Type        string  `json:"type"`         // "aluminum", "steel", "wood", "plastic"
-	Hardness    float64 `json:"hardness"`     // 0-1 scale
-	Density     float64 `json:"density"`      // kg/m³
-	ChipLoad    float64 `json:"chip_load"`    // mm/tooth
+	Type         string  `json:"type"`          // "aluminum", "steel", "wood", "plastic"
+	Hardness     float64 `json:"hardness"`      // 0-1 scale
+	Density      float64 `json:"density"`       // kg/m³
+	ChipLoad     float64 `json:"chip_load"`     // mm/tooth
 	CuttingSpeed float64 `json:"cutting_speed"` // m/min
 }
 
 // GCodeSimulationResult represents the result of G-code simulation
 type GCodeSimulationResult struct {
-	ToolPath      []ToolPathSegment `json:"tool_path"`
-	CycleTime     time.Duration     `json:"cycle_time"`
-	Distance      float64           `json:"distance"`        // Total distance traveled
-	CuttingTime   time.Duration     `json:"cutting_time"`    // Time spent cutting
-	RapidTime     time.Duration     `json:"rapid_time"`      // Time spent in rapid moves
-	BoundingBox   BoundingBox       `json:"bounding_box"`    // Bounding box of tool path
-	MaterialRemoved float64         `json:"material_removed"` // Volume of material removed
-	Collisions    []Collision       `json:"collisions"`
-	Warnings      []string          `json:"warnings"`
+	ToolPath        []ToolPathSegment `json:"tool_path"`
+	CycleTime       time.Duration     `json:"cycle_time"`
+	Distance        float64           `json:"distance"`         // Total distance traveled
+	CuttingTime     time.Duration     `json:"cutting_time"`     // Time spent cutting
+	RapidTime       time.Duration     `json:"rapid_time"`       // Time spent in rapid moves
+	BoundingBox     BoundingBox       `json:"bounding_box"`     // Bounding box of tool path
+	MaterialRemoved float64           `json:"material_removed"` // Volume of material removed
+	Collisions      []Collision       `json:"collisions"`
+	Warnings        []string          `json:"warnings"`
 }
 
 // ToolPathSegment represents a segment of the tool path
@@ -137,8 +137,8 @@ type ToolPathSegment struct {
 // Collision represents a detected collision
 type Collision struct {
 	Position Vector3 `json:"position"`
-	Type     string  `json:"type"` // "tool", "holder", "spindle"
-	Object   string  `json:"object"` // What was hit
+	Type     string  `json:"type"`     // "tool", "holder", "spindle"
+	Object   string  `json:"object"`   // What was hit
 	Severity string  `json:"severity"` // "warning", "error", "critical"
 }
 
@@ -227,7 +227,7 @@ func (e *Engine) SimulateGCode(ctx context.Context, req GCodeSimulationRequest) 
 				result.CuttingTime += segment.Duration
 				// Calculate material removal (simplified)
 				pathLength := currentPos.Distance(newPos)
-				result.MaterialRemoved += pathLength * req.ToolDiameter * math.Abs(newPos.Z - currentPos.Z) / 1000000 // mm³ to m³
+				result.MaterialRemoved += pathLength * req.ToolDiameter * math.Abs(newPos.Z-currentPos.Z) / 1000000 // mm³ to m³
 			}
 
 			result.Distance += currentPos.Distance(newPos)
@@ -473,27 +473,27 @@ type MaterialSimulationRequest struct {
 
 // MaterialSimulationResult represents material simulation results
 type MaterialSimulationResult struct {
-	MaterialState   MaterialState   `json:"material_state"`
-	SurfaceQuality  float64         `json:"surface_quality"` // 0-1 scale
-	ToolWear        float64         `json:"tool_wear"`       // 0-1 scale
-	Temperature     TemperatureMap  `json:"temperature"`
-	Forces          CuttingForces   `json:"forces"`
-	ChipFormation   ChipParameters  `json:"chip_formation"`
+	MaterialState  MaterialState  `json:"material_state"`
+	SurfaceQuality float64        `json:"surface_quality"` // 0-1 scale
+	ToolWear       float64        `json:"tool_wear"`       // 0-1 scale
+	Temperature    TemperatureMap `json:"temperature"`
+	Forces         CuttingForces  `json:"forces"`
+	ChipFormation  ChipParameters `json:"chip_formation"`
 }
 
 // MaterialState represents the state of material after processing
 type MaterialState struct {
-	RemovedVolume   float64   `json:"removed_volume"`   // m³
-	RemainingVolume float64   `json:"remaining_volume"` // m³
-	SurfaceArea     float64   `json:"surface_area"`     // m²
+	RemovedVolume   float64     `json:"removed_volume"`   // m³
+	RemainingVolume float64     `json:"remaining_volume"` // m³
+	SurfaceArea     float64     `json:"surface_area"`     // m²
 	Dimensions      BoundingBox `json:"dimensions"`
 }
 
 // TemperatureMap represents temperature distribution
 type TemperatureMap struct {
-	MaxTemp     float64            `json:"max_temp"`     // °C
-	AvgTemp     float64            `json:"avg_temp"`     // °C
-	HeatZones   []HeatZone         `json:"heat_zones"`
+	MaxTemp   float64    `json:"max_temp"` // °C
+	AvgTemp   float64    `json:"avg_temp"` // °C
+	HeatZones []HeatZone `json:"heat_zones"`
 }
 
 // HeatZone represents a localized heat zone
@@ -514,10 +514,10 @@ type CuttingForces struct {
 
 // ChipParameters represents chip formation parameters
 type ChipParameters struct {
-	ChipThickness   float64 `json:"chip_thickness"`   // mm
-	ChipCurlRadius  float64 `json:"chip_curl_radius"` // mm
-	ChipBreaking    bool    `json:"chip_breaking"`
-	ChipEvacuation  string  `json:"chip_evacuation"`  // "good", "moderate", "poor"
+	ChipThickness  float64 `json:"chip_thickness"`   // mm
+	ChipCurlRadius float64 `json:"chip_curl_radius"` // mm
+	ChipBreaking   bool    `json:"chip_breaking"`
+	ChipEvacuation string  `json:"chip_evacuation"` // "good", "moderate", "poor"
 }
 
 // SimulateMaterial simulates material processing
@@ -546,7 +546,7 @@ func (e *Engine) simulateSubtractive(req MaterialSimulationRequest) *MaterialSim
 
 	// Calculate chip thickness
 	feedPerTooth := req.FeedRate / (req.SpindleSpeed * 2) // Assuming 2-flute tool
-	chipThickness := feedPerTooth * math.Sin(math.Pi/4)  // 45° average engagement
+	chipThickness := feedPerTooth * math.Sin(math.Pi/4)   // 45° average engagement
 
 	// Calculate cutting forces (simplified Merchant's equation)
 	specificCuttingForce := req.Material.Hardness * 2000 // N/mm² (simplified)
@@ -615,7 +615,7 @@ func (e *Engine) simulateAdditive(req MaterialSimulationRequest) *MaterialSimula
 	// Calculate deposition rate
 	pathLength := calculatePathLength(req.ToolPath)
 	depositionVolume := pathLength * layerArea / 1e9 // mm³ to m³
-	_ = pathLength / req.FeedRate * 60 // depositionTime (seconds), reserved for thermal model
+	_ = pathLength / req.FeedRate * 60               // depositionTime (seconds), reserved for thermal model
 
 	// Temperature for thermoplastics
 	extrusionTemp := 200.0 // Default for PLA
@@ -638,7 +638,7 @@ func (e *Engine) simulateAdditive(req MaterialSimulationRequest) *MaterialSimula
 	}
 
 	// Layer adhesion quality
-	coolingRate := 10.0 // °C/s
+	coolingRate := 10.0                              // °C/s
 	layerBondStrength := 1.0 - (coolingRate / 100.0) // Simplified
 	result.SurfaceQuality = layerBondStrength
 
@@ -656,12 +656,12 @@ func (e *Engine) simulateThermalCutting(req MaterialSimulationRequest) *Material
 	result := &MaterialSimulationResult{}
 
 	// Laser power and cutting speed relationship
-	cuttingSpeed := req.FeedRate / 60 // mm/s
+	cuttingSpeed := req.FeedRate / 60               // mm/s
 	_ = req.Material.Density * cuttingSpeed * 0.001 // requiredPower (simplified), reserved for power analysis
 
 	// Heat affected zone
 	hazWidth := req.ToolDiameter + 0.5 // mm
-	maxTemp := 1000.0 // Melting temperature
+	maxTemp := 1000.0                  // Melting temperature
 
 	result.Temperature = TemperatureMap{
 		MaxTemp: maxTemp,
@@ -677,7 +677,7 @@ func (e *Engine) simulateThermalCutting(req MaterialSimulationRequest) *Material
 
 	// Kerf width and quality
 	kerfWidth := req.ToolDiameter
-	result.SurfaceQuality = 1.0 - (kerfWidth - req.ToolDiameter) / req.ToolDiameter
+	result.SurfaceQuality = 1.0 - (kerfWidth-req.ToolDiameter)/req.ToolDiameter
 
 	// Material removal (kerf)
 	pathLength := calculatePathLength(req.ToolPath)

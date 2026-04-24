@@ -53,11 +53,11 @@ func NewGenealogyService(
 // by the order item's product SKU.
 func (s *GenealogyService) AutoCreateFromTask(ctx context.Context, task TaskInfo) (*repositories.ProductGenealogy, error) {
 	record := &repositories.ProductGenealogy{
-		TenantID: task.TenantID,
-		OrderID:  task.OrderID,
-		TaskID:   &task.ID,
+		TenantID:  task.TenantID,
+		OrderID:   task.OrderID,
+		TaskID:    &task.ID,
 		MachineID: task.MachineID,
-		Status:   string(repositories.GenealogyStatusDraft),
+		Status:    string(repositories.GenealogyStatusDraft),
 	}
 
 	if task.OrderItemID != nil {

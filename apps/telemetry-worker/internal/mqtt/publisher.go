@@ -69,11 +69,11 @@ func (p *EventPublisher) Close() error {
 
 // TelemetryEvent represents a real-time telemetry event.
 type TelemetryEvent struct {
-	ID        string                 `json:"id"`
-	Type      string                 `json:"type"`
-	TenantID  uuid.UUID              `json:"tenant_id"`
-	Timestamp time.Time              `json:"timestamp"`
-	Data      TelemetryBatchData     `json:"data"`
+	ID        string             `json:"id"`
+	Type      string             `json:"type"`
+	TenantID  uuid.UUID          `json:"tenant_id"`
+	Timestamp time.Time          `json:"timestamp"`
+	Data      TelemetryBatchData `json:"data"`
 }
 
 // TelemetryBatchData contains the batch of telemetry metrics.

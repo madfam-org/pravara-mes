@@ -21,12 +21,12 @@ import (
 
 // TelemetryPayload represents the expected MQTT telemetry message format.
 type TelemetryPayload struct {
-	Timestamp   *time.Time             `json:"timestamp"`
-	MachineID   string                 `json:"machine_id"`
-	MetricType  string                 `json:"metric_type"`
-	Value       float64                `json:"value"`
-	Unit        string                 `json:"unit"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp  *time.Time             `json:"timestamp"`
+	MachineID  string                 `json:"machine_id"`
+	MetricType string                 `json:"metric_type"`
+	Value      float64                `json:"value"`
+	Unit       string                 `json:"unit"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // TelemetryStore defines the interface for storing telemetry data.

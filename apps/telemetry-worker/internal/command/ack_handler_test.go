@@ -240,13 +240,13 @@ type mockMessage struct {
 	payload []byte
 }
 
-func (m *mockMessage) Duplicate() bool    { return false }
-func (m *mockMessage) Qos() byte          { return 1 }
-func (m *mockMessage) Retained() bool     { return false }
-func (m *mockMessage) Topic() string      { return m.topic }
-func (m *mockMessage) MessageID() uint16  { return 1 }
-func (m *mockMessage) Payload() []byte    { return m.payload }
-func (m *mockMessage) Ack()               {}
+func (m *mockMessage) Duplicate() bool   { return false }
+func (m *mockMessage) Qos() byte         { return 1 }
+func (m *mockMessage) Retained() bool    { return false }
+func (m *mockMessage) Topic() string     { return m.topic }
+func (m *mockMessage) MessageID() uint16 { return 1 }
+func (m *mockMessage) Payload() []byte   { return m.payload }
+func (m *mockMessage) Ack()              {}
 
 type MockMQTTClient struct {
 	mock.Mock

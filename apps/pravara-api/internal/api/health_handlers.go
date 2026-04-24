@@ -29,11 +29,11 @@ func NewHealthHandler(db *db.DB, log *logrus.Logger) *HealthHandler {
 
 // HealthResponse represents the full health check response.
 type HealthResponse struct {
-	Status     string                   `json:"status"`
-	Service    string                   `json:"service"`
-	Timestamp  string                   `json:"timestamp"`
-	Uptime     string                   `json:"uptime"`
-	Version    string                   `json:"version"`
+	Status     string                     `json:"status"`
+	Service    string                     `json:"service"`
+	Timestamp  string                     `json:"timestamp"`
+	Uptime     string                     `json:"uptime"`
+	Version    string                     `json:"version"`
 	Components map[string]ComponentHealth `json:"components"`
 }
 
@@ -87,10 +87,10 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	response.Components["runtime"] = ComponentHealth{
 		Status: "healthy",
 		Details: map[string]any{
-			"goroutines":   runtime.NumGoroutine(),
-			"heap_alloc":   memStats.HeapAlloc,
-			"heap_sys":     memStats.HeapSys,
-			"gc_cycles":    memStats.NumGC,
+			"goroutines": runtime.NumGoroutine(),
+			"heap_alloc": memStats.HeapAlloc,
+			"heap_sys":   memStats.HeapSys,
+			"gc_cycles":  memStats.NumGC,
 		},
 	}
 

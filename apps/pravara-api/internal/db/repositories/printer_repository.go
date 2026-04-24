@@ -20,9 +20,9 @@ type PrinterProfile struct {
 	Description *string   `db:"description" json:"description,omitempty"`
 
 	// Specifications
-	PrinterType   string  `db:"printer_type" json:"printer_type"`
-	Manufacturer  *string `db:"manufacturer" json:"manufacturer,omitempty"`
-	Model         *string `db:"model" json:"model,omitempty"`
+	PrinterType  string  `db:"printer_type" json:"printer_type"`
+	Manufacturer *string `db:"manufacturer" json:"manufacturer,omitempty"`
+	Model        *string `db:"model" json:"model,omitempty"`
 
 	// Build volume
 	BuildVolumeX *float64 `db:"build_volume_x" json:"build_volume_x,omitempty"`
@@ -30,11 +30,11 @@ type PrinterProfile struct {
 	BuildVolumeZ *float64 `db:"build_volume_z" json:"build_volume_z,omitempty"`
 
 	// Capabilities
-	HeatedBed       bool `db:"heated_bed" json:"heated_bed"`
-	HeatedChamber   bool `db:"heated_chamber" json:"heated_chamber"`
-	AutoLeveling    bool `db:"auto_leveling" json:"auto_leveling"`
-	FilamentSensor  bool `db:"filament_sensor" json:"filament_sensor"`
-	PowerRecovery   bool `db:"power_recovery" json:"power_recovery"`
+	HeatedBed      bool `db:"heated_bed" json:"heated_bed"`
+	HeatedChamber  bool `db:"heated_chamber" json:"heated_chamber"`
+	AutoLeveling   bool `db:"auto_leveling" json:"auto_leveling"`
+	FilamentSensor bool `db:"filament_sensor" json:"filament_sensor"`
+	PowerRecovery  bool `db:"power_recovery" json:"power_recovery"`
 
 	// Multi-tool capabilities
 	Has3DPrinting bool `db:"has_3d_printing" json:"has_3d_printing"`
@@ -54,9 +54,9 @@ type PrinterProfile struct {
 	MaxZSpeed      int `db:"max_z_speed" json:"max_z_speed"`
 
 	// G-code
-	GCodeFlavor     string  `db:"gcode_flavor" json:"gcode_flavor"`
-	StartGCode      *string `db:"start_gcode" json:"start_gcode,omitempty"`
-	EndGCode        *string `db:"end_gcode" json:"end_gcode,omitempty"`
+	GCodeFlavor      string  `db:"gcode_flavor" json:"gcode_flavor"`
+	StartGCode       *string `db:"start_gcode" json:"start_gcode,omitempty"`
+	EndGCode         *string `db:"end_gcode" json:"end_gcode,omitempty"`
 	LayerChangeGCode *string `db:"layer_change_gcode" json:"layer_change_gcode,omitempty"`
 
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
@@ -82,14 +82,14 @@ type PrinterConnection struct {
 	APIKey        *string `db:"api_key" json:"api_key,omitempty"`
 
 	// State
-	IsActive         bool       `db:"is_active" json:"is_active"`
-	IsConnected      bool       `db:"is_connected" json:"is_connected"`
-	LastConnectedAt  *time.Time `db:"last_connected_at" json:"last_connected_at,omitempty"`
+	IsActive           bool       `db:"is_active" json:"is_active"`
+	IsConnected        bool       `db:"is_connected" json:"is_connected"`
+	LastConnectedAt    *time.Time `db:"last_connected_at" json:"last_connected_at,omitempty"`
 	LastDisconnectedAt *time.Time `db:"last_disconnected_at" json:"last_disconnected_at,omitempty"`
-	ConnectionError  *string    `db:"connection_error" json:"connection_error,omitempty"`
+	ConnectionError    *string    `db:"connection_error" json:"connection_error,omitempty"`
 
-	CurrentState string     `db:"current_state" json:"current_state"`
-	CurrentTool  *string    `db:"current_tool" json:"current_tool,omitempty"`
+	CurrentState string  `db:"current_state" json:"current_state"`
+	CurrentTool  *string `db:"current_tool" json:"current_tool,omitempty"`
 
 	// Temperatures
 	NozzleTempCurrent  *float64 `db:"nozzle_temp_current" json:"nozzle_temp_current,omitempty"`
@@ -126,10 +126,10 @@ type PrintJob struct {
 	MaterialID   *uuid.UUID `db:"material_id" json:"material_id,omitempty"`
 
 	// Job info
-	JobName      string  `db:"job_name" json:"job_name"`
-	FileName     *string `db:"file_name" json:"file_name,omitempty"`
+	JobName       string  `db:"job_name" json:"job_name"`
+	FileName      *string `db:"file_name" json:"file_name,omitempty"`
 	FileSizeBytes *int64  `db:"file_size_bytes" json:"file_size_bytes,omitempty"`
-	Source       *string `db:"source" json:"source,omitempty"`
+	Source        *string `db:"source" json:"source,omitempty"`
 
 	// Estimates
 	LayerCount           *int     `db:"layer_count" json:"layer_count,omitempty"`
@@ -142,11 +142,11 @@ type PrintJob struct {
 	ActualFilamentMM  *float64 `db:"actual_filament_mm" json:"actual_filament_mm,omitempty"`
 
 	// Status
-	Status              string   `db:"status" json:"status"`
-	ProgressPercent     float64  `db:"progress_percent" json:"progress_percent"`
-	CurrentLayer        int      `db:"current_layer" json:"current_layer"`
-	TimeElapsedSeconds  int      `db:"time_elapsed_seconds" json:"time_elapsed_seconds"`
-	TimeRemainingSeconds *int     `db:"time_remaining_seconds" json:"time_remaining_seconds,omitempty"`
+	Status               string  `db:"status" json:"status"`
+	ProgressPercent      float64 `db:"progress_percent" json:"progress_percent"`
+	CurrentLayer         int     `db:"current_layer" json:"current_layer"`
+	TimeElapsedSeconds   int     `db:"time_elapsed_seconds" json:"time_elapsed_seconds"`
+	TimeRemainingSeconds *int    `db:"time_remaining_seconds" json:"time_remaining_seconds,omitempty"`
 
 	// Timestamps
 	QueuedAt    time.Time  `db:"queued_at" json:"queued_at"`
@@ -189,12 +189,12 @@ type PrintJob struct {
 
 // MaterialProfile represents a material configuration
 type MaterialProfile struct {
-	ID          uuid.UUID `db:"id" json:"id"`
-	TenantID    uuid.UUID `db:"tenant_id" json:"tenant_id"`
-	Name        string    `db:"name" json:"name"`
+	ID           uuid.UUID `db:"id" json:"id"`
+	TenantID     uuid.UUID `db:"tenant_id" json:"tenant_id"`
+	Name         string    `db:"name" json:"name"`
 	MaterialType string    `db:"material_type" json:"material_type"`
 	Manufacturer *string   `db:"manufacturer" json:"manufacturer,omitempty"`
-	Color       *string   `db:"color" json:"color,omitempty"`
+	Color        *string   `db:"color" json:"color,omitempty"`
 
 	// Temperatures
 	NozzleTemp  *int `db:"nozzle_temp" json:"nozzle_temp,omitempty"`
@@ -207,9 +207,9 @@ type MaterialProfile struct {
 	RetractSpeed    *int     `db:"retract_speed" json:"retract_speed,omitempty"`
 
 	// Properties
-	Density    *float64 `db:"density" json:"density,omitempty"`
-	Diameter   float64  `db:"diameter" json:"diameter"`
-	CostPerKg  *float64 `db:"cost_per_kg" json:"cost_per_kg,omitempty"`
+	Density   *float64 `db:"density" json:"density,omitempty"`
+	Diameter  float64  `db:"diameter" json:"diameter"`
+	CostPerKg *float64 `db:"cost_per_kg" json:"cost_per_kg,omitempty"`
 
 	Notes *string `db:"notes" json:"notes,omitempty"`
 

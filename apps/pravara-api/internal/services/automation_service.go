@@ -16,11 +16,11 @@ import (
 
 // MachineValidation represents the result of validating a machine for automation.
 type MachineValidation struct {
-	Valid    bool
-	Blocked  bool
-	Warning  string
-	Error    string
-	Machine  *types.Machine
+	Valid   bool
+	Blocked bool
+	Warning string
+	Error   string
+	Machine *types.Machine
 }
 
 // AutomationService handles automated task-machine interactions.

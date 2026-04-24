@@ -21,13 +21,13 @@ const (
 	dobotHeaderByte2 byte = 0xAA
 
 	// Command IDs for the Dobot binary protocol.
-	dobotCmdGetPose    byte = 10  // Get current position
-	dobotCmdHome       byte = 31  // Home all axes
-	dobotCmdSetPTPCmd  byte = 84  // Point-to-Point movement
-	dobotCmdSetSuction byte = 62  // Set suction cup state
-	dobotCmdSetGripper byte = 63  // Set gripper state
-	dobotCmdClearAlarm byte = 20  // Clear alarm state
-	dobotCmdGetAlarm   byte = 21  // Get alarm state
+	dobotCmdGetPose    byte = 10 // Get current position
+	dobotCmdHome       byte = 31 // Home all axes
+	dobotCmdSetPTPCmd  byte = 84 // Point-to-Point movement
+	dobotCmdSetSuction byte = 62 // Set suction cup state
+	dobotCmdSetGripper byte = 63 // Set gripper state
+	dobotCmdClearAlarm byte = 20 // Clear alarm state
+	dobotCmdGetAlarm   byte = 21 // Get alarm state
 
 	// PTP mode constants.
 	dobotPTPModeJump    byte = 0 // JUMP mode (lift, move, descend)
@@ -40,15 +40,15 @@ const (
 
 // DobotStatus represents the current state of a Dobot robot arm.
 type DobotStatus struct {
-	State      string    // idle, moving, alarm, disconnected
-	PositionX  float64   // End effector X in mm
-	PositionY  float64   // End effector Y in mm
-	PositionZ  float64   // End effector Z in mm
-	PositionR  float64   // End effector rotation in degrees
+	State       string     // idle, moving, alarm, disconnected
+	PositionX   float64    // End effector X in mm
+	PositionY   float64    // End effector Y in mm
+	PositionZ   float64    // End effector Z in mm
+	PositionR   float64    // End effector rotation in degrees
 	JointAngles [4]float64 // Joint angles in degrees (J1-J4)
-	SuctionOn  bool      // Suction cup state
-	GripperOn  bool      // Gripper state
-	LastUpdate time.Time
+	SuctionOn   bool       // Suction cup state
+	GripperOn   bool       // Gripper state
+	LastUpdate  time.Time
 }
 
 // DobotAdapter handles communication with Dobot robotic arms using the

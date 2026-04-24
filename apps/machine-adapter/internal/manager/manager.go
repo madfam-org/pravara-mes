@@ -17,7 +17,7 @@ import (
 
 // TelemetryMetric represents a single telemetry data point.
 type TelemetryMetric struct {
-	Type      string  `json:"type"`      // "position_x", "temperature_extruder", etc.
+	Type      string  `json:"type"` // "position_x", "temperature_extruder", etc.
 	Value     float64 `json:"value"`
 	Unit      string  `json:"unit"`
 	Timestamp string  `json:"timestamp"`

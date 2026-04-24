@@ -48,20 +48,20 @@ func (h *QualityHandler) SetUsageRecorder(r billing.UsageRecorder) {
 
 // CreateCertificateRequest represents the request body for creating a certificate.
 type CreateCertificateRequest struct {
-	CertificateNumber string                    `json:"certificate_number" binding:"required"`
-	Type              types.QualityCertType     `json:"type" binding:"required"`
-	Status            types.QualityCertStatus   `json:"status"`
-	OrderID           *uuid.UUID                `json:"order_id"`
-	TaskID            *uuid.UUID                `json:"task_id"`
-	MachineID         *uuid.UUID                `json:"machine_id"`
-	BatchLotID        *uuid.UUID                `json:"batch_lot_id"`
-	Title             string                    `json:"title" binding:"required"`
-	Description       string                    `json:"description"`
-	IssuedDate        *time.Time                `json:"issued_date"`
-	ExpiryDate        *time.Time                `json:"expiry_date"`
-	IssuedBy          *uuid.UUID                `json:"issued_by"`
-	DocumentURL       string                    `json:"document_url"`
-	Metadata          map[string]any            `json:"metadata"`
+	CertificateNumber string                  `json:"certificate_number" binding:"required"`
+	Type              types.QualityCertType   `json:"type" binding:"required"`
+	Status            types.QualityCertStatus `json:"status"`
+	OrderID           *uuid.UUID              `json:"order_id"`
+	TaskID            *uuid.UUID              `json:"task_id"`
+	MachineID         *uuid.UUID              `json:"machine_id"`
+	BatchLotID        *uuid.UUID              `json:"batch_lot_id"`
+	Title             string                  `json:"title" binding:"required"`
+	Description       string                  `json:"description"`
+	IssuedDate        *time.Time              `json:"issued_date"`
+	ExpiryDate        *time.Time              `json:"expiry_date"`
+	IssuedBy          *uuid.UUID              `json:"issued_by"`
+	DocumentURL       string                  `json:"document_url"`
+	Metadata          map[string]any          `json:"metadata"`
 }
 
 // UpdateCertificateRequest represents the request body for updating a certificate.
@@ -455,28 +455,28 @@ func (h *QualityHandler) DeleteCertificate(c *gin.Context) {
 
 // CreateInspectionRequest represents the request body for creating an inspection.
 type CreateInspectionRequest struct {
-	InspectionNumber string                   `json:"inspection_number" binding:"required"`
-	OrderID          *uuid.UUID               `json:"order_id"`
-	TaskID           *uuid.UUID               `json:"task_id"`
-	MachineID        *uuid.UUID               `json:"machine_id"`
-	Type             string                   `json:"type" binding:"required"`
-	ScheduledAt      *time.Time               `json:"scheduled_at"`
-	InspectorID      *uuid.UUID               `json:"inspector_id"`
-	Notes            string                   `json:"notes"`
-	Checklist        []any                    `json:"checklist"`
-	Metadata         map[string]any           `json:"metadata"`
+	InspectionNumber string         `json:"inspection_number" binding:"required"`
+	OrderID          *uuid.UUID     `json:"order_id"`
+	TaskID           *uuid.UUID     `json:"task_id"`
+	MachineID        *uuid.UUID     `json:"machine_id"`
+	Type             string         `json:"type" binding:"required"`
+	ScheduledAt      *time.Time     `json:"scheduled_at"`
+	InspectorID      *uuid.UUID     `json:"inspector_id"`
+	Notes            string         `json:"notes"`
+	Checklist        []any          `json:"checklist"`
+	Metadata         map[string]any `json:"metadata"`
 }
 
 // UpdateInspectionRequest represents the request body for updating an inspection.
 type UpdateInspectionRequest struct {
-	ScheduledAt   *time.Time               `json:"scheduled_at"`
-	CompletedAt   *time.Time               `json:"completed_at"`
-	InspectorID   *uuid.UUID               `json:"inspector_id"`
-	Result        types.InspectionResult   `json:"result"`
-	Notes         string                   `json:"notes"`
-	Checklist     []any                    `json:"checklist"`
-	CertificateID *uuid.UUID               `json:"certificate_id"`
-	Metadata      map[string]any           `json:"metadata"`
+	ScheduledAt   *time.Time             `json:"scheduled_at"`
+	CompletedAt   *time.Time             `json:"completed_at"`
+	InspectorID   *uuid.UUID             `json:"inspector_id"`
+	Result        types.InspectionResult `json:"result"`
+	Notes         string                 `json:"notes"`
+	Checklist     []any                  `json:"checklist"`
+	CertificateID *uuid.UUID             `json:"certificate_id"`
+	Metadata      map[string]any         `json:"metadata"`
 }
 
 // CompleteInspectionRequest represents the request body for completing an inspection.

@@ -184,7 +184,7 @@ func TestOrderItem_SpecificationsTypes(t *testing.T) {
 		{
 			name: "boolean values",
 			specs: map[string]interface{}{
-				"threaded":  true,
+				"threaded":    true,
 				"countersunk": false,
 			},
 		},

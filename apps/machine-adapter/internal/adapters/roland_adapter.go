@@ -17,9 +17,9 @@ import (
 
 // RolandStatus represents the current state of a Roland CAMM-GL cutter.
 type RolandStatus struct {
-	State      string    // ready, cutting, error
-	PositionX  float64   // Current X position in plotter units
-	PositionY  float64   // Current Y position in plotter units
+	State      string  // ready, cutting, error
+	PositionX  float64 // Current X position in plotter units
+	PositionY  float64 // Current Y position in plotter units
 	LastUpdate time.Time
 }
 

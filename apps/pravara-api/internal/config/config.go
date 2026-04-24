@@ -90,11 +90,11 @@ type R2Config struct {
 
 // CentrifugoConfig holds Centrifugo WebSocket gateway settings.
 type CentrifugoConfig struct {
-	TokenSecret   string `mapstructure:"token_secret"`
-	TokenTTL      int    `mapstructure:"token_ttl"` // Token TTL in seconds
-	APIKey        string `mapstructure:"api_key"`
-	APIURL        string `mapstructure:"api_url"`
-	PublicURL     string `mapstructure:"public_url"`
+	TokenSecret string `mapstructure:"token_secret"`
+	TokenTTL    int    `mapstructure:"token_ttl"` // Token TTL in seconds
+	APIKey      string `mapstructure:"api_key"`
+	APIURL      string `mapstructure:"api_url"`
+	PublicURL   string `mapstructure:"public_url"`
 }
 
 // DhanamConfig holds Dhanam billing integration settings.
@@ -189,7 +189,7 @@ func setDefaults(v *viper.Viper) {
 	// Dhanam defaults
 	v.SetDefault("dhanam.enabled", false)
 	v.SetDefault("dhanam.api_url", "https://api.dhanam.io/v1")
-	v.SetDefault("dhanam.sync_interval", 60)  // 60 minutes
+	v.SetDefault("dhanam.sync_interval", 60) // 60 minutes
 	v.SetDefault("dhanam.retry_count", 3)
 	v.SetDefault("dhanam.retry_delay", 30) // 30 seconds
 

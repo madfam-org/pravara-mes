@@ -37,33 +37,33 @@ const (
 
 // Agent represents a human operator or automated agent.
 type Agent struct {
-	ID                    uuid.UUID              `json:"id"`
-	TenantID              uuid.UUID              `json:"tenant_id"`
-	UserID                *uuid.UUID             `json:"user_id,omitempty"`
-	Code                  string                 `json:"code"`
-	Name                  string                 `json:"name"`
-	Type                  AgentType              `json:"type"`
-	Status                AgentStatus            `json:"status"`
-	Skills                []string               `json:"skills"`
-	Certifications        []Certification        `json:"certifications"`
-	ExperienceLevel       string                 `json:"experience_level,omitempty"`
-	ShiftPattern          string                 `json:"shift_pattern,omitempty"`
-	AvailableFrom         *time.Time             `json:"available_from,omitempty"`
-	AvailableUntil        *time.Time             `json:"available_until,omitempty"`
-	MaxConcurrentTasks    int                    `json:"max_concurrent_tasks"`
-	CurrentTaskCount      int                    `json:"current_task_count"`
-	TasksCompleted        int                    `json:"tasks_completed"`
-	TasksFailed           int                    `json:"tasks_failed"`
-	AvgTaskDurationMin    int                    `json:"avg_task_duration_minutes,omitempty"`
-	QualityScore          float64                `json:"quality_score,omitempty"`
-	ReliabilityScore      float64                `json:"reliability_score,omitempty"`
-	PreferredMachines     []uuid.UUID            `json:"preferred_machines,omitempty"`
-	BlockedMachines       []uuid.UUID            `json:"blocked_machines,omitempty"`
-	NotificationPrefs     map[string]bool        `json:"notification_preferences,omitempty"`
-	Metadata              map[string]interface{} `json:"metadata,omitempty"`
-	LastActivityAt        *time.Time             `json:"last_activity_at,omitempty"`
-	CreatedAt             time.Time              `json:"created_at"`
-	UpdatedAt             time.Time              `json:"updated_at"`
+	ID                 uuid.UUID              `json:"id"`
+	TenantID           uuid.UUID              `json:"tenant_id"`
+	UserID             *uuid.UUID             `json:"user_id,omitempty"`
+	Code               string                 `json:"code"`
+	Name               string                 `json:"name"`
+	Type               AgentType              `json:"type"`
+	Status             AgentStatus            `json:"status"`
+	Skills             []string               `json:"skills"`
+	Certifications     []Certification        `json:"certifications"`
+	ExperienceLevel    string                 `json:"experience_level,omitempty"`
+	ShiftPattern       string                 `json:"shift_pattern,omitempty"`
+	AvailableFrom      *time.Time             `json:"available_from,omitempty"`
+	AvailableUntil     *time.Time             `json:"available_until,omitempty"`
+	MaxConcurrentTasks int                    `json:"max_concurrent_tasks"`
+	CurrentTaskCount   int                    `json:"current_task_count"`
+	TasksCompleted     int                    `json:"tasks_completed"`
+	TasksFailed        int                    `json:"tasks_failed"`
+	AvgTaskDurationMin int                    `json:"avg_task_duration_minutes,omitempty"`
+	QualityScore       float64                `json:"quality_score,omitempty"`
+	ReliabilityScore   float64                `json:"reliability_score,omitempty"`
+	PreferredMachines  []uuid.UUID            `json:"preferred_machines,omitempty"`
+	BlockedMachines    []uuid.UUID            `json:"blocked_machines,omitempty"`
+	NotificationPrefs  map[string]bool        `json:"notification_preferences,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	LastActivityAt     *time.Time             `json:"last_activity_at,omitempty"`
+	CreatedAt          time.Time              `json:"created_at"`
+	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
 // Certification represents an agent's certification.
@@ -76,19 +76,19 @@ type Certification struct {
 
 // AgentMachineAuth represents agent authorization for a machine.
 type AgentMachineAuth struct {
-	ID                    uuid.UUID  `json:"id"`
-	AgentID               uuid.UUID  `json:"agent_id"`
-	MachineID             uuid.UUID  `json:"machine_id"`
-	CanOperate            bool       `json:"can_operate"`
-	CanMaintain           bool       `json:"can_maintain"`
-	CanConfigure          bool       `json:"can_configure"`
-	CanEmergencyStop      bool       `json:"can_emergency_stop"`
-	ProficiencyLevel      string     `json:"proficiency_level,omitempty"`
-	TrainingCompletedAt   *time.Time `json:"training_completed_at,omitempty"`
-	CertificationExpires  *time.Time `json:"certification_expires_at,omitempty"`
-	HoursOperated         int        `json:"hours_operated"`
-	RequiresSupervisor    bool       `json:"requires_supervisor"`
-	RestrictedOperations  []string   `json:"restricted_operations,omitempty"`
+	ID                   uuid.UUID  `json:"id"`
+	AgentID              uuid.UUID  `json:"agent_id"`
+	MachineID            uuid.UUID  `json:"machine_id"`
+	CanOperate           bool       `json:"can_operate"`
+	CanMaintain          bool       `json:"can_maintain"`
+	CanConfigure         bool       `json:"can_configure"`
+	CanEmergencyStop     bool       `json:"can_emergency_stop"`
+	ProficiencyLevel     string     `json:"proficiency_level,omitempty"`
+	TrainingCompletedAt  *time.Time `json:"training_completed_at,omitempty"`
+	CertificationExpires *time.Time `json:"certification_expires_at,omitempty"`
+	HoursOperated        int        `json:"hours_operated"`
+	RequiresSupervisor   bool       `json:"requires_supervisor"`
+	RestrictedOperations []string   `json:"restricted_operations,omitempty"`
 }
 
 // AssignmentRequest represents a task assignment request.
@@ -104,15 +104,15 @@ type AssignmentRequest struct {
 
 // AssignmentScore represents an agent's suitability score for a task.
 type AssignmentScore struct {
-	Agent            *Agent  `json:"agent"`
-	Score            float64 `json:"score"`
-	SkillMatch       float64 `json:"skill_match"`
-	AvailabilityScore float64 `json:"availability_score"`
-	ProficiencyScore float64 `json:"proficiency_score"`
-	WorkloadScore    float64 `json:"workload_score"`
-	ReliabilityScore float64 `json:"reliability_score"`
-	Reasons          []string `json:"reasons"`
-	Warnings         []string `json:"warnings,omitempty"`
+	Agent             *Agent   `json:"agent"`
+	Score             float64  `json:"score"`
+	SkillMatch        float64  `json:"skill_match"`
+	AvailabilityScore float64  `json:"availability_score"`
+	ProficiencyScore  float64  `json:"proficiency_score"`
+	WorkloadScore     float64  `json:"workload_score"`
+	ReliabilityScore  float64  `json:"reliability_score"`
+	Reasons           []string `json:"reasons"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 // AgentService manages agents and task assignments.

@@ -28,17 +28,17 @@ type ServerConfig struct {
 
 // MQTTConfig holds MQTT broker configuration.
 type MQTTConfig struct {
-	BrokerURL       string
-	Username        string
-	Password        string
-	ClientID        string
-	CommandTopic    string
-	TelemetryTopic  string
-	StatusTopic     string
-	QoS             byte
-	CleanSession    bool
-	AutoReconnect   bool
-	ReconnectDelay  time.Duration
+	BrokerURL      string
+	Username       string
+	Password       string
+	ClientID       string
+	CommandTopic   string
+	TelemetryTopic string
+	StatusTopic    string
+	QoS            byte
+	CleanSession   bool
+	AutoReconnect  bool
+	ReconnectDelay time.Duration
 }
 
 // DatabaseConfig holds database configuration.
@@ -51,23 +51,23 @@ type DatabaseConfig struct {
 
 // DiscoveryConfig holds machine discovery configuration.
 type DiscoveryConfig struct {
-	EnableMDNS       bool
-	EnableUSB        bool
-	EnableNetScan    bool
-	ScanInterval     time.Duration
-	NetworkRanges    []string
-	KnownMachines    []string
+	EnableMDNS    bool
+	EnableUSB     bool
+	EnableNetScan bool
+	ScanInterval  time.Duration
+	NetworkRanges []string
+	KnownMachines []string
 }
 
 // AdapterConfig holds protocol adapter configuration.
 type AdapterConfig struct {
-	SerialPorts      []string
-	BaudRates        []int
-	TCPPorts         []int
-	CommandTimeout   time.Duration
-	RetryAttempts    int
-	RetryDelay       time.Duration
-	BufferSize       int
+	SerialPorts    []string
+	BaudRates      []int
+	TCPPorts       []int
+	CommandTimeout time.Duration
+	RetryAttempts  int
+	RetryDelay     time.Duration
+	BufferSize     int
 }
 
 // Load reads configuration from environment and config files.

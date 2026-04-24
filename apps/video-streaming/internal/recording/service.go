@@ -48,19 +48,19 @@ func (s *Service) SetStorage(client StorageClient) {
 
 // Recording represents a video recording
 type Recording struct {
-	ID           uuid.UUID              `json:"id"`
-	CameraID     uuid.UUID              `json:"camera_id"`
-	StartTime    time.Time              `json:"start_time"`
-	EndTime      *time.Time             `json:"end_time,omitempty"`
-	StorageURL   string                 `json:"storage_url"`
-	FilePath     string                 `json:"file_path"`
-	FileSize     int64                  `json:"file_size"`
-	Duration     int                    `json:"duration_seconds"`
-	Events       []RecordingEvent       `json:"events"`
-	Metadata     map[string]interface{} `json:"metadata"`
-	Status       string                 `json:"status"` // recording, completed, failed
-	Process      *os.Process            `json:"-"`
-	CreatedAt    time.Time              `json:"created_at"`
+	ID         uuid.UUID              `json:"id"`
+	CameraID   uuid.UUID              `json:"camera_id"`
+	StartTime  time.Time              `json:"start_time"`
+	EndTime    *time.Time             `json:"end_time,omitempty"`
+	StorageURL string                 `json:"storage_url"`
+	FilePath   string                 `json:"file_path"`
+	FileSize   int64                  `json:"file_size"`
+	Duration   int                    `json:"duration_seconds"`
+	Events     []RecordingEvent       `json:"events"`
+	Metadata   map[string]interface{} `json:"metadata"`
+	Status     string                 `json:"status"` // recording, completed, failed
+	Process    *os.Process            `json:"-"`
+	CreatedAt  time.Time              `json:"created_at"`
 }
 
 // RecordingEvent represents an event during recording
@@ -406,13 +406,13 @@ func (s *Service) AddEvent(recordingID uuid.UUID, eventType string, data map[str
 // buildFFmpegCommand builds the FFmpeg command for recording
 func (s *Service) buildFFmpegCommand(streamURL, outputPath string, duration int) []string {
 	args := []string{
-		"-rtsp_transport", "tcp",     // Use TCP for RTSP
-		"-i", streamURL,               // Input stream
-		"-c:v", "copy",                // Copy video codec (no re-encoding)
-		"-c:a", "copy",                // Copy audio codec if present
-		"-f", "mp4",                   // Output format
-		"-movflags", "+faststart",     // Optimize for streaming
-		"-y",                          // Overwrite output file
+		"-rtsp_transport", "tcp", // Use TCP for RTSP
+		"-i", streamURL, // Input stream
+		"-c:v", "copy", // Copy video codec (no re-encoding)
+		"-c:a", "copy", // Copy audio codec if present
+		"-f", "mp4", // Output format
+		"-movflags", "+faststart", // Optimize for streaming
+		"-y", // Overwrite output file
 	}
 
 	// Add duration if specified

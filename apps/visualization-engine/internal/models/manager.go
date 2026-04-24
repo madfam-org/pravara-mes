@@ -33,19 +33,19 @@ type BoundingBox struct {
 
 // MachineModel represents a 3D model for a machine type
 type MachineModel struct {
-	ID           uuid.UUID    `json:"id"`
-	MachineType  string       `json:"machine_type"`
-	Name         string       `json:"name"`
-	ModelURL     string       `json:"model_url"`     // URL to GLTF/STL file
-	ThumbnailURL string       `json:"thumbnail_url"` // Preview image
-	BoundingBox  BoundingBox  `json:"bounding_box"`
-	OriginOffset Vector3      `json:"origin_offset"` // Calibration offset
-	Scale        float64      `json:"scale"`
-	LODLevels    []LODLevel   `json:"lod_levels"`
-	Materials    []Material   `json:"materials"`
-	Animations   []Animation  `json:"animations"`
-	CreatedAt    time.Time    `json:"created_at"`
-	UpdatedAt    time.Time    `json:"updated_at"`
+	ID           uuid.UUID   `json:"id"`
+	MachineType  string      `json:"machine_type"`
+	Name         string      `json:"name"`
+	ModelURL     string      `json:"model_url"`     // URL to GLTF/STL file
+	ThumbnailURL string      `json:"thumbnail_url"` // Preview image
+	BoundingBox  BoundingBox `json:"bounding_box"`
+	OriginOffset Vector3     `json:"origin_offset"` // Calibration offset
+	Scale        float64     `json:"scale"`
+	LODLevels    []LODLevel  `json:"lod_levels"`
+	Materials    []Material  `json:"materials"`
+	Animations   []Animation `json:"animations"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 // LODLevel represents a level of detail for the model
@@ -58,11 +58,11 @@ type LODLevel struct {
 // Material represents a material definition for the model
 type Material struct {
 	Name      string  `json:"name"`
-	Color     string  `json:"color"`      // Hex color
-	Metalness float64 `json:"metalness"`  // 0-1
-	Roughness float64 `json:"roughness"`  // 0-1
-	Opacity   float64 `json:"opacity"`    // 0-1
-	Emissive  string  `json:"emissive"`   // Hex color for emission
+	Color     string  `json:"color"`     // Hex color
+	Metalness float64 `json:"metalness"` // 0-1
+	Roughness float64 `json:"roughness"` // 0-1
+	Opacity   float64 `json:"opacity"`   // 0-1
+	Emissive  string  `json:"emissive"`  // Hex color for emission
 }
 
 // Animation represents an animation sequence for the model
@@ -84,11 +84,11 @@ type MachinePosition struct {
 
 // CameraPreset represents a saved camera position
 type CameraPreset struct {
-	Name     string   `json:"name"`
-	Position Vector3  `json:"position"`
-	Target   Vector3  `json:"target"`
-	FOV      float64  `json:"fov"`
-	Type     string   `json:"type"` // "perspective", "orthographic"
+	Name     string  `json:"name"`
+	Position Vector3 `json:"position"`
+	Target   Vector3 `json:"target"`
+	FOV      float64 `json:"fov"`
+	Type     string  `json:"type"` // "perspective", "orthographic"
 }
 
 // LightConfig represents lighting configuration
@@ -107,11 +107,11 @@ type AmbientLight struct {
 
 // Light represents a light source
 type Light struct {
-	Type      string  `json:"type"` // "directional", "point", "spot"
-	Position  Vector3 `json:"position"`
-	Color     string  `json:"color"`
-	Intensity float64 `json:"intensity"`
-	CastShadow bool   `json:"cast_shadow"`
+	Type       string  `json:"type"` // "directional", "point", "spot"
+	Position   Vector3 `json:"position"`
+	Color      string  `json:"color"`
+	Intensity  float64 `json:"intensity"`
+	CastShadow bool    `json:"cast_shadow"`
 }
 
 // ShadowMapConfig represents shadow map settings
@@ -122,28 +122,28 @@ type ShadowMapConfig struct {
 
 // FactoryLayout represents a factory floor layout
 type FactoryLayout struct {
-	ID               uuid.UUID          `json:"id"`
-	TenantID         uuid.UUID          `json:"tenant_id"`
-	Name             string             `json:"name"`
-	Description      string             `json:"description"`
-	FloorPlan        FloorPlan          `json:"floor_plan"`
-	MachinePositions []MachinePosition  `json:"machine_positions"`
-	CameraPresets    []CameraPreset     `json:"camera_presets"`
-	LightingConfig   LightConfig        `json:"lighting_config"`
-	GridSettings     GridSettings       `json:"grid_settings"`
-	Zones            []Zone             `json:"zones"`
-	Waypoints        []Waypoint         `json:"waypoints"`
-	CreatedAt        time.Time          `json:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	ID               uuid.UUID         `json:"id"`
+	TenantID         uuid.UUID         `json:"tenant_id"`
+	Name             string            `json:"name"`
+	Description      string            `json:"description"`
+	FloorPlan        FloorPlan         `json:"floor_plan"`
+	MachinePositions []MachinePosition `json:"machine_positions"`
+	CameraPresets    []CameraPreset    `json:"camera_presets"`
+	LightingConfig   LightConfig       `json:"lighting_config"`
+	GridSettings     GridSettings      `json:"grid_settings"`
+	Zones            []Zone            `json:"zones"`
+	Waypoints        []Waypoint        `json:"waypoints"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 // FloorPlan represents the 2D floor plan
 type FloorPlan struct {
-	Width      float64   `json:"width"`  // Meters
-	Height     float64   `json:"height"` // Meters
-	ImageURL   string    `json:"image_url"`
-	Walls      []Wall    `json:"walls"`
-	Obstacles  []Obstacle `json:"obstacles"`
+	Width     float64    `json:"width"`  // Meters
+	Height    float64    `json:"height"` // Meters
+	ImageURL  string     `json:"image_url"`
+	Walls     []Wall     `json:"walls"`
+	Obstacles []Obstacle `json:"obstacles"`
 }
 
 // Wall represents a wall in the floor plan
@@ -163,22 +163,22 @@ type Obstacle struct {
 
 // GridSettings represents the factory grid configuration
 type GridSettings struct {
-	Visible     bool    `json:"visible"`
-	Size        float64 `json:"size"`        // Grid cell size in meters
-	Divisions   int     `json:"divisions"`   // Subdivisions per cell
-	Color       string  `json:"color"`       // Hex color
-	Opacity     float64 `json:"opacity"`     // 0-1
-	SnapToGrid  bool    `json:"snap_to_grid"`
+	Visible    bool    `json:"visible"`
+	Size       float64 `json:"size"`      // Grid cell size in meters
+	Divisions  int     `json:"divisions"` // Subdivisions per cell
+	Color      string  `json:"color"`     // Hex color
+	Opacity    float64 `json:"opacity"`   // 0-1
+	SnapToGrid bool    `json:"snap_to_grid"`
 }
 
 // Zone represents a logical zone in the factory
 type Zone struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Type        string    `json:"type"` // "production", "storage", "quality", "shipping"
-	Boundary    []Vector3 `json:"boundary"` // Polygon vertices
-	Color       string    `json:"color"`
-	Opacity     float64   `json:"opacity"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Type         string    `json:"type"`     // "production", "storage", "quality", "shipping"
+	Boundary     []Vector3 `json:"boundary"` // Polygon vertices
+	Color        string    `json:"color"`
+	Opacity      float64   `json:"opacity"`
 	Restrictions []string  `json:"restrictions"` // Access restrictions
 }
 

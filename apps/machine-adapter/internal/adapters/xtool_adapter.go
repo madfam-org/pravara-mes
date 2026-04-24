@@ -17,9 +17,9 @@ import (
 
 // XToolStatus represents the current state of an xTool laser machine.
 type XToolStatus struct {
-	State       string    // idle, running, paused, error
-	LaserTemp   float64   // Laser module temperature in celsius
-	JobProgress float64   // Job progress percentage (0-100)
+	State       string  // idle, running, paused, error
+	LaserTemp   float64 // Laser module temperature in celsius
+	JobProgress float64 // Job progress percentage (0-100)
 	LastUpdate  time.Time
 }
 

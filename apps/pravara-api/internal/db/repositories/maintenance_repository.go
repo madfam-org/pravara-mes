@@ -40,26 +40,26 @@ type MaintenanceSchedule struct {
 
 // MaintenanceWorkOrder represents a specific maintenance work order instance.
 type MaintenanceWorkOrder struct {
-	ID              uuid.UUID        `json:"id"`
-	TenantID        uuid.UUID        `json:"tenant_id"`
-	ScheduleID      *uuid.UUID       `json:"schedule_id,omitempty"`
-	MachineID       uuid.UUID        `json:"machine_id"`
-	WorkOrderNumber string           `json:"work_order_number"`
-	Title           string           `json:"title"`
-	Description     string           `json:"description"`
-	Status          string           `json:"status"`
-	Priority        int              `json:"priority"`
-	AssignedTo      *uuid.UUID       `json:"assigned_to,omitempty"`
-	Checklist       json.RawMessage  `json:"checklist,omitempty"`
-	ScheduledAt     *time.Time       `json:"scheduled_at,omitempty"`
-	StartedAt       *time.Time       `json:"started_at,omitempty"`
-	CompletedAt     *time.Time       `json:"completed_at,omitempty"`
-	DueAt           *time.Time       `json:"due_at,omitempty"`
-	Notes           string           `json:"notes"`
-	PartsUsed       json.RawMessage  `json:"parts_used,omitempty"`
-	Metadata        map[string]any   `json:"metadata,omitempty"`
-	CreatedAt       time.Time        `json:"created_at"`
-	UpdatedAt       time.Time        `json:"updated_at"`
+	ID              uuid.UUID       `json:"id"`
+	TenantID        uuid.UUID       `json:"tenant_id"`
+	ScheduleID      *uuid.UUID      `json:"schedule_id,omitempty"`
+	MachineID       uuid.UUID       `json:"machine_id"`
+	WorkOrderNumber string          `json:"work_order_number"`
+	Title           string          `json:"title"`
+	Description     string          `json:"description"`
+	Status          string          `json:"status"`
+	Priority        int             `json:"priority"`
+	AssignedTo      *uuid.UUID      `json:"assigned_to,omitempty"`
+	Checklist       json.RawMessage `json:"checklist,omitempty"`
+	ScheduledAt     *time.Time      `json:"scheduled_at,omitempty"`
+	StartedAt       *time.Time      `json:"started_at,omitempty"`
+	CompletedAt     *time.Time      `json:"completed_at,omitempty"`
+	DueAt           *time.Time      `json:"due_at,omitempty"`
+	Notes           string          `json:"notes"`
+	PartsUsed       json.RawMessage `json:"parts_used,omitempty"`
+	Metadata        map[string]any  `json:"metadata,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // ScheduleFilter defines filtering options for listing maintenance schedules.

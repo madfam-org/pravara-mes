@@ -72,10 +72,10 @@ type GenealogyFilter struct {
 
 // GenealogyTree represents a tree view of a genealogy record with joined data.
 type GenealogyTree struct {
-	Genealogy          ProductGenealogy     `json:"genealogy"`
-	ProductDefinition  *ProductDefinition   `json:"product_definition,omitempty"`
-	BOMItems           []BOMItem            `json:"bom_items,omitempty"`
-	MaterialsConsumed  []MaterialConsumption `json:"materials_consumed,omitempty"`
+	Genealogy         ProductGenealogy      `json:"genealogy"`
+	ProductDefinition *ProductDefinition    `json:"product_definition,omitempty"`
+	BOMItems          []BOMItem             `json:"bom_items,omitempty"`
+	MaterialsConsumed []MaterialConsumption `json:"materials_consumed,omitempty"`
 }
 
 // GenealogyRepository handles product genealogy database operations.

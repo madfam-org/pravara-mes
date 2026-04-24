@@ -18,12 +18,12 @@ import (
 
 // OpenPnPStatus represents the current state of an OpenPnP pick-and-place machine.
 type OpenPnPStatus struct {
-	State      string    // idle, running, paused, error
-	PositionX  float64   // Nozzle X position in mm
-	PositionY  float64   // Nozzle Y position in mm
-	PositionZ  float64   // Nozzle Z position in mm
-	Rotation   float64   // Nozzle rotation in degrees
-	VacuumOn   bool      // Whether vacuum/suction is active
+	State      string  // idle, running, paused, error
+	PositionX  float64 // Nozzle X position in mm
+	PositionY  float64 // Nozzle Y position in mm
+	PositionZ  float64 // Nozzle Z position in mm
+	Rotation   float64 // Nozzle rotation in degrees
+	VacuumOn   bool    // Whether vacuum/suction is active
 	LastUpdate time.Time
 }
 

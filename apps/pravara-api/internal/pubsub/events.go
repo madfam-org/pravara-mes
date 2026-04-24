@@ -35,11 +35,11 @@ const (
 	EventTaskBlocked      EventType = "task.blocked"       // Task blocked due to machine error
 
 	// Order events
-	EventOrderCreated  EventType = "order.created"
-	EventOrderUpdated  EventType = "order.updated"
-	EventOrderDeleted  EventType = "order.deleted"
-	EventOrderStatus   EventType = "order.status_changed"
-	EventOrderItemAdd  EventType = "order.item_added"
+	EventOrderCreated EventType = "order.created"
+	EventOrderUpdated EventType = "order.updated"
+	EventOrderDeleted EventType = "order.deleted"
+	EventOrderStatus  EventType = "order.status_changed"
+	EventOrderItemAdd EventType = "order.item_added"
 
 	// Notification events
 	EventNotificationAlert   EventType = "notification.alert"
@@ -164,18 +164,18 @@ type MachineCommandData struct {
 
 // MachineCommandAckData contains data for command acknowledgement events.
 type MachineCommandAckData struct {
-	CommandID   uuid.UUID `json:"command_id"`
-	MachineID   uuid.UUID `json:"machine_id"`
-	Success     bool      `json:"success"`
-	Message     string    `json:"message,omitempty"`
-	AckedAt     time.Time `json:"acked_at"`
+	CommandID uuid.UUID `json:"command_id"`
+	MachineID uuid.UUID `json:"machine_id"`
+	Success   bool      `json:"success"`
+	Message   string    `json:"message,omitempty"`
+	AckedAt   time.Time `json:"acked_at"`
 }
 
 // TelemetryBatchData contains data for telemetry batch events.
 type TelemetryBatchData struct {
-	MachineID  uuid.UUID          `json:"machine_id"`
-	Metrics    []TelemetryMetric  `json:"metrics"`
-	ReceivedAt time.Time          `json:"received_at"`
+	MachineID  uuid.UUID         `json:"machine_id"`
+	Metrics    []TelemetryMetric `json:"metrics"`
+	ReceivedAt time.Time         `json:"received_at"`
 }
 
 // TelemetryMetric represents a single telemetry metric.
@@ -211,16 +211,16 @@ type TaskAssignData struct {
 
 // TaskJobData contains data for task job lifecycle events.
 type TaskJobData struct {
-	TaskID        uuid.UUID  `json:"task_id"`
-	TaskTitle     string     `json:"task_title"`
-	CommandID     uuid.UUID  `json:"command_id"`
-	MachineID     uuid.UUID  `json:"machine_id"`
-	MachineName   string     `json:"machine_name"`
-	CommandType   string     `json:"command_type"`
-	Status        string     `json:"status"` // started, completed, failed
-	ErrorMessage  string     `json:"error_message,omitempty"`
-	Timestamp     time.Time  `json:"timestamp"`
-	ActualMinutes int        `json:"actual_minutes,omitempty"`
+	TaskID        uuid.UUID `json:"task_id"`
+	TaskTitle     string    `json:"task_title"`
+	CommandID     uuid.UUID `json:"command_id"`
+	MachineID     uuid.UUID `json:"machine_id"`
+	MachineName   string    `json:"machine_name"`
+	CommandType   string    `json:"command_type"`
+	Status        string    `json:"status"` // started, completed, failed
+	ErrorMessage  string    `json:"error_message,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	ActualMinutes int       `json:"actual_minutes,omitempty"`
 }
 
 // OrderStatusData contains data for order status change events.
@@ -235,13 +235,13 @@ type OrderStatusData struct {
 
 // NotificationData contains data for notification events.
 type NotificationData struct {
-	Title       string                 `json:"title"`
-	Message     string                 `json:"message"`
-	Severity    string                 `json:"severity"` // info, warning, error, critical
-	Source      string                 `json:"source"`   // machine, order, task, system
-	SourceID    *uuid.UUID             `json:"source_id,omitempty"`
-	ActionURL   *string                `json:"action_url,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Title     string                 `json:"title"`
+	Message   string                 `json:"message"`
+	Severity  string                 `json:"severity"` // info, warning, error, critical
+	Source    string                 `json:"source"`   // machine, order, task, system
+	SourceID  *uuid.UUID             `json:"source_id,omitempty"`
+	ActionURL *string                `json:"action_url,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // EntityCreatedData is a generic data structure for entity creation events.

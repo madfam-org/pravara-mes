@@ -17,19 +17,19 @@ import (
 
 // LinuxCNCStatus represents the current state of a LinuxCNC machine.
 type LinuxCNCStatus struct {
-	State         string    // idle, running, paused, estop, off
-	Mode          string    // manual, auto, mdi
-	InterpState   string    // idle, reading, paused, waiting
-	PositionX     float64   // Commanded X position in mm
-	PositionY     float64   // Commanded Y position in mm
-	PositionZ     float64   // Commanded Z position in mm
-	FeedRate      float64   // Current feed rate in mm/min
-	SpindleSpeed  float64   // Current spindle speed in RPM
-	SpindleOn     bool      // Whether spindle is running
-	HomedAxes     [3]bool   // Whether X, Y, Z axes are homed
-	EStop         bool      // Emergency stop active
-	MachineOn     bool      // Machine power state
-	LastUpdate    time.Time
+	State        string  // idle, running, paused, estop, off
+	Mode         string  // manual, auto, mdi
+	InterpState  string  // idle, reading, paused, waiting
+	PositionX    float64 // Commanded X position in mm
+	PositionY    float64 // Commanded Y position in mm
+	PositionZ    float64 // Commanded Z position in mm
+	FeedRate     float64 // Current feed rate in mm/min
+	SpindleSpeed float64 // Current spindle speed in RPM
+	SpindleOn    bool    // Whether spindle is running
+	HomedAxes    [3]bool // Whether X, Y, Z axes are homed
+	EStop        bool    // Emergency stop active
+	MachineOn    bool    // Machine power state
+	LastUpdate   time.Time
 }
 
 // LinuxCNCAdapter handles communication with LinuxCNC via the linuxcncrsh
@@ -324,11 +324,11 @@ func (a *LinuxCNCAdapter) queryFullStatus() (interface{}, error) {
 			"y": status.PositionY,
 			"z": status.PositionZ,
 		},
-		"feed_rate":    status.FeedRate,
+		"feed_rate":     status.FeedRate,
 		"spindle_speed": status.SpindleSpeed,
-		"spindle_on":   status.SpindleOn,
-		"estop":        status.EStop,
-		"machine_on":   status.MachineOn,
+		"spindle_on":    status.SpindleOn,
+		"estop":         status.EStop,
+		"machine_on":    status.MachineOn,
 	}, nil
 }
 

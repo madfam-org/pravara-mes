@@ -23,40 +23,40 @@ func NewFullControlParser(log *logrus.Logger) *FullControlGCodeParser {
 
 // ExtrusionSegment represents a 3D printing extrusion segment
 type ExtrusionSegment struct {
-	Start          Vector3  `json:"start"`
-	End            Vector3  `json:"end"`
-	ExtrusionRate  float64  `json:"extrusion_rate"`  // mm³/s
-	LayerHeight    float64  `json:"layer_height"`     // mm
-	LineWidth      float64  `json:"line_width"`       // mm
-	Temperature    float64  `json:"temperature"`      // °C
-	Speed          float64  `json:"speed"`            // mm/s
-	Material       string   `json:"material"`         // PLA, ABS, PETG, etc.
-	IsRetraction   bool     `json:"is_retraction"`
-	IsPrime        bool     `json:"is_prime"`
-	IsTravel       bool     `json:"is_travel"`
+	Start           Vector3 `json:"start"`
+	End             Vector3 `json:"end"`
+	ExtrusionRate   float64 `json:"extrusion_rate"` // mm³/s
+	LayerHeight     float64 `json:"layer_height"`   // mm
+	LineWidth       float64 `json:"line_width"`     // mm
+	Temperature     float64 `json:"temperature"`    // °C
+	Speed           float64 `json:"speed"`          // mm/s
+	Material        string  `json:"material"`       // PLA, ABS, PETG, etc.
+	IsRetraction    bool    `json:"is_retraction"`
+	IsPrime         bool    `json:"is_prime"`
+	IsTravel        bool    `json:"is_travel"`
 	VolumeDeposited float64 `json:"volume_deposited"` // mm³
 }
 
 // FullControlSimulationResult extends the base simulation with 3D printing specifics
 type FullControlSimulationResult struct {
 	GCodeSimulationResult
-	Layers           []Layer           `json:"layers"`
-	ExtrusionPath    []ExtrusionSegment `json:"extrusion_path"`
-	TotalFilament    float64           `json:"total_filament_mm"`     // Total filament length used
-	TotalVolume      float64           `json:"total_volume_mm3"`       // Total volume deposited
-	PrintTime        time.Duration     `json:"print_time"`
-	LayerCount       int               `json:"layer_count"`
-	Retractions      int               `json:"retractions"`
-	EstimatedWeight  float64           `json:"estimated_weight_grams"` // Based on material density
-	NozzleTemp       float64           `json:"nozzle_temperature"`
-	BedTemp          float64           `json:"bed_temperature"`
-	MaterialType     string            `json:"material_type"`
+	Layers          []Layer            `json:"layers"`
+	ExtrusionPath   []ExtrusionSegment `json:"extrusion_path"`
+	TotalFilament   float64            `json:"total_filament_mm"` // Total filament length used
+	TotalVolume     float64            `json:"total_volume_mm3"`  // Total volume deposited
+	PrintTime       time.Duration      `json:"print_time"`
+	LayerCount      int                `json:"layer_count"`
+	Retractions     int                `json:"retractions"`
+	EstimatedWeight float64            `json:"estimated_weight_grams"` // Based on material density
+	NozzleTemp      float64            `json:"nozzle_temperature"`
+	BedTemp         float64            `json:"bed_temperature"`
+	MaterialType    string             `json:"material_type"`
 }
 
 // Layer represents a single print layer
 type Layer struct {
 	Number       int                `json:"number"`
-	Height       float64            `json:"height"`          // Z position
+	Height       float64            `json:"height"` // Z position
 	Segments     []ExtrusionSegment `json:"segments"`
 	PrintTime    time.Duration      `json:"print_time"`
 	FilamentUsed float64            `json:"filament_used_mm"`
@@ -67,13 +67,13 @@ type Layer struct {
 
 // MaterialProperties defines material-specific properties
 type MaterialProperties struct {
-	Density           float64 `json:"density_g_cm3"`      // g/cm³
-	MeltingTemp       float64 `json:"melting_temp"`        // °C
-	GlassTransition   float64 `json:"glass_transition"`    // °C
-	ThermalExpansion  float64 `json:"thermal_expansion"`   // coefficient
-	FlowRate          float64 `json:"flow_rate_multiplier"`
-	RetractionLength  float64 `json:"retraction_length"`   // mm
-	RetractionSpeed   float64 `json:"retraction_speed"`    // mm/s
+	Density          float64 `json:"density_g_cm3"`     // g/cm³
+	MeltingTemp      float64 `json:"melting_temp"`      // °C
+	GlassTransition  float64 `json:"glass_transition"`  // °C
+	ThermalExpansion float64 `json:"thermal_expansion"` // coefficient
+	FlowRate         float64 `json:"flow_rate_multiplier"`
+	RetractionLength float64 `json:"retraction_length"` // mm
+	RetractionSpeed  float64 `json:"retraction_speed"`  // mm/s
 }
 
 var materials = map[string]MaterialProperties{
@@ -133,15 +133,15 @@ func (p *FullControlGCodeParser) SimulateFullControlGCode(gcode string, material
 
 	// State tracking
 	var (
-		currentPos     = Vector3{X: 0, Y: 0, Z: 0}
-		currentE       float64 = 0 // Extruder position
-		currentLayer   *Layer
-		feedRate       float64 = 60 // mm/s default
-		absoluteMode   bool = true
-		absoluteEMode  bool = true
-		nozzleTemp     float64 = 200
-		layerHeight    float64 = 0.2 // Default layer height
-		lineWidth      float64 = nozzleDiameter * 1.2
+		currentPos               = Vector3{X: 0, Y: 0, Z: 0}
+		currentE         float64 = 0 // Extruder position
+		currentLayer     *Layer
+		feedRate         float64 = 60 // mm/s default
+		absoluteMode     bool    = true
+		absoluteEMode    bool    = true
+		nozzleTemp       float64 = 200
+		layerHeight      float64 = 0.2 // Default layer height
+		lineWidth        float64 = nozzleDiameter * 1.2
 		filamentDiameter float64 = 1.75 // mm
 	)
 

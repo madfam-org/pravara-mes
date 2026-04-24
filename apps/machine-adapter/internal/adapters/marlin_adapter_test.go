@@ -22,11 +22,11 @@ func TestMarlinAdapter_ParseTemperature(t *testing.T) {
 	adapter := NewMarlinAdapter(def, logger)
 
 	tests := []struct {
-		name           string
-		input          string
-		expectedExtruder float64
+		name              string
+		input             string
+		expectedExtruder  float64
 		expectedExtTarget float64
-		expectedBed    float64
+		expectedBed       float64
 		expectedBedTarget float64
 	}{
 		{

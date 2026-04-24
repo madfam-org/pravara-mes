@@ -517,19 +517,19 @@ func (h *MachineHandler) Heartbeat(c *gin.Context) {
 
 // validCommands defines the set of allowed machine commands.
 var validCommands = map[string]pubsub.MachineCommandType{
-	"start_job":       pubsub.CommandStartJob,
-	"pause":           pubsub.CommandPause,
-	"resume":          pubsub.CommandResume,
-	"stop":            pubsub.CommandStop,
-	"home":            pubsub.CommandHome,
-	"calibrate":       pubsub.CommandCalibrate,
-	"emergency_stop":  pubsub.CommandEmergency,
-	"preheat":         pubsub.CommandPreheat,
-	"cooldown":        pubsub.CommandCooldown,
-	"load_file":       pubsub.CommandLoadFile,
-	"unload_file":     pubsub.CommandUnloadFile,
-	"set_origin":      pubsub.CommandSetOrigin,
-	"probe":           pubsub.CommandProbe,
+	"start_job":      pubsub.CommandStartJob,
+	"pause":          pubsub.CommandPause,
+	"resume":         pubsub.CommandResume,
+	"stop":           pubsub.CommandStop,
+	"home":           pubsub.CommandHome,
+	"calibrate":      pubsub.CommandCalibrate,
+	"emergency_stop": pubsub.CommandEmergency,
+	"preheat":        pubsub.CommandPreheat,
+	"cooldown":       pubsub.CommandCooldown,
+	"load_file":      pubsub.CommandLoadFile,
+	"unload_file":    pubsub.CommandUnloadFile,
+	"set_origin":     pubsub.CommandSetOrigin,
+	"probe":          pubsub.CommandProbe,
 }
 
 // SendCommand sends a control command to a machine.

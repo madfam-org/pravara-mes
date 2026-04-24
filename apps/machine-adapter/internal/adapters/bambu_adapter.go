@@ -18,17 +18,17 @@ import (
 
 // BambuStatus represents the current state of a Bambu Lab printer.
 type BambuStatus struct {
-	State          string  // idle, running, paused, error
-	NozzleTemp     float64 // Current nozzle temperature
-	NozzleTarget   float64 // Target nozzle temperature
-	BedTemp        float64 // Current bed temperature
-	BedTarget      float64 // Target bed temperature
-	ChamberTemp    float64 // Current chamber temperature
-	PrintPercent   int     // Print progress percentage (0-100)
-	SpeedLevel     int     // Speed level percentage
-	FanSpeed       int     // Part cooling fan speed (0-15 mapped to 0-100%)
-	AMSHumidity    []int   // Humidity per AMS slot
-	LastUpdate     time.Time
+	State        string  // idle, running, paused, error
+	NozzleTemp   float64 // Current nozzle temperature
+	NozzleTarget float64 // Target nozzle temperature
+	BedTemp      float64 // Current bed temperature
+	BedTarget    float64 // Target bed temperature
+	ChamberTemp  float64 // Current chamber temperature
+	PrintPercent int     // Print progress percentage (0-100)
+	SpeedLevel   int     // Speed level percentage
+	FanSpeed     int     // Part cooling fan speed (0-15 mapped to 0-100%)
+	AMSHumidity  []int   // Humidity per AMS slot
+	LastUpdate   time.Time
 }
 
 // BambuAdapter handles communication with Bambu Lab printers via MQTT over TLS.

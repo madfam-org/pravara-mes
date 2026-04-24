@@ -20,11 +20,11 @@ import (
 
 // mockUsageRecorder implements billing.UsageRecorder for testing.
 type mockUsageRecorder struct {
-	recordEventFunc      func(ctx context.Context, event billing.UsageEvent) error
-	recordBatchFunc      func(ctx context.Context, events []billing.UsageEvent) error
-	getTenantUsageFunc   func(ctx context.Context, tenantID string, from, to time.Time) (*billing.TenantUsageSummary, error)
-	getDailyUsageFunc    func(ctx context.Context, tenantID string, from, to time.Time) ([]billing.DailyUsageSummary, error)
-	closeFunc            func() error
+	recordEventFunc    func(ctx context.Context, event billing.UsageEvent) error
+	recordBatchFunc    func(ctx context.Context, events []billing.UsageEvent) error
+	getTenantUsageFunc func(ctx context.Context, tenantID string, from, to time.Time) (*billing.TenantUsageSummary, error)
+	getDailyUsageFunc  func(ctx context.Context, tenantID string, from, to time.Time) ([]billing.DailyUsageSummary, error)
+	closeFunc          func() error
 }
 
 func (m *mockUsageRecorder) RecordEvent(ctx context.Context, event billing.UsageEvent) error {
@@ -498,7 +498,6 @@ func TestAdminGetTenantUsage_InvalidTenantID(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-
 	// Handler validates and returns 400 for empty tenant ID
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -506,7 +505,8 @@ func TestAdminGetTenantUsage_InvalidTenantID(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.Equal(t, "invalid_request", response["error"])}
+	assert.Equal(t, "invalid_request", response["error"])
+}
 
 // TestAdminGetTenantUsage_MaxRange tests 365-day limit for admin endpoint.
 func TestAdminGetTenantUsage_MaxRange(t *testing.T) {

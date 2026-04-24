@@ -406,9 +406,9 @@ func TestGRBLMachines_TelemetryParse(t *testing.T) {
 
 func TestResinPrinters_Resolution(t *testing.T) {
 	tests := []struct {
-		name       string
-		def        *MachineDefinition
-		xyMicrons  float64
+		name      string
+		def       *MachineDefinition
+		xyMicrons float64
 	}{
 		{"ElegooSaturn4Ultra", ElegooSaturn4UltraDefinition(), 18.0},
 		{"AnycubicPhotonMonoM7", AnycubicPhotonMonoM7Definition(), 40.0},

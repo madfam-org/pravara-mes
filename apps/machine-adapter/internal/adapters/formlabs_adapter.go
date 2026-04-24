@@ -242,7 +242,7 @@ func (a *FormlabsAdapter) fetchStatus() error {
 	}
 
 	var printer struct {
-		State    string `json:"state"`
+		State     string  `json:"state"`
 		ResinTemp float64 `json:"resin_temperature"`
 		TankLevel float64 `json:"tank_level"`
 	}

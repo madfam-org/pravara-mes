@@ -386,11 +386,11 @@ func TestWebhookRepository_GetSubscriptionByID(t *testing.T) {
 	repo := NewWebhookRepository(db)
 
 	tests := []struct {
-		name    string
-		subID   uuid.UUID
+		name      string
+		subID     uuid.UUID
 		mockSetup func(sqlmock.Sqlmock, uuid.UUID)
-		wantSub bool
-		wantErr bool
+		wantSub   bool
+		wantErr   bool
 	}{
 		{
 			name:  "subscription found",

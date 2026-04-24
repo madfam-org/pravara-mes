@@ -386,13 +386,13 @@ func (a *PrusaLinkAdapter) pollTelemetry() {
 
 	var statusData struct {
 		Printer struct {
-			State       string  `json:"state"`
-			TempNozzle  float64 `json:"temp_nozzle"`
+			State        string  `json:"state"`
+			TempNozzle   float64 `json:"temp_nozzle"`
 			TargetNozzle float64 `json:"target_nozzle"`
-			TempBed     float64 `json:"temp_bed"`
-			TargetBed   float64 `json:"target_bed"`
-			Speed       int     `json:"speed"`
-			Flow        int     `json:"flow"`
+			TempBed      float64 `json:"temp_bed"`
+			TargetBed    float64 `json:"target_bed"`
+			Speed        int     `json:"speed"`
+			Flow         int     `json:"flow"`
 		} `json:"printer"`
 		Job struct {
 			Progress float64 `json:"progress"`

@@ -21,16 +21,16 @@ import (
 
 // MoonrakerStatus represents the current state of a Klipper printer via Moonraker.
 type MoonrakerStatus struct {
-	State          string    // standby, printing, paused, error, complete
-	ExtruderTemp   float64   // Current extruder temperature
-	ExtruderTarget float64   // Target extruder temperature
-	BedTemp        float64   // Current bed temperature
-	BedTarget      float64   // Target bed temperature
-	Progress       float64   // Print progress 0.0-1.0
-	PrintState     string    // Klipper print_stats state
-	FanSpeed       float64   // Part cooling fan speed 0.0-1.0
-	Filename       string    // Currently loaded file
-	PrintDuration  float64   // Seconds elapsed
+	State          string  // standby, printing, paused, error, complete
+	ExtruderTemp   float64 // Current extruder temperature
+	ExtruderTarget float64 // Target extruder temperature
+	BedTemp        float64 // Current bed temperature
+	BedTarget      float64 // Target bed temperature
+	Progress       float64 // Print progress 0.0-1.0
+	PrintState     string  // Klipper print_stats state
+	FanSpeed       float64 // Part cooling fan speed 0.0-1.0
+	Filename       string  // Currently loaded file
+	PrintDuration  float64 // Seconds elapsed
 	LastUpdate     time.Time
 }
 
@@ -69,11 +69,11 @@ type MoonrakerAdapter struct {
 	httpClient *http.Client
 
 	// WebSocket
-	wsConn       *websocket.Conn
-	wsCtx        context.Context
-	wsCancel     context.CancelFunc
-	wsReconnect  atomic.Bool
-	wsNextID     atomic.Int64
+	wsConn      *websocket.Conn
+	wsCtx       context.Context
+	wsCancel    context.CancelFunc
+	wsReconnect atomic.Bool
+	wsNextID    atomic.Int64
 
 	// Telemetry callback
 	OnTelemetry TelemetryCallback

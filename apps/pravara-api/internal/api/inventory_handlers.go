@@ -82,7 +82,7 @@ type UpdateInventoryItemRequest struct {
 // AdjustInventoryRequest represents the request body for adjusting inventory quantity.
 type AdjustInventoryRequest struct {
 	Quantity        float64    `json:"quantity" binding:"required"`
-	TransactionType string    `json:"transaction_type" binding:"required"`
+	TransactionType string     `json:"transaction_type" binding:"required"`
 	ReferenceType   *string    `json:"reference_type"`
 	ReferenceID     *uuid.UUID `json:"reference_id"`
 	Notes           *string    `json:"notes"`
@@ -90,20 +90,20 @@ type AdjustInventoryRequest struct {
 
 // ForgeSightWebhookPayload represents the incoming ForgeSight webhook payload.
 type ForgeSightWebhookPayload struct {
-	Event string                     `json:"event"`
-	Items []ForgeSightWebhookItem    `json:"items"`
+	Event string                  `json:"event"`
+	Items []ForgeSightWebhookItem `json:"items"`
 }
 
 // ForgeSightWebhookItem represents a single item in the ForgeSight webhook.
 type ForgeSightWebhookItem struct {
-	ForgeSightID string  `json:"forgesight_id"`
-	SKU          string  `json:"sku"`
-	Name         string  `json:"name"`
-	Category     string  `json:"category"`
-	Unit         string  `json:"unit"`
-	Quantity     float64 `json:"quantity"`
+	ForgeSightID string   `json:"forgesight_id"`
+	SKU          string   `json:"sku"`
+	Name         string   `json:"name"`
+	Category     string   `json:"category"`
+	Unit         string   `json:"unit"`
+	Quantity     float64  `json:"quantity"`
 	UnitCost     *float64 `json:"unit_cost"`
-	Currency     string  `json:"currency"`
+	Currency     string   `json:"currency"`
 }
 
 // =============== Endpoints ===============
@@ -482,15 +482,15 @@ func (h *InventoryHandler) ForgeSightWebhook(c *gin.Context) {
 	var processed int
 	for _, fsItem := range payload.Items {
 		item := &repositories.InventoryItem{
-			TenantID:     tenantUUID,
-			SKU:          fsItem.SKU,
-			Name:         fsItem.Name,
-			Category:     fsItem.Category,
-			Unit:         fsItem.Unit,
+			TenantID:       tenantUUID,
+			SKU:            fsItem.SKU,
+			Name:           fsItem.Name,
+			Category:       fsItem.Category,
+			Unit:           fsItem.Unit,
 			QuantityOnHand: fsItem.Quantity,
-			ForgeSightID: &fsItem.ForgeSightID,
-			UnitCost:     fsItem.UnitCost,
-			Currency:     fsItem.Currency,
+			ForgeSightID:   &fsItem.ForgeSightID,
+			UnitCost:       fsItem.UnitCost,
+			Currency:       fsItem.Currency,
 		}
 
 		if item.Currency == "" {

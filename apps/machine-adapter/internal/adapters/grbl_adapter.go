@@ -19,11 +19,11 @@ import (
 
 // GRBLStatus represents the current state of a GRBL machine.
 type GRBLStatus struct {
-	State      string    // Idle, Run, Hold, Jog, Alarm, Door, Check, Home, Sleep
+	State      string     // Idle, Run, Hold, Jog, Alarm, Door, Check, Home, Sleep
 	MachinePos [3]float64 // Machine position X, Y, Z
 	WorkPos    [3]float64 // Work position X, Y, Z
-	FeedRate   float64   // Current feed rate
-	Spindle    float64   // Spindle speed
+	FeedRate   float64    // Current feed rate
+	Spindle    float64    // Spindle speed
 	Override   struct {
 		Feed    int // Feed override percentage
 		Rapids  int // Rapids override percentage

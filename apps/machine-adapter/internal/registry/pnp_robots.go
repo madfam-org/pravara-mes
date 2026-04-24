@@ -186,11 +186,11 @@ func URGenericDefinition() *MachineDefinition {
 			},
 		},
 		StatusMapping: map[string]string{
-			"RUNNING":            "running",
-			"IDLE":               "idle",
-			"PAUSED":             "paused",
-			"PROTECTIVE_STOP":    "error",
-			"EMERGENCY_STOPPED":  "error",
+			"RUNNING":           "running",
+			"IDLE":              "idle",
+			"PAUSED":            "paused",
+			"PROTECTIVE_STOP":   "error",
+			"EMERGENCY_STOPPED": "error",
 		},
 		TelemetryParse: map[string]TelemetryDef{
 			"joint_positions": {
@@ -253,9 +253,9 @@ func DobotMagicianDefinition() *MachineDefinition {
 			},
 		},
 		StatusMapping: map[string]string{
-			"IDLE":    "idle",
-			"MOVING":  "running",
-			"ALARM":   "error",
+			"IDLE":   "idle",
+			"MOVING": "running",
+			"ALARM":  "error",
 		},
 		TelemetryParse: map[string]TelemetryDef{
 			"position": {

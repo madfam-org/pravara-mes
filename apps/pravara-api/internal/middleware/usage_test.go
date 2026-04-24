@@ -248,11 +248,11 @@ func TestUsageTracking_RecordsMetadata(t *testing.T) {
 	mockRecorder := new(mockUsageRecorder)
 
 	tests := []struct {
-		name         string
-		method       string
-		path         string
-		statusCode   int
-		tenantID     string
+		name       string
+		method     string
+		path       string
+		statusCode int
+		tenantID   string
 	}{
 		{
 			name:       "GET request with 200",

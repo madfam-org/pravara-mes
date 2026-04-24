@@ -50,7 +50,7 @@ type duetStatusResponse struct {
 			Active  float64 `json:"active"`
 		} `json:"bed"`
 	} `json:"temps"`
-	CurrentTool int `json:"currentTool"`
+	CurrentTool     int     `json:"currentTool"`
 	FractionPrinted float64 `json:"fractionPrinted"` // 0.0-1.0
 }
 

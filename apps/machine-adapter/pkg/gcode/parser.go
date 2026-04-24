@@ -11,11 +11,11 @@ import (
 
 // Command represents a parsed G-code command.
 type Command struct {
-	Letter     string                 // Command letter (G, M, T, etc.)
-	Number     int                    // Command number
-	Parameters map[string]float64     // Parameters (X, Y, Z, F, S, etc.)
-	Comment    string                 // Inline comment
-	Raw        string                 // Original line
+	Letter     string             // Command letter (G, M, T, etc.)
+	Number     int                // Command number
+	Parameters map[string]float64 // Parameters (X, Y, Z, F, S, etc.)
+	Comment    string             // Inline comment
+	Raw        string             // Original line
 }
 
 // Parser parses G-code commands.
@@ -108,18 +108,18 @@ func (p *Parser) Next() (*Command, error) {
 
 // Generator generates G-code commands.
 type Generator struct {
-	writer  io.Writer
-	modal   ModalState
+	writer io.Writer
+	modal  ModalState
 }
 
 // ModalState tracks modal G-code states.
 type ModalState struct {
-	MotionMode      int     // G0, G1, G2, G3
-	FeedRate        float64 // F
-	SpindleSpeed    float64 // S
-	CoordinateMode  int     // G90/G91 (absolute/relative)
-	Units           int     // G20/G21 (inch/mm)
-	WorkCoordinate  int     // G54-G59
+	MotionMode     int     // G0, G1, G2, G3
+	FeedRate       float64 // F
+	SpindleSpeed   float64 // S
+	CoordinateMode int     // G90/G91 (absolute/relative)
+	Units          int     // G20/G21 (inch/mm)
+	WorkCoordinate int     // G54-G59
 }
 
 // NewGenerator creates a new G-code generator.

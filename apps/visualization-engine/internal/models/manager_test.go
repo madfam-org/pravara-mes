@@ -48,8 +48,8 @@ func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
 	return &fakeStmt{query: query, conn: c}, nil
 }
 
-func (c *fakeConn) Close() error                 { return nil }
-func (c *fakeConn) Begin() (driver.Tx, error)     { return &fakeTx{}, nil }
+func (c *fakeConn) Close() error              { return nil }
+func (c *fakeConn) Begin() (driver.Tx, error) { return &fakeTx{}, nil }
 
 type fakeTx struct{}
 
@@ -61,8 +61,8 @@ type fakeStmt struct {
 	conn  *fakeConn
 }
 
-func (s *fakeStmt) Close() error                               { return nil }
-func (s *fakeStmt) NumInput() int                               { return -1 }
+func (s *fakeStmt) Close() error  { return nil }
+func (s *fakeStmt) NumInput() int { return -1 }
 func (s *fakeStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if s.conn.connector.execFunc != nil {
 		return s.conn.connector.execFunc(s.query, args)

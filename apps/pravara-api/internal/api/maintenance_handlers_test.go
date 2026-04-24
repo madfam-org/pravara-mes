@@ -213,7 +213,7 @@ func TestCompleteWorkOrderRequest_Validation(t *testing.T) {
 			valid: true,
 		},
 		{
-			name: "valid empty request (no required fields)",
+			name:    "valid empty request (no required fields)",
 			request: CompleteWorkOrderRequest{},
 			valid:   true,
 		},

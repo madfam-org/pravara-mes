@@ -493,13 +493,13 @@ func TestInspectionRepository_Create(t *testing.T) {
 	repo := NewInspectionRepository(db)
 
 	inspection := &types.Inspection{
-		ID:                uuid.New(),
-		TenantID:          uuid.New(),
-		InspectionNumber:  "INSP-002",
-		Type:              "final",
-		Result:            types.InspectionResultPending,
-		Checklist:         []any{map[string]interface{}{"item": "test"}},
-		Metadata:          map[string]interface{}{"priority": "high"},
+		ID:               uuid.New(),
+		TenantID:         uuid.New(),
+		InspectionNumber: "INSP-002",
+		Type:             "final",
+		Result:           types.InspectionResultPending,
+		Checklist:        []any{map[string]interface{}{"item": "test"}},
+		Metadata:         map[string]interface{}{"priority": "high"},
 	}
 
 	createdAt := time.Now()

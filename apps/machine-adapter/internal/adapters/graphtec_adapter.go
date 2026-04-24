@@ -27,12 +27,12 @@ const (
 
 // GraphtecStatus represents the current state of a Graphtec vinyl cutter.
 type GraphtecStatus struct {
-	State      string    // idle, cutting, paused, error
-	PositionX  float64   // Current X position in mm
-	PositionY  float64   // Current Y position in mm
-	Speed      int       // Current cutting speed
-	Force      int       // Current cutting force (grams)
-	ActivePen  int       // Currently selected pen/tool
+	State      string  // idle, cutting, paused, error
+	PositionX  float64 // Current X position in mm
+	PositionY  float64 // Current Y position in mm
+	Speed      int     // Current cutting speed
+	Force      int     // Current cutting force (grams)
+	ActivePen  int     // Currently selected pen/tool
 	LastUpdate time.Time
 }
 
