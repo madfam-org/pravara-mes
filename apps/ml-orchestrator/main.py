@@ -113,12 +113,24 @@ app = FastAPI(
 )
 
 # CORS middleware
+# H5 (audit 2026-04-23): wildcard CORS + allow_credentials=True is unsafe.
+# Read explicit allowlist from CORS_ALLOWED_ORIGINS (comma-separated). Falls
+# back to localhost-only origins when unset (safe for local dev).
+_cors_raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or [
+    "http://localhost:3000",
+    "http://localhost:8080",
+]
+if any(o == "*" for o in _cors_origins):
+    raise RuntimeError(
+        "CORS_ALLOWED_ORIGINS must not contain '*' (would re-introduce H5)."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
 )
 
 # Pydantic models
