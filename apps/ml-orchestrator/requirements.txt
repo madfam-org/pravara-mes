@@ -13,7 +13,7 @@ psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 alembic==1.13.1
 opencv-python==4.9.0.80
-Pillow==10.3.0
+Pillow==12.2.0
 matplotlib==3.8.2
 seaborn==0.13.1
 plotly==5.18.0
