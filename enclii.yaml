@@ -4,6 +4,20 @@ metadata:
   name: pravara-mes
   project: pravara-mes
 spec:
+  status:
+    enabled: true
+    entries:
+      - name: MES API
+        url: https://mes-api.madfam.io/health
+        href: https://mes-api.madfam.io
+        group: Pravara MES
+        family: Digital Fabrication
+        description: Manufacturing execution API
+      - name: MES Web
+        url: https://mes.madfam.io
+        group: Pravara MES
+        family: Digital Fabrication
+        description: Manufacturing dashboard
   runtime:
     port: 4500
   domains:
