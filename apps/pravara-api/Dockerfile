@@ -25,14 +25,17 @@ COPY apps/visualization-engine/go.mod apps/visualization-engine/go.sum* ./apps/v
 COPY packages/sdk-go/go.mod packages/sdk-go/go.sum* ./packages/sdk-go/
 
 # Download dependencies
-RUN cd apps/pravara-api && go mod download
+WORKDIR /build/apps/pravara-api
+RUN go mod download
 
 # Copy source code
+WORKDIR /build
 COPY apps/pravara-api/ ./apps/pravara-api/
 COPY packages/sdk-go/ ./packages/sdk-go/
 
 # Build the binary
-RUN cd apps/pravara-api && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+WORKDIR /build/apps/pravara-api
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" -o /build/pravara-api ./cmd/api
 
 # -----------------------------------------------------------------------------
