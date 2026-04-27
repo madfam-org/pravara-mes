@@ -125,7 +125,7 @@ images:
 - digest: sha256:3264237535cd5232befe527a124477dd6c6cd5ad528bddf366dc3122d9da6b84
   name: pravara-admin
   newName: ghcr.io/madfam-org/pravara-admin
-- digest: sha256:da314668b31f8e19105b21d39e9966945632d9e633ae04d71a811df4d71e8a1b
+- digest: sha256:0dc1d65dd6e9cd0382fffc042d810f62e671acff2ff027e8e0a00f1b5e3cbc1c
   name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
 - digest: sha256:a6653a0c7e4ecc5a857e2bbac9e5ac89031db434a3f822690b84fa87ef55b728
