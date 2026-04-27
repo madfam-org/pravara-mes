@@ -14,11 +14,7 @@ RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
 # Copy configuration
 COPY config.json /centrifugo/config.json
 
-<<<<<<< HEAD
-# Run as non-root user (centrifugo image ships with uid 1000 'centrifugo')
-=======
-# Drop back to the centrifugo non-root user (uid 1000) for runtime
->>>>>>> 3e2b25f (fix(security): apk upgrade pravara-gateway base image (resolves ~56 alpine CVEs))
+# Drop back to the centrifugo non-root user (uid 1000) for runtime after apk upgrade
 USER centrifugo
 
 # Expose WebSocket and internal ports
