@@ -25,14 +25,17 @@ COPY apps/visualization-engine/go.mod apps/visualization-engine/go.sum* ./apps/v
 COPY packages/sdk-go/go.mod packages/sdk-go/go.sum* ./packages/sdk-go/
 
 # Download dependencies
-RUN cd apps/telemetry-worker && go mod download
+WORKDIR /build/apps/telemetry-worker
+RUN go mod download
 
 # Copy source code
+WORKDIR /build
 COPY apps/telemetry-worker/ ./apps/telemetry-worker/
 COPY packages/sdk-go/ ./packages/sdk-go/
 
 # Build the binary
-RUN cd apps/telemetry-worker && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+WORKDIR /build/apps/telemetry-worker
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" -o /build/telemetry-worker ./cmd/worker
 
 # -----------------------------------------------------------------------------
