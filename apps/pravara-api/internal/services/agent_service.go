@@ -4,6 +4,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -336,20 +337,65 @@ func (s *AgentService) GetAvailableAgents(ctx context.Context, requiredSkills []
 	var agents []*Agent
 	for rows.Next() {
 		agent := &Agent{}
+		// JSONB columns must be scanned into []byte and then unmarshaled.
+		// Scanning directly into typed slices/maps fails because Postgres returns
+		// the raw JSON text as a driver string value, which database/sql cannot
+		// auto-convert into Go aggregates.
+		var (
+			skillsJSON         []byte
+			certificationsJSON []byte
+			preferredJSON      []byte
+			blockedJSON        []byte
+			notifPrefsJSON     []byte
+			metadataJSON       []byte
+		)
+
 		err := rows.Scan(
 			&agent.ID, &agent.TenantID, &agent.UserID, &agent.Code, &agent.Name,
-			&agent.Type, &agent.Status, &agent.Skills, &agent.Certifications,
+			&agent.Type, &agent.Status, &skillsJSON, &certificationsJSON,
 			&agent.ExperienceLevel, &agent.ShiftPattern, &agent.AvailableFrom,
 			&agent.AvailableUntil, &agent.MaxConcurrentTasks, &agent.CurrentTaskCount,
 			&agent.TasksCompleted, &agent.TasksFailed, &agent.AvgTaskDurationMin,
-			&agent.QualityScore, &agent.ReliabilityScore, &agent.PreferredMachines,
-			&agent.BlockedMachines, &agent.NotificationPrefs, &agent.Metadata,
+			&agent.QualityScore, &agent.ReliabilityScore, &preferredJSON,
+			&blockedJSON, &notifPrefsJSON, &metadataJSON,
 			&agent.LastActivityAt, &agent.CreatedAt, &agent.UpdatedAt,
 		)
 		if err != nil {
 			s.log.WithError(err).Error("Failed to scan agent")
 			continue
 		}
+
+		if len(skillsJSON) > 0 {
+			if err := json.Unmarshal(skillsJSON, &agent.Skills); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal agent skills")
+			}
+		}
+		if len(certificationsJSON) > 0 {
+			if err := json.Unmarshal(certificationsJSON, &agent.Certifications); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal agent certifications")
+			}
+		}
+		if len(preferredJSON) > 0 {
+			if err := json.Unmarshal(preferredJSON, &agent.PreferredMachines); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal preferred machines")
+			}
+		}
+		if len(blockedJSON) > 0 {
+			if err := json.Unmarshal(blockedJSON, &agent.BlockedMachines); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal blocked machines")
+			}
+		}
+		if len(notifPrefsJSON) > 0 {
+			if err := json.Unmarshal(notifPrefsJSON, &agent.NotificationPrefs); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal notification preferences")
+			}
+		}
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &agent.Metadata); err != nil {
+				s.log.WithError(err).Warn("Failed to unmarshal agent metadata")
+			}
+		}
+
 		agents = append(agents, agent)
 	}
 
@@ -407,13 +453,21 @@ func (s *AgentService) AssignTask(ctx context.Context, taskID, agentID uuid.UUID
 
 // notifyAgent sends a notification to an agent.
 func (s *AgentService) notifyAgent(ctx context.Context, tx *sql.Tx, agentID uuid.UUID, notificationType string, taskID uuid.UUID) error {
-	_, err := tx.ExecContext(ctx, `
+	// The data column is JSONB, so marshal the payload before passing it to the
+	// driver — passing a raw map[string]interface{} causes database/sql to fail
+	// with "unsupported type ... a map".
+	dataJSON, err := json.Marshal(map[string]interface{}{"task_id": taskID})
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification data: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO agent_notifications (tenant_id, agent_id, type, priority, title, message, data)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, ctx.Value("tenant_id"), agentID, notificationType, "normal",
 		"New Task Assignment",
 		"You have been assigned a new task",
-		map[string]interface{}{"task_id": taskID})
+		dataJSON)
 
 	return err
 }
