@@ -1,0 +1,39 @@
+# =============================================================================
+# Trivy ignore list — pravara-mes
+# =============================================================================
+#
+# Format: one rule ID (or CVE) per line. Lines starting with '#' are comments.
+# Trivy automatically reads .trivyignore from the scan working directory.
+#
+# Each entry below MUST include a rationale and a re-evaluation cue (date,
+# upstream link, or condition). When the condition is met, remove the entry
+# and let the scanner re-flag if the issue still exists.
+#
+# References:
+#   - Trivy CLI: https://trivy.dev/latest/docs/configuration/filtering/
+#   - aquasecurity/trivy-action reads .trivyignore by default since v0.18.0
+#
+# =============================================================================
+# K8s misconfiguration false positives
+# =============================================================================
+
+# KSV-0039 — "containers should not run with a low UID" / namespace LimitRange missing
+# KSV-0040 — "containers should not run with a low GID"  / namespace ResourceQuota missing
+#
+# Trivy emits these once per scanned manifest file (~57 + ~56 alerts in pravara-mes)
+# even though the namespace-level policies are declared in
+#   infra/k8s/base/namespace.yaml
+# at lines 17-29 (ResourceQuota: pravara-quota) and 31-44 (LimitRange:
+# pravara-limits). Trivy's filesystem scan mode treats each YAML file as an
+# isolated package and does not follow the LimitRange chain.
+#
+# Verification:
+#   $ trivy config infra/k8s/base/    # scans whole dir, alerts persist
+#   $ kubectl -n pravara-mes get limitrange,resourcequota
+#     # -> pravara-quota + pravara-limits should be Active
+#
+# Re-evaluation cue: when Trivy gains cross-file context for namespace policies
+# (tracked at https://github.com/aquasecurity/trivy/issues), or when this
+# repo migrates to a single-bundle scan workflow, remove these two lines.
+KSV-0039
+KSV-0040
