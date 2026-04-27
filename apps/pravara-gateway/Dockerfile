@@ -8,6 +8,9 @@ FROM centrifugo/centrifugo:v5
 # Copy configuration
 COPY config.json /centrifugo/config.json
 
+# Run as non-root user (centrifugo image ships with uid 1000 'centrifugo')
+USER centrifugo
+
 # Expose WebSocket and internal ports
 EXPOSE 8000 9000
 
