@@ -5,8 +5,17 @@
 
 FROM centrifugo/centrifugo:v5
 
+# Refresh alpine system packages to pull latest security patches
+# (zlib, musl, busybox CVEs flagged by Trivy on the upstream image baseline).
+# Switch to root temporarily for apk operations, then drop privileges.
+USER root
+RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
+
 # Copy configuration
 COPY config.json /centrifugo/config.json
+
+# Drop back to the centrifugo non-root user (uid 1000) for runtime
+USER centrifugo
 
 # Expose WebSocket and internal ports
 EXPOSE 8000 9000
