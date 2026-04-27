@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.25.9'
   NODE_VERSION: '22'
   DATABASE_URL: 'postgres://pravara:test@localhost:5432/pravara_test?sslmode=disable'
   REDIS_URL: 'redis://localhost:6379'
