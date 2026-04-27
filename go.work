@@ -1,8 +1,10 @@
-go 1.24.0
+go 1.25.0
+
+toolchain go1.25.9
 
 use (
-	./apps/pravara-api
 	./apps/machine-adapter
+	./apps/pravara-api
 	./apps/telemetry-worker
 	./apps/visualization-engine
 	./packages/sdk-go
