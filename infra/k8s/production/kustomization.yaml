@@ -122,7 +122,7 @@ images:
 - name: postgres
   newName: docker.io/library/postgres
   newTag: 16-alpine
-- digest: sha256:ea4cebd7d35d8c25d0948041f6de245a100cda9a8d89870bb552c69f14689c92
+- digest: sha256:3264237535cd5232befe527a124477dd6c6cd5ad528bddf366dc3122d9da6b84
   name: pravara-admin
   newName: ghcr.io/madfam-org/pravara-admin
 - digest: sha256:d6aa54be52e1cdfcdd6efbbb0b9d28eba4f54f7775a577ff5312c3b7f3294238
