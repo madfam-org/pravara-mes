@@ -21,6 +21,7 @@ type RedisUsageRecorder struct {
 	eventChannel chan UsageEvent
 	wg           sync.WaitGroup
 	flushTicker  *time.Ticker
+	done         chan struct{}
 	dhanamClient *DhanamClient
 }
 
@@ -67,6 +68,7 @@ func NewRedisUsageRecorder(cfg RecorderConfig, log *logrus.Logger) (*RedisUsageR
 		log:          log,
 		eventChannel: make(chan UsageEvent, cfg.BufferSize),
 		flushTicker:  time.NewTicker(cfg.FlushInterval),
+		done:         make(chan struct{}),
 		dhanamClient: dhanamClient,
 	}
 
@@ -231,24 +233,22 @@ func (r *RedisUsageRecorder) eventProcessor() {
 func (r *RedisUsageRecorder) periodicFlush() {
 	defer r.wg.Done()
 
-	for range r.flushTicker.C {
-		r.mu.RLock()
-		if r.closed {
-			r.mu.RUnlock()
+	for {
+		select {
+		case <-r.done:
 			return
-		}
-		r.mu.RUnlock()
+		case <-r.flushTicker.C:
+			if r.dhanamClient == nil || !r.dhanamClient.IsEnabled() {
+				r.log.Debug("Dhanam integration disabled, skipping flush")
+				continue
+			}
 
-		if r.dhanamClient == nil || !r.dhanamClient.IsEnabled() {
-			r.log.Debug("Dhanam integration disabled, skipping flush")
-			continue
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			if err := r.flushToDhanam(ctx); err != nil {
+				r.log.WithError(err).Error("Failed to flush usage data to Dhanam")
+			}
+			cancel()
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		if err := r.flushToDhanam(ctx); err != nil {
-			r.log.WithError(err).Error("Failed to flush usage data to Dhanam")
-		}
-		cancel()
 	}
 }
 
@@ -498,6 +498,7 @@ func (r *RedisUsageRecorder) Close() error {
 
 	// Stop background workers
 	r.flushTicker.Stop()
+	close(r.done)
 	close(r.eventChannel)
 	r.wg.Wait()
 
