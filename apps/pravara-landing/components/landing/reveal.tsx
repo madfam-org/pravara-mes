@@ -3,15 +3,17 @@
 import { useReveal } from "@/hooks/use-reveal";
 import { cn } from "@/lib/utils";
 
-// Section-level scroll-reveal wrapper. The hook handles
-// IntersectionObserver + reduced-motion; this component just maps the
-// boolean state to opacity/translate classes. Defaults to a 600ms
-// transition, matching the global "fade-up" keyframe.
+// Section wrapper. Content is ALWAYS visible — SEO crawlers,
+// screenshot tools, and reduced-motion users see the page exactly
+// the same as a real visitor. The IntersectionObserver only adds a
+// subtle 12px slide-up when the section enters view; if the observer
+// never fires (tall sections, threshold edge cases, headless tools),
+// nothing breaks because we never hide content in the first place.
 
 export function Reveal({
   children,
   className,
-  threshold = 0.2,
+  threshold = 0.1,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -22,8 +24,8 @@ export function Reveal({
     <div
       ref={ref}
       className={cn(
-        "transition-all duration-700 ease-out will-change-transform",
-        revealed ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+        "transition-transform duration-700 ease-out will-change-transform",
+        revealed ? "translate-y-0" : "translate-y-3",
         className,
       )}
     >
