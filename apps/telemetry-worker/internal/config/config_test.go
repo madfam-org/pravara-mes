@@ -21,8 +21,8 @@ func TestConfig_Load_Defaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel: got %q, want %q", cfg.LogLevel, "info")
 	}
-	if cfg.MQTT.Broker != "localhost" {
-		t.Errorf("MQTT.Broker: got %q, want %q", cfg.MQTT.Broker, "localhost")
+	if cfg.MQTT.Broker != "emqx-pravara" {
+		t.Errorf("MQTT.Broker: got %q, want %q", cfg.MQTT.Broker, "emqx-pravara")
 	}
 	if cfg.MQTT.Port != 1883 {
 		t.Errorf("MQTT.Port: got %d, want %d", cfg.MQTT.Port, 1883)

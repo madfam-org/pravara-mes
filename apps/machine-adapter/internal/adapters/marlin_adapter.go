@@ -531,44 +531,35 @@ func (a *MarlinAdapter) updateStatus() {
 
 // processResponse processes responses from the printer.
 func (a *MarlinAdapter) processResponse(line string) {
-	// Check for standard responses
-	if line == "ok" || strings.HasPrefix(line, "ok ") {
-		a.responseQueue <- CommandResponse{Success: true, Message: line}
-		return
-	}
-
-	// Check for errors
-	if strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "error:") {
-		a.responseQueue <- CommandResponse{
-			Success: false,
-			Error:   fmt.Errorf("printer error: %s", line),
-		}
-		return
-	}
-
-	// Parse temperature reports
+	// Marlin frequently piggybacks telemetry on response lines
+	// (e.g. "ok T:200.0 /200.0"), so parse telemetry up-front before
+	// dispatching the response — otherwise an early return on "ok "
+	// silently drops embedded temperature/position updates.
 	if strings.Contains(line, "T:") || strings.Contains(line, "B:") {
 		a.parseTemperature(line)
 	}
-
-	// Parse position reports
 	if strings.Contains(line, "X:") && strings.Contains(line, "Y:") && strings.Contains(line, "Z:") {
 		a.parsePosition(line)
 	}
-
-	// Parse SD progress
 	if strings.HasPrefix(line, "SD printing byte") {
 		a.parseSDProgress(line)
 	}
-
-	// Parse other messages
 	if strings.Contains(line, "echo:") {
 		a.echoEnabled = true
 		a.log.WithField("echo", line).Debug("Echo message")
 	}
 
-	// Send generic success for other messages
-	if !strings.HasPrefix(line, "echo:") && !strings.HasPrefix(line, "//") {
+	switch {
+	case line == "ok" || strings.HasPrefix(line, "ok "):
+		a.responseQueue <- CommandResponse{Success: true, Message: line}
+	case strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "error:"):
+		a.responseQueue <- CommandResponse{
+			Success: false,
+			Error:   fmt.Errorf("printer error: %s", line),
+		}
+	case strings.HasPrefix(line, "echo:"), strings.HasPrefix(line, "//"):
+		// Diagnostic output, not a command response — don't enqueue.
+	default:
 		a.responseQueue <- CommandResponse{Success: true, Message: line}
 	}
 }

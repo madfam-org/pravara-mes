@@ -74,6 +74,7 @@ func NewGRBLAdapter(definition *registry.MachineDefinition, log *logrus.Logger) 
 	return &GRBLAdapter{
 		log:           log.WithField("adapter", "grbl"),
 		definition:    definition,
+		writer:        io.Discard,
 		commandQueue:  make(chan CommandRequest, 100),
 		responseQueue: make(chan CommandResponse, 100),
 		ctx:           ctx,
