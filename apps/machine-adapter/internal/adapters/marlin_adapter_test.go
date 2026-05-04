@@ -191,8 +191,16 @@ func TestMarlinAdapter_ProcessResponse(t *testing.T) {
 		t.Fatal("No response received for 'ok'")
 	}
 
-	// Test OK with temperature
-	adapter.processResponse("ok T:200.0 /200.0")
+	// Test OK with temperature — Marlin embeds telemetry on "ok"
+	// lines, so processResponse enqueues a success response *and*
+	// updates parsed status. Drain the queued response before moving
+	// on, otherwise it leaks into the next subtest's select.
+	go adapter.processResponse("ok T:200.0 /200.0")
+	select {
+	case <-adapter.responseQueue:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("No response received for 'ok T:...'")
+	}
 	status := adapter.GetStatus()
 	assert.Equal(t, 200.0, status.ExtruderTemp)
 
