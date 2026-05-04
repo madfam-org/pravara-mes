@@ -131,9 +131,9 @@ images:
 - digest: sha256:a6653a0c7e4ecc5a857e2bbac9e5ac89031db434a3f822690b84fa87ef55b728
   name: pravara-gateway
   newName: ghcr.io/madfam-org/pravara-gateway
-- name: pravara-landing
+- digest: sha256:30ec177f6e3f5e4f2da83f2e32fcbb732e32147d37173000461b8907800ef54d
+  name: pravara-landing
   newName: ghcr.io/madfam-org/pravara-landing
-  newTag: latest
 - digest: sha256:123fb66ca0c5c52b90e0b136e441299958afed554797aab5adbf328133dc7cba
   name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
