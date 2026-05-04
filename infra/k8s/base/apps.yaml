@@ -207,6 +207,109 @@ spec:
     app.kubernetes.io/name: pravara-ui
 
 # -----------------------------------------------------------------------------
+# pravara-landing — Public marketing surface (Next.js, no auth deps)
+#
+# Lives at mes.madfam.io/ — Cloudflare Tunnel routes the apex to this
+# service while /login, /dashboard, /admin, /api/* go to pravara-ui.
+# Decoupled from pravara-ui so the marketing bundle stays small (no
+# React Query / Zustand / dnd-kit / Janua) and the page is purely
+# static — no envFrom secrets needed, no DB reads, fast cold start.
+# -----------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravara-landing
+  namespace: pravara-mes
+  labels:
+    app: pravara-landing
+    app.kubernetes.io/name: pravara-landing
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pravara-landing
+      app.kubernetes.io/name: pravara-landing
+  template:
+    metadata:
+      labels:
+        app: pravara-landing
+        app.kubernetes.io/name: pravara-landing
+        app.kubernetes.io/part-of: pravara-mes
+    spec:
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-credentials
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pravara-landing
+          image: pravara-landing
+          ports:
+            - containerPort: 4502
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /
+              port: 4502
+            failureThreshold: 12
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4502
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4502
+            periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravara-landing
+  namespace: pravara-mes
+  labels:
+    app: pravara-landing
+    app.kubernetes.io/name: pravara-landing
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4502
+      name: http
+  selector:
+    app: pravara-landing
+    app.kubernetes.io/name: pravara-landing
+
+# -----------------------------------------------------------------------------
 # telemetry-worker — MQTT telemetry consumer (Go)
 # -----------------------------------------------------------------------------
 ---

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Pravara MES — Sistema de ejecución de manufactura, en una pantalla.">
+  <!-- Placeholder OG image. Swap with a designed PNG before paid launch.
+       Kept as SVG so this commit is small and theme tokens stay legible. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0f1a"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(80, 100)">
+    <rect x="0" y="0" width="56" height="56" rx="12" fill="#f1f5f9"/>
+    <text x="76" y="38" font-family="Inter, system-ui, sans-serif" font-size="28" font-weight="600" fill="#cbd5e1">Pravara MES</text>
+  </g>
+  <text x="80" y="320" font-family="Inter, system-ui, sans-serif" font-size="74" font-weight="700" fill="#f1f5f9">Toda tu fábrica,</text>
+  <text x="80" y="410" font-family="Inter, system-ui, sans-serif" font-size="74" font-weight="700" fill="url(#accent)">en una sola pantalla.</text>
+  <text x="80" y="490" font-family="Inter, system-ui, sans-serif" font-size="26" fill="#94a3b8">MES nativo en la nube · MQTT · OPC-UA · ISO 9001 · NOM-151</text>
+  <g transform="translate(80, 540)">
+    <rect x="0" y="0" width="220" height="50" rx="10" fill="#f1f5f9"/>
+    <text x="24" y="33" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="600" fill="#0f172a">Solicitar demo →</text>
+  </g>
+  <text x="1120" y="600" text-anchor="end" font-family="ui-monospace, monospace" font-size="18" fill="#475569">mes.madfam.io</text>
+</svg>

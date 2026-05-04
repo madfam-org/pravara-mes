@@ -35,6 +35,7 @@ jobs:
     outputs:
       pravara-api: ${{ steps.filter.outputs.pravara-api }}
       pravara-ui: ${{ steps.filter.outputs.pravara-ui }}
+      pravara-landing: ${{ steps.filter.outputs.pravara-landing }}
       pravara-gateway: ${{ steps.filter.outputs.pravara-gateway }}
       telemetry-worker: ${{ steps.filter.outputs.telemetry-worker }}
       services: ${{ steps.filter.outputs.changes }}
@@ -55,6 +56,8 @@ jobs:
             pravara-ui:
               - 'apps/pravara-ui/**'
               - 'packages/ui-components/**'
+            pravara-landing:
+              - 'apps/pravara-landing/**'
             pravara-gateway:
               - 'apps/pravara-gateway/**'
             telemetry-worker:
@@ -243,6 +246,80 @@ jobs:
             ${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-ui@${{ steps.build.outputs.digest }}
 
   # ===========================================================================
+  # Build Landing Service
+  #
+  # pravara-landing is the public marketing surface at mes.madfam.io/.
+  # No private packages → no NPM_MADFAM_TOKEN. No backend env vars
+  # baked into the image — the page is fully static after build.
+  # ===========================================================================
+  build-landing:
+    name: Build pravara-landing
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pravara-landing == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.MADFAM_BOT_PAT }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-landing
+          tags: |
+            type=sha,prefix={{branch}}-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=pravara-landing
+            org.opencontainers.image.description=PravaraMES public marketing surface
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/pravara-landing
+          file: apps/pravara-landing/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+          platforms: linux/amd64
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        run: |
+          cosign sign --yes \
+            ${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-landing@${{ steps.build.outputs.digest }}
+
+  # ===========================================================================
   # Build Gateway Service
   # ===========================================================================
   build-gateway:
@@ -322,12 +399,14 @@ jobs:
       - changes
       - build-go
       - build-ui
+      - build-landing
       - build-gateway
     if: |
       always() &&
       needs.changes.result == 'success' &&
       (needs.build-go.result == 'success' || needs.build-go.result == 'skipped') &&
       (needs.build-ui.result == 'success' || needs.build-ui.result == 'skipped') &&
+      (needs.build-landing.result == 'success' || needs.build-landing.result == 'skipped') &&
       (needs.build-gateway.result == 'success' || needs.build-gateway.result == 'skipped')
     permissions:
       contents: write
@@ -350,10 +429,11 @@ jobs:
           API_DIGEST="${{ needs.build-go.outputs.pravara-api-digest }}"
           WORKER_DIGEST="${{ needs.build-go.outputs.telemetry-worker-digest }}"
           UI_DIGEST="${{ needs.build-ui.outputs.digest }}"
+          LANDING_DIGEST="${{ needs.build-landing.outputs.digest }}"
           GATEWAY_DIGEST="${{ needs.build-gateway.outputs.digest }}"
 
           # Check if we have any digests to commit
-          if [ -z "$API_DIGEST" ] && [ -z "$WORKER_DIGEST" ] && [ -z "$UI_DIGEST" ] && [ -z "$GATEWAY_DIGEST" ]; then
+          if [ -z "$API_DIGEST" ] && [ -z "$WORKER_DIGEST" ] && [ -z "$UI_DIGEST" ] && [ -z "$LANDING_DIGEST" ] && [ -z "$GATEWAY_DIGEST" ]; then
             echo "No digests to commit"
             exit 0
           fi
@@ -370,6 +450,10 @@ jobs:
 
             if [ -n "$UI_DIGEST" ]; then
               kustomize edit set image pravara-ui=${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-ui@${UI_DIGEST}
+            fi
+
+            if [ -n "$LANDING_DIGEST" ]; then
+              kustomize edit set image pravara-landing=${{ env.REGISTRY_IMAGE_PREFIX }}/pravara-landing@${LANDING_DIGEST}
             fi
 
             if [ -n "$GATEWAY_DIGEST" ]; then
@@ -402,6 +486,7 @@ jobs:
       - changes
       - build-go
       - build-ui
+      - build-landing
       - build-gateway
     if: always()
     steps:
@@ -444,4 +529,5 @@ jobs:
           report_event "pravara-api" "${{ needs.build-go.result }}" "${{ needs.build-go.outputs.pravara-api-digest }}"
           report_event "telemetry-worker" "${{ needs.build-go.result }}" "${{ needs.build-go.outputs.telemetry-worker-digest }}"
           report_event "pravara-ui" "${{ needs.build-ui.result }}" "${{ needs.build-ui.outputs.digest }}"
+          report_event "pravara-landing" "${{ needs.build-landing.result }}" "${{ needs.build-landing.outputs.digest }}"
           report_event "pravara-gateway" "${{ needs.build-gateway.result }}" "${{ needs.build-gateway.outputs.digest }}"

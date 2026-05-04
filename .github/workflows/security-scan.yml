@@ -128,6 +128,9 @@ jobs:
           - service: pravara-ui
             context: apps/pravara-ui
             dockerfile: apps/pravara-ui/Dockerfile
+          - service: pravara-landing
+            context: apps/pravara-landing
+            dockerfile: apps/pravara-landing/Dockerfile
           - service: pravara-gateway
             context: apps/pravara-gateway
             dockerfile: apps/pravara-gateway/Dockerfile

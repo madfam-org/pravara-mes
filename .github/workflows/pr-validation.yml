@@ -260,6 +260,64 @@ jobs:
           NEXT_PUBLIC_JANUA_URL: https://auth.madfam.io
 
   # ===========================================================================
+  # Landing Linting
+  # ===========================================================================
+  landing-lint:
+    name: Landing Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pravara-landing
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/pravara-landing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Run unit tests
+        run: npm run test:run
+
+  # ===========================================================================
+  # Landing Build Verification
+  # ===========================================================================
+  landing-build:
+    name: Landing Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pravara-landing
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/pravara-landing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js landing
+        run: npm run build
+
+  # ===========================================================================
   # Kubernetes Manifest Validation
   # ===========================================================================
   k8s-validate:
