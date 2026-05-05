@@ -120,7 +120,12 @@ spec:
           type: RuntimeDefault
       containers:
         - name: centrifugo
-          image: centrifugo/centrifugo:v5
+          # Pin by sha256 digest — Kyverno require-image-digest cluster
+          # policy rejects tag-pinned refs in prod, blocking rollouts
+          # with CreateContainerConfigError. Tag preserved in comment
+          # so future bumps know what stream to refresh from.
+          # centrifugo/centrifugo:v5 captured 2026-05-05
+          image: centrifugo/centrifugo@sha256:90be10af3cb1c73c6b6cff8f6bcf02f8c0537d6aa1ed9f2cfe59a9e776a0c3d5
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
