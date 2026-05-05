@@ -43,6 +43,18 @@ spec:
           ports:
             - containerPort: 4500
               name: http
+          # The Go binary is built with CGO_ENABLED=0 (musl/distroless),
+          # so `os/user.Current()` (called transitively by lib/pq when no
+          # explicit user= is in the DSN) fails with:
+          # "user: Current requires cgo or $USER set in environment".
+          # The pod runs as runAsUser: 10001 with no /etc/passwd entry,
+          # so the libc fallback wouldn't help even if cgo were on.
+          # Setting $USER explicitly is the canonical Go fix per the
+          # error message and survives base-image swaps. CrashLoop
+          # observed 252 restarts in 21h prior to this fix.
+          env:
+            - name: USER
+              value: "pravara"
           envFrom:
             - configMapRef:
                 name: pravara-config
