@@ -68,12 +68,17 @@ patches:
     name: centrifugo
 
 images:
+# Pin upstream images by sha256 digest — Kyverno require-image-digest
+# rejects tag-pinned refs in prod. Tag preserved in comment so future
+# bumps know what stream to refresh from. Same fix landed in
+# infra/k8s/base/{centrifugo,emqx}.yaml via PR #26 but the prod
+# overlay's `images:` directive overrode the base references.
 - name: centrifugo/centrifugo
   newName: docker.io/centrifugo/centrifugo
-  newTag: v5
+  digest: sha256:90be10af3cb1c73c6b6cff8f6bcf02f8c0537d6aa1ed9f2cfe59a9e776a0c3d5  # was :v5
 - name: emqx/emqx
   newName: docker.io/emqx/emqx
-  newTag: "5.4"
+  digest: sha256:ca1a51d470ca667f7cc64ce77af7a7bb0e697223951f2880e9f74779fb651f1d  # was :5.4
 - name: postgres
   newName: docker.io/library/postgres
   newTag: 16-alpine
