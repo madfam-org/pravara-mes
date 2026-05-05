@@ -67,22 +67,22 @@ patches:
     kind: Deployment
     name: centrifugo
 
-images:
 # Pin upstream images by sha256 digest — Kyverno require-image-digest
 # rejects tag-pinned refs in prod. Tag preserved in comment so future
 # bumps know what stream to refresh from. Same fix landed in
 # infra/k8s/base/{centrifugo,emqx}.yaml via PR #26 but the prod
 # overlay's `images:` directive overrode the base references.
-- name: centrifugo/centrifugo
+images:
+- digest: sha256:90be10af3cb1c73c6b6cff8f6bcf02f8c0537d6aa1ed9f2cfe59a9e776a0c3d5
+  name: centrifugo/centrifugo
   newName: docker.io/centrifugo/centrifugo
-  digest: sha256:90be10af3cb1c73c6b6cff8f6bcf02f8c0537d6aa1ed9f2cfe59a9e776a0c3d5  # was :v5
-- name: emqx/emqx
+- digest: sha256:ca1a51d470ca667f7cc64ce77af7a7bb0e697223951f2880e9f74779fb651f1d
+  name: emqx/emqx
   newName: docker.io/emqx/emqx
-  digest: sha256:ca1a51d470ca667f7cc64ce77af7a7bb0e697223951f2880e9f74779fb651f1d  # was :5.4
 - name: postgres
   newName: docker.io/library/postgres
   newTag: 16-alpine
-- digest: sha256:3264237535cd5232befe527a124477dd6c6cd5ad528bddf366dc3122d9da6b84
+- digest: sha256:8e186afb8772be807bb3d0cddeb6def1c3b5c06f2b9a0735f516b450afe77c15
   name: pravara-admin
   newName: ghcr.io/madfam-org/pravara-admin
 - digest: sha256:0dc1d65dd6e9cd0382fffc042d810f62e671acff2ff027e8e0a00f1b5e3cbc1c
