@@ -11,7 +11,7 @@ embedded below.
 
 ## 1. What this repo is
 
-PravaraMES is the Manufacturing Execution System that owns fabrication-node routing and dispatch for all physical jobs in the MADFAM ecosystem. Universal machine connectivity (95%+ of digital fab machines), event-driven workflows, digital-twin simulation with real-time physics, and support for FDM, laser, CNC, and pen-plotting operations. Consumes accepted fab quotes from Cotiza and reports job status back into PhyneCRM for the client portal.
+PravaraMES is the Manufacturing Execution System that owns fabrication-node routing and dispatch for all physical jobs in the MADFAM ecosystem. Universal machine connectivity (95%+ of digital fab machines), event-driven workflows, digital-twin simulation with real-time physics, and support for FDM, laser, CNC, and pen-plotting operations. Consumes accepted fab quotes from Cotiza and reports job status back into PhyndCRM for the client portal.
 
 **Pillar**: Fabrication / MES (physical dispatch)
 **Type**: service
@@ -39,7 +39,7 @@ PravaraMES is the Manufacturing Execution System that owns fabrication-node rout
 
 ### Downstream consumers (this repo is consumed by)
 
-- phyne-crm (job status federation to client portal)
+- phynd-crm (job status federation to client portal)
 - forj (accepted orders route into fab jobs here)
 - karafiel (completed-job CFDI emission)
 
@@ -71,7 +71,7 @@ below is embedded here so this document stands alone.
 | **Cotiza** | `madfam-org/digifab-quoting` | MADFAM's quoting engine (fabrication + services) |
 | **Forgesight** | `madfam-org/forgesight` | Digital fabrication industry intelligence (pricing/vendor feed to Cotiza) |
 | **Pravara MES** | `madfam-org/pravara-mes` | Fabrication-node routing and dispatch (physical jobs) |
-| **PhyneCRM** | `madfam-org/phyne-crm` | Client-facing deliverables portal (single pane of glass per engagement) |
+| **PhyndCRM** | `madfam-org/phynd-crm` | Client-facing deliverables portal (single pane of glass per engagement) |
 | **Fortuna** | `madfam-org/fortuna` | Problem intelligence / zeitgeist analysis |
 | **Avala** | `madfam-org/avala` | Learning verification platform |
 
