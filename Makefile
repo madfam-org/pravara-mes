@@ -111,14 +111,26 @@ db-rollback:
 # ==================== Kubernetes ====================
 
 k8s-apply:
+	@if [ "$$LOCAL_K8S" != "yes" ]; then \
+		echo "Refusing raw kubectl apply. Production operations are Enclii-first; for a local/dev cluster re-run with LOCAL_K8S=yes."; \
+		exit 1; \
+	fi
 	kubectl apply -k infra/k8s/overlays/development
 
 k8s-delete:
+	@if [ "$$LOCAL_K8S" != "yes" ]; then \
+		echo "Refusing raw kubectl delete. Production operations are Enclii-first; for a local/dev cluster re-run with LOCAL_K8S=yes."; \
+		exit 1; \
+	fi
 	kubectl delete -k infra/k8s/overlays/development
 
 # ==================== Clean ====================
 
 clean:
+	@if [ "$$LOCAL_DESTRUCTIVE" != "yes" ]; then \
+		echo "Refusing destructive clean. Re-run with LOCAL_DESTRUCTIVE=yes."; \
+		exit 1; \
+	fi
 	rm -rf bin/
 	rm -rf apps/pravara-ui/.next
 	rm -rf apps/pravara-ui/node_modules/.cache

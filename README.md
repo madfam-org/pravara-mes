@@ -117,6 +117,11 @@ make dev
 
 ### Environment Variables
 
+The examples below are placeholders only. Production and staging values must be
+managed through Enclii secrets backed by Lockbox/Vault/ESO; do not paste live
+machine, database, broker, or webhook credentials into docs, issues, PRs, CI
+logs, or LLM chat.
+
 ```bash
 # API Configuration
 PRAVARA_ENVIRONMENT=development
@@ -127,7 +132,7 @@ PRAVARA_SERVER_PORT=4500
 PRAVARA_DATABASE_HOST=localhost
 PRAVARA_DATABASE_PORT=5432
 PRAVARA_DATABASE_USER=pravara
-PRAVARA_DATABASE_PASSWORD=pravara_secret
+PRAVARA_DATABASE_PASSWORD=replace-with-local-database-password
 PRAVARA_DATABASE_NAME=pravara_mes
 PRAVARA_DATABASE_SSLMODE=disable
 
@@ -139,7 +144,7 @@ PRAVARA_AUTH_AUDIENCE=pravara-api
 PRAVARA_MQTT_BROKER=localhost
 PRAVARA_MQTT_PORT=1883
 PRAVARA_MQTT_USERNAME=pravara
-PRAVARA_MQTT_PASSWORD=mqtt_secret
+PRAVARA_MQTT_PASSWORD=replace-with-local-mqtt-password
 
 # Redis
 PRAVARA_REDIS_HOST=localhost

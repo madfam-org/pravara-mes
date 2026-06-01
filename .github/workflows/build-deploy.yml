@@ -16,11 +16,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: pravara-mes-kustomization-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.25.9'
   NODE_VERSION: '22'
   REGISTRY: ghcr.io
   REGISTRY_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
@@ -230,7 +230,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=https://mes-api.madfam.io
             NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
-            NPM_MADFAM_TOKEN=${{ secrets.NPM_MADFAM_TOKEN }}
+          secrets: |
+            npm_madfam_token=${{ secrets.NPM_MADFAM_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           sbom: true

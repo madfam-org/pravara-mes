@@ -8,6 +8,10 @@ on:
       - "apps/admin/**"
       - "!infra/k8s/production/kustomization.yaml"
 
+concurrency:
+  group: pravara-mes-kustomization-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: madfam-org/pravara-admin
@@ -57,7 +61,8 @@ jobs:
             NEXT_PUBLIC_API_URL=https://mes-api.madfam.io
             NEXT_PUBLIC_OIDC_ISSUER=https://auth.madfam.io
             NEXT_PUBLIC_OIDC_CLIENT_ID=${{ secrets.OIDC_ADMIN_CLIENT_ID }}
-            NPM_MADFAM_TOKEN=${{ secrets.NPM_MADFAM_TOKEN }}
+          secrets: |
+            npm_madfam_token=${{ secrets.NPM_MADFAM_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

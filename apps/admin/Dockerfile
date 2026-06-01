@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # =============================================================================
 # PravaraMES Admin Dockerfile
 # Multi-stage build for optimized production image
@@ -14,11 +15,12 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 
-ARG NPM_MADFAM_TOKEN
-RUN echo "@janua:registry=https://npm.madfam.io/" > .npmrc && \
-    echo "//npm.madfam.io/:_authToken=${NPM_MADFAM_TOKEN}" >> .npmrc
-
-RUN npm ci
+RUN --mount=type=secret,id=npm_madfam_token \
+    TOKEN="$(cat /run/secrets/npm_madfam_token 2>/dev/null || true)" && \
+    echo "@janua:registry=https://npm.madfam.io/" > .npmrc && \
+    if [ -n "$TOKEN" ]; then echo "//npm.madfam.io/:_authToken=$TOKEN" >> .npmrc; fi && \
+    npm ci && \
+    rm -f .npmrc
 
 # -----------------------------------------------------------------------------
 # Stage 2: Build

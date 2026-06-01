@@ -28,6 +28,15 @@ redirect and should not become the source of truth again.
   emergencies when Enclii is unavailable or lacks an implemented adapter.
 - Record any missing Enclii adapter gap instead of normalizing raw production
   access in docs or runbooks.
+- Treat this repository as physical-operations software. Do not run commands,
+  scripts, tests, migrations, or adapters that can move machines, dispatch jobs,
+  open network access to fabrication equipment, or change machine credentials
+  unless the user explicitly asks and the command is scoped to simulator,
+  dry-run, or a named safe environment.
+- Keep environment examples placeholder-only. Do not add live credentials,
+  token-shaped examples, machine connection strings, base64-encoded secrets, or
+  production webhook URLs to docs, templates, workflow logs, issues, PRs, or
+  LLM chat.
 
 ## Repo entrypoints
 
