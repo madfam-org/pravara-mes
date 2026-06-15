@@ -2,6 +2,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { siteMetadata, siteViewport } from "./metadata";
+import { EcosystemBannerClient } from "@/components/EcosystemBannerClient";
 
 // Re-export so Next still discovers the metadata in the layout module —
 // the actual values live in ./metadata.ts so the SEO contract test can
@@ -20,8 +21,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
     >
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      <body className="min-h-screen bg-background text-foreground antialiased pb-8">
         {children}
+        <EcosystemBannerClient />
       </body>
     </html>
   );
