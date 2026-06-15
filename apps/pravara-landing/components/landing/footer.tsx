@@ -50,14 +50,6 @@ export function LandingFooter() {
               ]}
             />
             <FooterLinkGroup
-              title="Ecosistema MADFAM"
-              links={[
-                { label: "Karafiel · Compliance fiscal", href: "https://karafiel.mx" },
-                { label: "Tezca · Inteligencia legal", href: "https://tezca.mx" },
-                { label: "Dhanam · Finanzas", href: "https://dhan.am" },
-              ]}
-            />
-            <FooterLinkGroup
               title="Legal"
               links={[
                 { label: "Privacidad", href: "/legal/privacy" },
