@@ -71,14 +71,20 @@ export const MACHINE_TYPES = [
 // =============================================================================
 
 export type OrderStatusType =
+  // Canonical (DB enum, what the API returns)
   | "received"
+  | "validated"
+  | "scheduled"
+  | "in_progress"
+  | "completed"
+  | "shipped"
+  | "cancelled"
+  // Legacy aliases (accepted on write, normalized by the API)
   | "confirmed"
   | "in_production"
   | "quality_check"
   | "ready"
-  | "shipped"
-  | "delivered"
-  | "cancelled";
+  | "delivered";
 
 export const ORDER_STATUS_CONFIG: Record<
   OrderStatusType,
@@ -92,6 +98,26 @@ export const ORDER_STATUS_CONFIG: Record<
     label: "Received",
     colorClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     description: "Order has been received",
+  },
+  validated: {
+    label: "Validated",
+    colorClass: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    description: "Order has been validated",
+  },
+  scheduled: {
+    label: "Scheduled",
+    colorClass: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+    description: "Order is scheduled for production",
+  },
+  in_progress: {
+    label: "In Progress",
+    colorClass: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    description: "Order is in production",
+  },
+  completed: {
+    label: "Completed",
+    colorClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    description: "All production tasks are complete",
   },
   confirmed: {
     label: "Confirmed",

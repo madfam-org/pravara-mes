@@ -111,11 +111,27 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		)
 	}
 
+	// Order->task->machine loop services. These work with or without the
+	// publisher (events are best-effort), so they are wired unconditionally
+	// and gated only by config.
+	assignmentService := services.NewMachineAssignmentService(machineRepo, publisher, log)
+	rollupService := services.NewOrderRollupService(orderRepo, publisher, log)
+	taskHandler.SetRollup(rollupService)
+
+	if cfg.Orders.AutoDecompose {
+		decompositionService := services.NewOrderDecompositionService(
+			taskRepo, assignmentService, publisher, cfg.Orders.AutoAssign, log,
+		)
+		orderHandler.SetDecomposition(decompositionService)
+		webhookHandler.SetDecomposition(decompositionService)
+	}
+
 	// Set publisher on handlers that support events
 	if publisher != nil {
 		taskHandler.SetPublisher(publisher)
 		orderHandler.SetPublisher(publisher)
 		machineHandler.SetPublisher(publisher)
+		webhookHandler.SetPublisher(publisher)
 
 		// Initialize and set automation service for task-machine integration
 		automationService := services.NewAutomationService(taskRepo, machineRepo, taskCmdRepo, publisher, log)

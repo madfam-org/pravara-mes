@@ -40,17 +40,17 @@ func TestMachineRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "name", "code", "type", "description", "status",
-					"mqtt_topic", "location", "specifications", "metadata",
+					"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 					"last_heartbeat", "created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
-						"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
+						[]byte("[]"), "pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
 						time.Now(), time.Now(), time.Now(),
 					).
 					AddRow(
 						uuid.New(), uuid.New(), "Machine B", "MACH-002", "3D Printer", "Description B", types.MachineStatusOffline,
-						"pravara/machine/002", "Floor 2", []byte("{}"), []byte("{}"),
+						[]byte("[]"), "pravara/machine/002", "Floor 2", []byte("{}"), []byte("{}"),
 						nil, time.Now(), time.Now(),
 					)
 
@@ -73,12 +73,12 @@ func TestMachineRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "name", "code", "type", "description", "status",
-					"mqtt_topic", "location", "specifications", "metadata",
+					"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 					"last_heartbeat", "created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
-						"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
+						[]byte("[]"), "pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
 						time.Now(), time.Now(), time.Now(),
 					)
 
@@ -104,12 +104,12 @@ func TestMachineRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "name", "code", "type", "description", "status",
-					"mqtt_topic", "location", "specifications", "metadata",
+					"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 					"last_heartbeat", "created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
-						"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
+						[]byte("[]"), "pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
 						time.Now(), time.Now(), time.Now(),
 					)
 
@@ -133,12 +133,12 @@ func TestMachineRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "name", "code", "type", "description", "status",
-					"mqtt_topic", "location", "specifications", "metadata",
+					"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 					"last_heartbeat", "created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "Machine K", "MACH-011", "CNC Mill", "Description K", types.MachineStatusOnline,
-						"pravara/machine/011", "Floor 1", []byte("{}"), []byte("{}"),
+						[]byte("[]"), "pravara/machine/011", "Floor 1", []byte("{}"), []byte("{}"),
 						time.Now(), time.Now(), time.Now(),
 					)
 
@@ -206,11 +206,11 @@ func TestMachineRepository_GetByID(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "name", "code", "type", "description", "status",
-					"mqtt_topic", "location", "specifications", "metadata",
+					"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 					"last_heartbeat", "created_at", "updated_at",
 				}).AddRow(
 					id, uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
-					"pravara/machine/001", "Floor 1", specsJSON, metadataJSON,
+					[]byte("[]"), "pravara/machine/001", "Floor 1", specsJSON, metadataJSON,
 					time.Now(), time.Now(), time.Now(),
 				)
 
@@ -278,11 +278,11 @@ func TestMachineRepository_GetByCode(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "tenant_id", "name", "code", "type", "description", "status",
-		"mqtt_topic", "location", "specifications", "metadata",
+		"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 		"last_heartbeat", "created_at", "updated_at",
 	}).AddRow(
 		uuid.New(), uuid.New(), "Machine A", machineCode, "CNC Mill", "Description A", types.MachineStatusOnline,
-		"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
+		[]byte("[]"), "pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
 		time.Now(), time.Now(), time.Now(),
 	)
 
@@ -657,17 +657,17 @@ func TestMachineRepository_GetOfflineMachines(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "tenant_id", "name", "code", "type", "description", "status",
-		"mqtt_topic", "location", "specifications", "metadata",
+		"capabilities", "mqtt_topic", "location", "specifications", "metadata",
 		"last_heartbeat", "created_at", "updated_at",
 	}).
 		AddRow(
 			uuid.New(), uuid.New(), "Machine A", "MACH-001", "CNC Mill", "Description A", types.MachineStatusOnline,
-			"pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
+			[]byte("[]"), "pravara/machine/001", "Floor 1", []byte("{}"), []byte("{}"),
 			time.Now().Add(-10*time.Minute), time.Now(), time.Now(),
 		).
 		AddRow(
 			uuid.New(), uuid.New(), "Machine B", "MACH-002", "3D Printer", "Description B", types.MachineStatusOnline,
-			"pravara/machine/002", "Floor 2", []byte("{}"), []byte("{}"),
+			[]byte("[]"), "pravara/machine/002", "Floor 2", []byte("{}"), []byte("{}"),
 			nil, time.Now(), time.Now(),
 		)
 

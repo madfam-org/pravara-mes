@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -21,6 +23,8 @@ type WebhookHandler struct {
 	orderItemRepo *repositories.OrderItemRepository
 	log           *logrus.Logger
 	cotizaSecret  string
+	publisher     *pubsub.Publisher
+	decomposition *services.OrderDecompositionService
 }
 
 // NewWebhookHandler creates a new webhook handler.
@@ -31,6 +35,18 @@ func NewWebhookHandler(orderRepo *repositories.OrderRepository, orderItemRepo *r
 		log:           log,
 		cotizaSecret:  cotizaSecret,
 	}
+}
+
+// SetPublisher sets the event publisher for order lifecycle events.
+func (h *WebhookHandler) SetPublisher(p *pubsub.Publisher) {
+	h.publisher = p
+}
+
+// SetDecomposition enables order->task auto-decomposition for orders
+// arriving via the Cotiza webhook. Only set when orders.auto_decompose is
+// enabled in config.
+func (h *WebhookHandler) SetDecomposition(d *services.OrderDecompositionService) {
+	h.decomposition = d
 }
 
 // CotizaWebhookPayload represents the incoming payload from Cotiza.
@@ -222,6 +238,7 @@ func (h *WebhookHandler) handleCotizaOrderCreated(c *gin.Context, payload *Cotiz
 	}).Info("Order created from Cotiza webhook")
 
 	// Create order items
+	items := make([]types.OrderItem, 0, len(payload.Order.Items))
 	for _, item := range payload.Order.Items {
 		orderItem := &types.OrderItem{
 			OrderID:        order.ID,
@@ -236,7 +253,33 @@ func (h *WebhookHandler) handleCotizaOrderCreated(c *gin.Context, payload *Cotiz
 		if err := h.orderItemRepo.Create(ctx, orderItem); err != nil {
 			h.log.WithError(err).WithField("product_name", item.ProductName).Warn("Failed to create order item")
 			// Continue with other items
+			continue
 		}
+		items = append(items, *orderItem)
+	}
+
+	// Publish order.created through the outbox-backed publisher.
+	if h.publisher != nil {
+		if err := h.publisher.PublishEntityCreated(ctx, pubsub.NamespaceOrders, order.TenantID, pubsub.EventOrderCreated, pubsub.EntityCreatedData{
+			EntityID:   order.ID,
+			EntityType: "order",
+			Name:       order.CustomerName,
+			CreatedAt:  time.Now().UTC(),
+			Metadata: map[string]any{
+				"external_id": order.ExternalID,
+				"source":      "cotiza_webhook",
+				"item_count":  len(items),
+			},
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish order.created event")
+		}
+	}
+
+	// Auto-decompose the order into production tasks (config-gated).
+	// Idempotent per order: replayed webhooks return early on the existing
+	// external-ID check above and never reach this point.
+	if h.decomposition != nil && len(items) > 0 {
+		h.decomposition.DecomposeOrder(ctx, order, items, uuid.Nil)
 	}
 
 	return nil
@@ -284,7 +327,24 @@ func (h *WebhookHandler) handleCotizaOrderCancelled(c *gin.Context, payload *Cot
 		return nil
 	}
 
-	return h.orderRepo.UpdateStatus(ctx, order.ID, types.OrderStatusCancelled)
+	if err := h.orderRepo.UpdateStatus(ctx, order.ID, types.OrderStatusCancelled); err != nil {
+		return err
+	}
+
+	if h.publisher != nil && order.Status != types.OrderStatusCancelled {
+		if err := h.publisher.PublishOrderStatus(ctx, order.TenantID, pubsub.OrderStatusData{
+			OrderID:         order.ID,
+			OrderExternalID: order.ExternalID,
+			OldStatus:       string(order.Status),
+			NewStatus:       string(types.OrderStatusCancelled),
+			CustomerName:    order.CustomerName,
+			UpdatedAt:       time.Now().UTC(),
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish order.status_changed event")
+		}
+	}
+
+	return nil
 }
 
 func (h *WebhookHandler) verifySignature(body []byte, signature string) bool {

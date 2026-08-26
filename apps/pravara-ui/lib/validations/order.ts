@@ -1,17 +1,27 @@
 import { z } from "zod";
 
 /**
- * Order status enum with all possible states
+ * Order status enum with all accepted states.
+ *
+ * Canonical values (the DB enum, what the API returns): received, validated,
+ * scheduled, in_progress, completed, shipped, cancelled. The remaining names
+ * are legacy aliases the API accepts and normalizes on write.
  */
 export const orderStatusEnum = z.enum([
+  // Canonical (DB enum)
   "received",
+  "validated",
+  "scheduled",
+  "in_progress",
+  "completed",
+  "shipped",
+  "cancelled",
+  // Legacy aliases (normalized by the API)
   "confirmed",
   "in_production",
   "quality_check",
   "ready",
-  "shipped",
   "delivered",
-  "cancelled",
 ]);
 
 export type OrderStatus = z.infer<typeof orderStatusEnum>;

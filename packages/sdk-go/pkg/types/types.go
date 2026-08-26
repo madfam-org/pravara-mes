@@ -8,18 +8,71 @@ import (
 )
 
 // OrderStatus represents the lifecycle state of an order.
+//
+// The database enum `order_status` (001_genesis.up.sql) is the source of
+// truth: received, validated, scheduled, in_progress, completed, shipped,
+// cancelled. Any other value accepted at the API boundary is an alias and
+// MUST be normalized with NormalizeOrderStatus before it reaches the
+// database, or Postgres rejects the write with an invalid-enum error.
 type OrderStatus string
 
 const (
-	OrderStatusReceived     OrderStatus = "received"
-	OrderStatusConfirmed    OrderStatus = "confirmed"
-	OrderStatusInProduction OrderStatus = "in_production"
-	OrderStatusQualityCheck OrderStatus = "quality_check"
-	OrderStatusReady        OrderStatus = "ready"
-	OrderStatusShipped      OrderStatus = "shipped"
-	OrderStatusDelivered    OrderStatus = "delivered"
-	OrderStatusCancelled    OrderStatus = "cancelled"
+	// Canonical values (match the order_status DB enum).
+	OrderStatusReceived   OrderStatus = "received"
+	OrderStatusValidated  OrderStatus = "validated"
+	OrderStatusScheduled  OrderStatus = "scheduled"
+	OrderStatusInProgress OrderStatus = "in_progress"
+	OrderStatusCompleted  OrderStatus = "completed"
+	OrderStatusShipped    OrderStatus = "shipped"
+	OrderStatusCancelled  OrderStatus = "cancelled"
+
+	// Legacy SDK/UI aliases. Kept for backward compatibility with existing
+	// clients; normalized onto canonical values at the API boundary.
+	OrderStatusConfirmed    OrderStatus = "confirmed"     // -> validated
+	OrderStatusInProduction OrderStatus = "in_production" // -> in_progress
+	OrderStatusQualityCheck OrderStatus = "quality_check" // -> in_progress
+	OrderStatusReady        OrderStatus = "ready"         // -> completed
+	OrderStatusDelivered    OrderStatus = "delivered"     // -> shipped
 )
+
+// orderStatusAliases maps legacy SDK/UI order-status names onto the
+// canonical DB enum values. "processing" appears in older API docs and is
+// included for completeness.
+var orderStatusAliases = map[OrderStatus]OrderStatus{
+	OrderStatusConfirmed:    OrderStatusValidated,
+	OrderStatusInProduction: OrderStatusInProgress,
+	"processing":            OrderStatusInProgress,
+	OrderStatusQualityCheck: OrderStatusInProgress,
+	OrderStatusReady:        OrderStatusCompleted,
+	OrderStatusDelivered:    OrderStatusShipped,
+}
+
+// canonicalOrderStatuses is the set of values the order_status DB enum accepts.
+var canonicalOrderStatuses = map[OrderStatus]bool{
+	OrderStatusReceived:   true,
+	OrderStatusValidated:  true,
+	OrderStatusScheduled:  true,
+	OrderStatusInProgress: true,
+	OrderStatusCompleted:  true,
+	OrderStatusShipped:    true,
+	OrderStatusCancelled:  true,
+}
+
+// NormalizeOrderStatus maps any accepted order-status name (canonical or
+// legacy alias) onto its canonical DB enum value. Unknown values are
+// returned unchanged so callers can surface a validation error.
+func NormalizeOrderStatus(s OrderStatus) OrderStatus {
+	if canonical, ok := orderStatusAliases[s]; ok {
+		return canonical
+	}
+	return s
+}
+
+// IsCanonicalOrderStatus reports whether s is a value the order_status DB
+// enum accepts. Call after NormalizeOrderStatus to validate client input.
+func IsCanonicalOrderStatus(s OrderStatus) bool {
+	return canonicalOrderStatuses[s]
+}
 
 // TaskStatus represents the Kanban board state of a task.
 type TaskStatus string
@@ -72,19 +125,23 @@ type User struct {
 
 // Order represents a manufacturing order (typically from Cotiza).
 type Order struct {
-	ID            uuid.UUID      `json:"id"`
-	TenantID      uuid.UUID      `json:"tenant_id"`
-	ExternalID    string         `json:"external_id,omitempty"`
-	CustomerName  string         `json:"customer_name"`
-	CustomerEmail string         `json:"customer_email,omitempty"`
-	Status        OrderStatus    `json:"status"`
-	Priority      int            `json:"priority"`
-	DueDate       *time.Time     `json:"due_date,omitempty"`
-	TotalAmount   float64        `json:"total_amount,omitempty"`
-	Currency      string         `json:"currency"`
-	Metadata      map[string]any `json:"metadata,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID            uuid.UUID   `json:"id"`
+	TenantID      uuid.UUID   `json:"tenant_id"`
+	ExternalID    string      `json:"external_id,omitempty"`
+	CustomerName  string      `json:"customer_name"`
+	CustomerEmail string      `json:"customer_email,omitempty"`
+	Status        OrderStatus `json:"status"`
+	Priority      int         `json:"priority"`
+	DueDate       *time.Time  `json:"due_date,omitempty"`
+	TotalAmount   float64     `json:"total_amount,omitempty"`
+	Currency      string      `json:"currency"`
+	// ShippingAddress holds delivery details as free-form JSON
+	// (e.g. line1, line2, city, state, postal_code, country, contact_name,
+	// contact_phone). Backed by orders.shipping_address (migration 025).
+	ShippingAddress map[string]any `json:"shipping_address,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 // OrderItem represents a line item within an order.

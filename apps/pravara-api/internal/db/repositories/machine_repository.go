@@ -38,7 +38,7 @@ type MachineFilter struct {
 func (r *MachineRepository) List(ctx context.Context, filter MachineFilter) ([]types.Machine, int, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
-		       mqtt_topic, location, specifications, metadata,
+		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
 		WHERE 1=1
@@ -106,7 +106,7 @@ func (r *MachineRepository) List(ctx context.Context, filter MachineFilter) ([]t
 func (r *MachineRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
-		       mqtt_topic, location, specifications, metadata,
+		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
 		WHERE id = $1
@@ -130,7 +130,7 @@ func (r *MachineRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.M
 func (r *MachineRepository) GetByCode(ctx context.Context, code string) (*types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
-		       mqtt_topic, location, specifications, metadata,
+		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
 		WHERE code = $1
@@ -156,8 +156,8 @@ func (r *MachineRepository) Create(ctx context.Context, machine *types.Machine) 
 	query := `
 		INSERT INTO machines (
 			id, tenant_id, name, code, type, description, status,
-			mqtt_topic, location, specifications, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			capabilities, mqtt_topic, location, specifications, metadata
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING created_at, updated_at
 	`
 
@@ -165,6 +165,7 @@ func (r *MachineRepository) Create(ctx context.Context, machine *types.Machine) 
 		machine.ID = uuid.New()
 	}
 
+	capabilitiesJSON := marshalCapabilities(machine.Capabilities)
 	specificationsJSON, _ := json.Marshal(machine.Specifications)
 	metadataJSON, _ := json.Marshal(machine.Metadata)
 
@@ -181,8 +182,8 @@ func (r *MachineRepository) Create(ctx context.Context, machine *types.Machine) 
 
 	err := r.db.QueryRowContext(ctx, query,
 		machine.ID, machine.TenantID, machine.Name, machine.Code,
-		machine.Type, description, machine.Status, mqttTopic,
-		location, specificationsJSON, metadataJSON,
+		machine.Type, description, machine.Status, capabilitiesJSON,
+		mqttTopic, location, specificationsJSON, metadataJSON,
 	).Scan(&machine.CreatedAt, &machine.UpdatedAt)
 
 	if err != nil {
@@ -204,14 +205,16 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 			type = $4,
 			description = $5,
 			status = $6,
-			mqtt_topic = $7,
-			location = $8,
-			specifications = $9,
-			metadata = $10
+			capabilities = $7,
+			mqtt_topic = $8,
+			location = $9,
+			specifications = $10,
+			metadata = $11
 		WHERE id = $1
 		RETURNING updated_at
 	`
 
+	capabilitiesJSON := marshalCapabilities(machine.Capabilities)
 	specificationsJSON, _ := json.Marshal(machine.Specifications)
 	metadataJSON, _ := json.Marshal(machine.Metadata)
 
@@ -228,8 +231,8 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 
 	err := r.db.QueryRowContext(ctx, query,
 		machine.ID, machine.Name, machine.Code, machine.Type,
-		description, machine.Status, mqttTopic, location,
-		specificationsJSON, metadataJSON,
+		description, machine.Status, capabilitiesJSON, mqttTopic,
+		location, specificationsJSON, metadataJSON,
 	).Scan(&machine.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -244,7 +247,8 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 
 // UpdateStatus updates only the status field of a machine.
 // This is more efficient than a full Update when only the status changes.
-// Valid statuses include: online, offline, busy, error, maintenance.
+// Valid statuses (machine_status enum): idle, running, setup, maintenance,
+// offline, error, plus 'online' (added by migration 026).
 // Returns an error if the machine is not found.
 func (r *MachineRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status types.MachineStatus) error {
 	query := `UPDATE machines SET status = $2 WHERE id = $1`
@@ -309,7 +313,7 @@ func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold time.Duration) ([]types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
-		       mqtt_topic, location, specifications, metadata,
+		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
 		WHERE status = 'online'
@@ -341,12 +345,12 @@ func (r *MachineRepository) scanMachine(rows *sql.Rows) (*types.Machine, error) 
 	var machine types.Machine
 	var description, mqttTopic, location sql.NullString
 	var lastHeartbeat sql.NullTime
-	var specificationsJSON, metadataJSON []byte
+	var capabilitiesJSON, specificationsJSON, metadataJSON []byte
 
 	err := rows.Scan(
 		&machine.ID, &machine.TenantID, &machine.Name, &machine.Code,
-		&machine.Type, &description, &machine.Status, &mqttTopic,
-		&location, &specificationsJSON, &metadataJSON,
+		&machine.Type, &description, &machine.Status, &capabilitiesJSON,
+		&mqttTopic, &location, &specificationsJSON, &metadataJSON,
 		&lastHeartbeat, &machine.CreatedAt, &machine.UpdatedAt,
 	)
 	if err != nil {
@@ -365,6 +369,9 @@ func (r *MachineRepository) scanMachine(rows *sql.Rows) (*types.Machine, error) 
 	if lastHeartbeat.Valid {
 		machine.LastHeartbeat = &lastHeartbeat.Time
 	}
+	if len(capabilitiesJSON) > 0 {
+		json.Unmarshal(capabilitiesJSON, &machine.Capabilities)
+	}
 	if len(specificationsJSON) > 0 {
 		json.Unmarshal(specificationsJSON, &machine.Specifications)
 	}
@@ -379,12 +386,12 @@ func (r *MachineRepository) scanMachineRow(row *sql.Row) (*types.Machine, error)
 	var machine types.Machine
 	var description, mqttTopic, location sql.NullString
 	var lastHeartbeat sql.NullTime
-	var specificationsJSON, metadataJSON []byte
+	var capabilitiesJSON, specificationsJSON, metadataJSON []byte
 
 	err := row.Scan(
 		&machine.ID, &machine.TenantID, &machine.Name, &machine.Code,
-		&machine.Type, &description, &machine.Status, &mqttTopic,
-		&location, &specificationsJSON, &metadataJSON,
+		&machine.Type, &description, &machine.Status, &capabilitiesJSON,
+		&mqttTopic, &location, &specificationsJSON, &metadataJSON,
 		&lastHeartbeat, &machine.CreatedAt, &machine.UpdatedAt,
 	)
 	if err != nil {
@@ -403,6 +410,9 @@ func (r *MachineRepository) scanMachineRow(row *sql.Row) (*types.Machine, error)
 	if lastHeartbeat.Valid {
 		machine.LastHeartbeat = &lastHeartbeat.Time
 	}
+	if len(capabilitiesJSON) > 0 {
+		json.Unmarshal(capabilitiesJSON, &machine.Capabilities)
+	}
 	if len(specificationsJSON) > 0 {
 		json.Unmarshal(specificationsJSON, &machine.Specifications)
 	}
@@ -411,4 +421,104 @@ func (r *MachineRepository) scanMachineRow(row *sql.Row) (*types.Machine, error)
 	}
 
 	return &machine, nil
+}
+
+// marshalCapabilities serializes the capabilities slice for the JSONB
+// column, defaulting to an empty JSON array (the column default) so nil
+// slices never write SQL NULL.
+func marshalCapabilities(capabilities []string) []byte {
+	if capabilities == nil {
+		return []byte("[]")
+	}
+	b, err := json.Marshal(capabilities)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
+}
+
+// AssignmentCandidate couples a machine with the scheduling-load statistics
+// used by capability-based auto-assignment.
+type AssignmentCandidate struct {
+	Machine        types.Machine
+	ActiveTasks    int        // tasks in backlog/queued/in_progress on this machine
+	LastAssignedAt *time.Time // most recent task created for this machine (nil = never)
+}
+
+// ListAssignmentCandidates returns the tenant's machines that are eligible
+// for automated task assignment: not in error or maintenance, and with an
+// MQTT topic configured (required for command dispatch). Capability
+// filtering happens in the assignment service; this query only gathers the
+// candidate pool plus per-machine load statistics.
+//
+// The query is tenant-scoped both explicitly (WHERE tenant_id) and via RLS.
+// It deliberately selects only columns guaranteed by 001_genesis so it
+// cannot regress against older production schemas.
+func (r *MachineRepository) ListAssignmentCandidates(ctx context.Context, tenantID uuid.UUID) ([]AssignmentCandidate, error) {
+	query := `
+		SELECT m.id, m.tenant_id, m.name, m.code, m.type, m.status,
+		       m.capabilities, m.mqtt_topic, m.last_heartbeat,
+		       m.created_at, m.updated_at,
+		       COALESCE(t.active_tasks, 0) AS active_tasks,
+		       t.last_assigned_at
+		FROM machines m
+		LEFT JOIN (
+			SELECT machine_id,
+			       COUNT(*) FILTER (WHERE status IN ('backlog', 'queued', 'in_progress')) AS active_tasks,
+			       MAX(created_at) AS last_assigned_at
+			FROM tasks
+			WHERE machine_id IS NOT NULL
+			GROUP BY machine_id
+		) t ON t.machine_id = m.id
+		WHERE m.tenant_id = $1
+		  AND m.status NOT IN ('error', 'maintenance')
+		  AND m.mqtt_topic IS NOT NULL
+		  AND m.mqtt_topic <> ''
+		ORDER BY m.name ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query assignment candidates: %w", err)
+	}
+	defer rows.Close()
+
+	var candidates []AssignmentCandidate
+	for rows.Next() {
+		var c AssignmentCandidate
+		var mqttTopic sql.NullString
+		var lastHeartbeat, lastAssigned sql.NullTime
+		var capabilitiesJSON []byte
+		var machineType sql.NullString
+
+		err := rows.Scan(
+			&c.Machine.ID, &c.Machine.TenantID, &c.Machine.Name, &c.Machine.Code,
+			&machineType, &c.Machine.Status, &capabilitiesJSON, &mqttTopic,
+			&lastHeartbeat, &c.Machine.CreatedAt, &c.Machine.UpdatedAt,
+			&c.ActiveTasks, &lastAssigned,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan assignment candidate: %w", err)
+		}
+
+		if machineType.Valid {
+			c.Machine.Type = machineType.String
+		}
+		if mqttTopic.Valid {
+			c.Machine.MQTTTopic = mqttTopic.String
+		}
+		if lastHeartbeat.Valid {
+			c.Machine.LastHeartbeat = &lastHeartbeat.Time
+		}
+		if lastAssigned.Valid {
+			c.LastAssignedAt = &lastAssigned.Time
+		}
+		if len(capabilitiesJSON) > 0 {
+			json.Unmarshal(capabilitiesJSON, &c.Machine.Capabilities)
+		}
+
+		candidates = append(candidates, c)
+	}
+
+	return candidates, rows.Err()
 }

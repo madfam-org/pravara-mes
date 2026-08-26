@@ -33,6 +33,10 @@ const (
 	EventTaskJobCompleted EventType = "task.job_completed" // Machine completed job
 	EventTaskJobFailed    EventType = "task.job_failed"    // Machine job failed
 	EventTaskBlocked      EventType = "task.blocked"       // Task blocked due to machine error
+	// EventTaskAssignmentFailed fires when capability-based auto-assignment
+	// found no eligible machine for a task; the task stays unassigned and
+	// waits for a human. Fail visible, not silent.
+	EventTaskAssignmentFailed EventType = "task.assignment_failed"
 
 	// Order events
 	EventOrderCreated EventType = "order.created"
@@ -207,6 +211,18 @@ type TaskAssignData struct {
 	AssigneeName *string    `json:"assignee_name,omitempty"`
 	AssignedBy   uuid.UUID  `json:"assigned_by"`
 	AssignedAt   time.Time  `json:"assigned_at"`
+}
+
+// TaskAssignmentFailedData contains data for task.assignment_failed events.
+type TaskAssignmentFailedData struct {
+	TaskID               uuid.UUID  `json:"task_id"`
+	TaskTitle            string     `json:"task_title"`
+	OrderID              *uuid.UUID `json:"order_id,omitempty"`
+	OrderItemID          *uuid.UUID `json:"order_item_id,omitempty"`
+	RequiredCapabilities []string   `json:"required_capabilities"`
+	CandidatesEvaluated  int        `json:"candidates_evaluated"`
+	Reason               string     `json:"reason"`
+	FailedAt             time.Time  `json:"failed_at"`
 }
 
 // TaskJobData contains data for task job lifecycle events.

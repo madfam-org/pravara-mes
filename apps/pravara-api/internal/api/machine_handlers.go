@@ -38,11 +38,15 @@ func NewMachineHandler(repo *repositories.MachineRepository, telemetryRepo *repo
 }
 
 // CreateMachineRequest represents the request body for creating a machine.
+// Capabilities is a list of normalized capability tokens (e.g.
+// ["3d_printing", "pla"]) matched against task requirements by the
+// capability-based auto-assignment (see services.MachineAssignmentService).
 type CreateMachineRequest struct {
 	Name           string         `json:"name" binding:"required"`
 	Code           string         `json:"code" binding:"required"`
 	Type           string         `json:"type" binding:"required"`
 	Description    string         `json:"description"`
+	Capabilities   []string       `json:"capabilities"`
 	MQTTTopic      string         `json:"mqtt_topic"`
 	Location       string         `json:"location"`
 	Specifications map[string]any `json:"specifications"`
@@ -56,6 +60,7 @@ type UpdateMachineRequest struct {
 	Type           string         `json:"type"`
 	Description    string         `json:"description"`
 	Status         string         `json:"status"`
+	Capabilities   []string       `json:"capabilities"`
 	MQTTTopic      string         `json:"mqtt_topic"`
 	Location       string         `json:"location"`
 	Specifications map[string]any `json:"specifications"`
@@ -77,7 +82,7 @@ type SendCommandRequest struct {
 // @Produce json
 // @Param limit query int false "Number of results per page" default(50)
 // @Param offset query int false "Offset for pagination" default(0)
-// @Param status query string false "Filter by machine status" Enums(online, offline, busy, maintenance, error)
+// @Param status query string false "Filter by machine status (machine_status DB enum + online)" Enums(idle, running, setup, maintenance, offline, error, online)
 // @Param type query string false "Filter by machine type"
 // @Success 200 {object} ListResponse "Paginated machine list"
 // @Failure 401 {object} map[string]string "Unauthorized"
@@ -169,7 +174,7 @@ func (h *MachineHandler) GetByID(c *gin.Context) {
 
 // Create creates a new machine.
 // @Summary Create a new machine
-// @Description Creates a new machine in offline status
+// @Description Creates a new machine in offline status. Capabilities is a list of capability tokens (e.g. 3d_printing, pla) used by capability-based task auto-assignment.
 // @Tags machines
 // @Accept json
 // @Produce json
@@ -219,6 +224,7 @@ func (h *MachineHandler) Create(c *gin.Context) {
 		Type:           req.Type,
 		Description:    req.Description,
 		Status:         types.MachineStatusOffline,
+		Capabilities:   req.Capabilities,
 		MQTTTopic:      req.MQTTTopic,
 		Location:       req.Location,
 		Specifications: req.Specifications,
@@ -240,7 +246,7 @@ func (h *MachineHandler) Create(c *gin.Context) {
 
 // Update modifies an existing machine.
 // @Summary Update a machine
-// @Description Updates machine configuration and status
+// @Description Updates machine configuration and status, including the capabilities list used by capability-based task auto-assignment.
 // @Tags machines
 // @Accept json
 // @Produce json
@@ -314,6 +320,9 @@ func (h *MachineHandler) Update(c *gin.Context) {
 	}
 	if req.Status != "" {
 		machine.Status = types.MachineStatus(req.Status)
+	}
+	if req.Capabilities != nil {
+		machine.Capabilities = req.Capabilities
 	}
 	if req.MQTTTopic != "" {
 		machine.MQTTTopic = req.MQTTTopic

@@ -91,6 +91,223 @@
                 }
             }
         },
+        "/analytics/oee": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated OEE snapshots with optional machine and date range filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Get OEE data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "day",
+                        "description": "Aggregation interval: day, week, month",
+                        "name": "interval",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated OEE snapshot list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/oee/compute": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Admin trigger to compute OEE for a specific machine and date, or all machines if machine_id is omitted",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Compute OEE",
+                "parameters": [
+                    {
+                        "description": "Computation request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ComputeOEERequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Computed OEE snapshot(s)",
+                        "schema": {}
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/oee/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns aggregated OEE metrics across all machines for a date range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Get fleet OEE summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (RFC3339)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (RFC3339)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Fleet OEE summary",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/billing/usage": {
             "get": {
                 "security": [
@@ -225,6 +442,431 @@
                 }
             }
         },
+        "/genealogy": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of product genealogy records with optional filtering",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "List genealogy records",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by product definition ID (UUID)",
+                        "name": "product_definition_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order ID (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task ID (UUID)",
+                        "name": "task_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (draft, in_progress, completed, sealed)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by serial number",
+                        "name": "serial_number",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by lot number",
+                        "name": "lot_number",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated genealogy list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new product genealogy record",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "Create a genealogy record",
+                "parameters": [
+                    {
+                        "description": "Genealogy record data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateGenealogyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created genealogy record",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductGenealogy"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/genealogy/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single product genealogy record with all details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "Get genealogy record by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Genealogy ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Genealogy record details",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductGenealogy"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Record not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates genealogy record fields",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "Update a genealogy record",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Genealogy ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Genealogy record update data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateGenealogyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated genealogy record",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductGenealogy"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Record not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/genealogy/{id}/seal": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Computes a cryptographic hash and seals the genealogy record, making it immutable",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "Seal a genealogy record",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Genealogy ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Seal request with sealed_by user ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SealGenealogyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Seal confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or already sealed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Record not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/genealogy/{id}/tree": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the complete genealogy tree including product definition, BOM, and material consumption",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genealogy"
+                ],
+                "summary": "Get genealogy tree",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Genealogy ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Genealogy tree",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.GenealogyTree"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Record not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns detailed health status including database connection and runtime metrics",
@@ -338,14 +980,16 @@
                     },
                     {
                         "enum": [
-                            "online",
-                            "offline",
-                            "busy",
+                            "idle",
+                            "running",
+                            "setup",
                             "maintenance",
-                            "error"
+                            "offline",
+                            "error",
+                            "online"
                         ],
                         "type": "string",
-                        "description": "Filter by machine status",
+                        "description": "Filter by machine status (machine_status DB enum + online)",
                         "name": "status",
                         "in": "query"
                     },
@@ -389,7 +1033,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new machine in offline status",
+                "description": "Creates a new machine in offline status. Capabilities is a list of capability tokens (e.g. 3d_printing, pla) used by capability-based task auto-assignment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -523,7 +1167,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates machine configuration and status",
+                "description": "Updates machine configuration and status, including the capabilities list used by capability-based task auto-assignment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -807,6 +1451,59 @@
                 }
             }
         },
+        "/machines/{id}/maintenance": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all maintenance work orders for a specific machine",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Get machine maintenance",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Machine ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Machine maintenance data",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/machines/{id}/telemetry": {
             "get": {
                 "security": [
@@ -894,6 +1591,674 @@
                 }
             }
         },
+        "/maintenance/schedules": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated list of maintenance schedules with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "List maintenance schedules",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by trigger type",
+                        "name": "trigger_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by active status (true/false)",
+                        "name": "is_active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of schedules",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new maintenance schedule for a machine",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Create maintenance schedule",
+                "parameters": [
+                    {
+                        "description": "Schedule data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created schedule",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/maintenance/schedules/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single maintenance schedule by its unique identifier",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Get maintenance schedule by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Schedule details",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Schedule not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Modifies an existing maintenance schedule",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Update maintenance schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated schedule data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated schedule",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Schedule not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently removes a maintenance schedule",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Delete maintenance schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Schedule not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/maintenance/work-orders": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated list of work orders with optional filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "List maintenance work orders",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by machine ID (UUID)",
+                        "name": "machine_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by schedule ID (UUID)",
+                        "name": "schedule_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by assigned user ID (UUID)",
+                        "name": "assigned_to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of work orders",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new maintenance work order",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Create maintenance work order",
+                "parameters": [
+                    {
+                        "description": "Work order data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateWorkOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created work order",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceWorkOrder"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/maintenance/work-orders/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single work order by its unique identifier",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Get maintenance work order by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Work Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Work order details",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceWorkOrder"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Modifies an existing maintenance work order",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Update maintenance work order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Work Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated work order data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateWorkOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated work order",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceWorkOrder"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/maintenance/work-orders/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks a work order as completed, advances the associated schedule",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "maintenance"
+                ],
+                "summary": "Complete maintenance work order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Work Order ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Completion data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CompleteWorkOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Completion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID or validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/orders": {
             "get": {
                 "security": [
@@ -927,15 +2292,15 @@
                     {
                         "enum": [
                             "received",
-                            "processing",
-                            "quality_check",
-                            "ready",
+                            "validated",
+                            "scheduled",
+                            "in_progress",
+                            "completed",
                             "shipped",
-                            "delivered",
                             "cancelled"
                         ],
                         "type": "string",
-                        "description": "Filter by order status",
+                        "description": "Filter by order status (canonical DB enum; legacy aliases confirmed/processing/in_production/quality_check/ready/delivered are normalized)",
                         "name": "status",
                         "in": "query"
                     },
@@ -991,7 +2356,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new order in received status",
+                "description": "Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1004,7 +2369,7 @@
                 "summary": "Create a new order",
                 "parameters": [
                     {
-                        "description": "Order creation data",
+                        "description": "Order creation data (optionally with inline items and shipping_address)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1015,7 +2380,7 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created order",
+                        "description": "Created order (or {order, items, tasks_created} when inline items were supplied)",
                         "schema": {
                             "$ref": "#/definitions/types.Order"
                         }
@@ -1116,7 +2481,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates order fields including status",
+                "description": "Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1153,7 +2518,7 @@
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "Validation error or invalid status",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1311,7 +2676,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Adds a new line item to an existing order",
+                "description": "Adds a new line item to an existing order. When orders.auto_decompose is enabled the item also spawns its production task (with capability-based machine auto-assignment when orders.auto_assign is enabled).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1358,6 +2723,547 @@
                     },
                     "404": {
                         "description": "Order not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of product definitions with optional filtering",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "List product definitions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Number of results per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by category",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active status",
+                        "name": "is_active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by SKU or name",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated product list",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new product definition with BOM support",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Create a new product definition",
+                "parameters": [
+                    {
+                        "description": "Product definition data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created product definition",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single product definition with all details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Get product definition by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Product definition details",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates product definition fields",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Update a product definition",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Product definition update data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated product definition",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a product definition from the system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Delete a product definition",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/bom": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all BOM items for a product definition",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Get product BOM",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "BOM items list",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/bom/items": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a new bill of materials item to a product definition",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Add BOM item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "BOM item data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateBOMItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created BOM item",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.BOMItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/bom/items/{itemId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a BOM item from a product definition",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Delete BOM item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Definition ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "BOM Item ID (UUID)",
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deletion confirmation",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "BOM item not found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3441,76 +5347,6 @@
                 }
             }
         },
-        "/webhooks/dhanam": {
-            "post": {
-                "description": "Receives invoice events from Dhanam billing service, validates HMAC-SHA256 signature, and stores the invoice with RLS tenant isolation",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "webhooks"
-                ],
-                "summary": "Receive Dhanam invoice webhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "HMAC-SHA256 signature for payload verification",
-                        "name": "X-Dhanam-Signature",
-                        "in": "header"
-                    },
-                    {
-                        "description": "Invoice webhook payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_api.DhanamWebhookPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Invoice processed and stored",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid payload",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing HMAC signature",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Processing error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/webhooks/cotiza": {
             "post": {
                 "description": "Processes order events from Cotiza Studio (created, updated, cancelled)",
@@ -3583,6 +5419,361 @@
         }
     },
     "definitions": {
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.BOMItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "estimated_cost": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_name": {
+                    "type": "string"
+                },
+                "product_definition_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "supplier": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.GenealogyTree": {
+            "type": "object",
+            "properties": {
+                "bom_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.BOMItem"
+                    }
+                },
+                "genealogy": {
+                    "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductGenealogy"
+                },
+                "materials_consumed": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialConsumption"
+                    }
+                },
+                "product_definition": {
+                    "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule": {
+            "type": "object",
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "condition_metric": {
+                    "type": "string"
+                },
+                "condition_threshold": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "interval_cycles": {
+                    "type": "integer"
+                },
+                "interval_days": {
+                    "type": "integer"
+                },
+                "interval_hours": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_done_at": {
+                    "type": "string"
+                },
+                "last_done_cycles": {
+                    "type": "integer"
+                },
+                "last_done_hours": {
+                    "type": "number"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_due_at": {
+                    "type": "string"
+                },
+                "next_due_cycles": {
+                    "type": "integer"
+                },
+                "next_due_hours": {
+                    "type": "number"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "trigger_type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceWorkOrder": {
+            "type": "object",
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "parts_used": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "schedule_id": {
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "work_order_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialConsumption": {
+            "type": "object",
+            "properties": {
+                "batch_lot_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "genealogy_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_name": {
+                    "type": "string"
+                },
+                "quantity_consumed": {
+                    "type": "number"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition": {
+            "type": "object",
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parametric_specs": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductGenealogy": {
+            "type": "object",
+            "properties": {
+                "birth_cert_url": {
+                    "type": "string"
+                },
+                "certificate_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inspection_id": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "product_definition_id": {
+                    "type": "string"
+                },
+                "seal_hash": {
+                    "type": "string"
+                },
+                "sealed_at": {
+                    "type": "string"
+                },
+                "sealed_by": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.AssignTaskRequest": {
             "type": "object",
             "properties": {
@@ -3629,6 +5820,14 @@
                 }
             }
         },
+        "internal_api.CompleteWorkOrderRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.ComponentHealth": {
             "type": "object",
             "properties": {
@@ -3637,6 +5836,20 @@
                     "additionalProperties": {}
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ComputeOEERequest": {
+            "type": "object",
+            "required": [
+                "date"
+            ],
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "machine_id": {
                     "type": "string"
                 }
             }
@@ -3783,34 +5996,36 @@
                 }
             }
         },
-        "internal_api.DhanamWebhookPayload": {
+        "internal_api.CreateBOMItemRequest": {
             "type": "object",
             "required": [
-                "event",
-                "tenant_id",
-                "invoice_id"
+                "material_name",
+                "quantity",
+                "unit"
             ],
             "properties": {
-                "event": {
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "invoice_id": {
-                    "type": "string"
-                },
-                "amount_cents": {
-                    "type": "integer"
-                },
                 "currency": {
                     "type": "string"
                 },
-                "line_items": {
-                    "type": "array",
-                    "items": {}
+                "estimated_cost": {
+                    "type": "number"
                 },
-                "issued_at": {
+                "material_code": {
+                    "type": "string"
+                },
+                "material_name": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "supplier": {
+                    "type": "string"
+                },
+                "unit": {
                     "type": "string"
                 }
             }
@@ -3922,6 +6137,45 @@
                 }
             }
         },
+        "internal_api.CreateGenealogyRequest": {
+            "type": "object",
+            "properties": {
+                "certificate_id": {
+                    "type": "string"
+                },
+                "inspection_id": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "product_definition_id": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.CreateInspectionRequest": {
             "type": "object",
             "required": [
@@ -3971,6 +6225,12 @@
                 "type"
             ],
             "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "code": {
                     "type": "string"
                 },
@@ -4049,6 +6309,12 @@
                 "external_id": {
                     "type": "string"
                 },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.CreateOrderItemRequest"
+                    }
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {}
@@ -4056,8 +6322,117 @@
                 "priority": {
                     "type": "integer"
                 },
+                "shipping_address": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "total_amount": {
                     "type": "number"
+                }
+            }
+        },
+        "internal_api.CreateProductRequest": {
+            "type": "object",
+            "required": [
+                "category",
+                "name",
+                "sku",
+                "version"
+            ],
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parametric_specs": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateScheduleRequest": {
+            "type": "object",
+            "required": [
+                "machine_id",
+                "name",
+                "trigger_type"
+            ],
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "condition_metric": {
+                    "type": "string"
+                },
+                "condition_threshold": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "interval_cycles": {
+                    "type": "integer"
+                },
+                "interval_days": {
+                    "type": "integer"
+                },
+                "interval_hours": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_done_cycles": {
+                    "type": "integer"
+                },
+                "last_done_hours": {
+                    "type": "number"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_due_at": {
+                    "type": "string"
+                },
+                "next_due_cycles": {
+                    "type": "integer"
+                },
+                "next_due_hours": {
+                    "type": "number"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "trigger_type": {
+                    "type": "string"
                 }
             }
         },
@@ -4097,6 +6472,56 @@
                 }
             }
         },
+        "internal_api.CreateWorkOrderRequest": {
+            "type": "object",
+            "required": [
+                "machine_id",
+                "title",
+                "work_order_number"
+            ],
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_at": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "schedule_id": {
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "work_order_number": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -4116,6 +6541,9 @@
                     "additionalProperties": {
                         "$ref": "#/definitions/internal_api.ComponentHealth"
                     }
+                },
+                "service": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -4158,6 +6586,17 @@
                     "minimum": 1
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.SealGenealogyRequest": {
+            "type": "object",
+            "required": [
+                "sealed_by"
+            ],
+            "properties": {
+                "sealed_by": {
                     "type": "string"
                 }
             }
@@ -4400,6 +6839,45 @@
                 }
             }
         },
+        "internal_api.UpdateGenealogyRequest": {
+            "type": "object",
+            "properties": {
+                "certificate_id": {
+                    "type": "string"
+                },
+                "inspection_id": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "product_definition_id": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.UpdateInspectionRequest": {
             "type": "object",
             "properties": {
@@ -4434,6 +6912,12 @@
         "internal_api.UpdateMachineRequest": {
             "type": "object",
             "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "code": {
                     "type": "string"
                 },
@@ -4487,11 +6971,103 @@
                 "priority": {
                     "type": "integer"
                 },
+                "shipping_address": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "status": {
                     "type": "string"
                 },
                 "total_amount": {
                     "type": "number"
+                }
+            }
+        },
+        "internal_api.UpdateProductRequest": {
+            "type": "object",
+            "properties": {
+                "cad_file_url": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parametric_specs": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateScheduleRequest": {
+            "type": "object",
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "condition_metric": {
+                    "type": "string"
+                },
+                "condition_threshold": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "interval_cycles": {
+                    "type": "integer"
+                },
+                "interval_days": {
+                    "type": "integer"
+                },
+                "interval_hours": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_done_cycles": {
+                    "type": "integer"
+                },
+                "last_done_hours": {
+                    "type": "number"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_due_at": {
+                    "type": "string"
+                },
+                "next_due_cycles": {
+                    "type": "integer"
+                },
+                "next_due_hours": {
+                    "type": "number"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "trigger_type": {
+                    "type": "string"
                 }
             }
         },
@@ -4525,6 +7101,51 @@
                 },
                 "priority": {
                     "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateWorkOrderRequest": {
+            "type": "object",
+            "properties": {
+                "assigned_to": {
+                    "type": "string"
+                },
+                "checklist": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_at": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "parts_used": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scheduled_at": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -4774,6 +7395,11 @@
                 "priority": {
                     "type": "integer"
                 },
+                "shipping_address": {
+                    "description": "ShippingAddress holds delivery details as free-form JSON\n(e.g. line1, line2, city, state, postal_code, country, contact_name,\ncontact_phone). Backed by orders.shipping_address (migration 025).",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "status": {
                     "$ref": "#/definitions/types.OrderStatus"
                 },
@@ -4825,23 +7451,52 @@
             "type": "string",
             "enum": [
                 "received",
+                "validated",
+                "scheduled",
+                "in_progress",
+                "completed",
+                "shipped",
+                "cancelled",
                 "confirmed",
                 "in_production",
                 "quality_check",
                 "ready",
-                "shipped",
-                "delivered",
-                "cancelled"
+                "delivered"
+            ],
+            "x-enum-comments": {
+                "OrderStatusConfirmed": "-\u003e validated",
+                "OrderStatusDelivered": "-\u003e shipped",
+                "OrderStatusInProduction": "-\u003e in_progress",
+                "OrderStatusQualityCheck": "-\u003e in_progress",
+                "OrderStatusReady": "-\u003e completed"
+            },
+            "x-enum-descriptions": [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "-\u003e validated",
+                "-\u003e in_progress",
+                "-\u003e in_progress",
+                "-\u003e completed",
+                "-\u003e shipped"
             ],
             "x-enum-varnames": [
                 "OrderStatusReceived",
+                "OrderStatusValidated",
+                "OrderStatusScheduled",
+                "OrderStatusInProgress",
+                "OrderStatusCompleted",
+                "OrderStatusShipped",
+                "OrderStatusCancelled",
                 "OrderStatusConfirmed",
                 "OrderStatusInProduction",
                 "OrderStatusQualityCheck",
                 "OrderStatusReady",
-                "OrderStatusShipped",
-                "OrderStatusDelivered",
-                "OrderStatusCancelled"
+                "OrderStatusDelivered"
             ]
         },
         "types.QualityCertStatus": {

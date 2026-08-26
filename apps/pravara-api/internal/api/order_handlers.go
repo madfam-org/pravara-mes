@@ -13,6 +13,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -23,6 +24,7 @@ type OrderHandler struct {
 	log           *logrus.Logger
 	publisher     *pubsub.Publisher
 	usageRecorder billing.UsageRecorder
+	decomposition *services.OrderDecompositionService
 }
 
 // SetPublisher sets the event publisher for real-time updates.
@@ -35,6 +37,12 @@ func (h *OrderHandler) SetUsageRecorder(r billing.UsageRecorder) {
 	h.usageRecorder = r
 }
 
+// SetDecomposition enables order->task auto-decomposition. Only set when
+// orders.auto_decompose is enabled in config.
+func (h *OrderHandler) SetDecomposition(d *services.OrderDecompositionService) {
+	h.decomposition = d
+}
+
 // NewOrderHandler creates a new order handler.
 func NewOrderHandler(repo *repositories.OrderRepository, orderItemRepo *repositories.OrderItemRepository, log *logrus.Logger) *OrderHandler {
 	return &OrderHandler{
@@ -45,27 +53,35 @@ func NewOrderHandler(repo *repositories.OrderRepository, orderItemRepo *reposito
 }
 
 // CreateOrderRequest represents the request body for creating an order.
+// Items may be supplied inline; each becomes an order item and — when
+// auto-decomposition is enabled — a production task.
 type CreateOrderRequest struct {
-	ExternalID    string         `json:"external_id"`
-	CustomerName  string         `json:"customer_name" binding:"required"`
-	CustomerEmail string         `json:"customer_email"`
-	Priority      int            `json:"priority"`
-	DueDate       *time.Time     `json:"due_date"`
-	TotalAmount   float64        `json:"total_amount"`
-	Currency      string         `json:"currency"`
-	Metadata      map[string]any `json:"metadata"`
+	ExternalID      string                   `json:"external_id"`
+	CustomerName    string                   `json:"customer_name" binding:"required"`
+	CustomerEmail   string                   `json:"customer_email"`
+	Priority        int                      `json:"priority"`
+	DueDate         *time.Time               `json:"due_date"`
+	TotalAmount     float64                  `json:"total_amount"`
+	Currency        string                   `json:"currency"`
+	ShippingAddress map[string]any           `json:"shipping_address"`
+	Metadata        map[string]any           `json:"metadata"`
+	Items           []CreateOrderItemRequest `json:"items"`
 }
 
 // UpdateOrderRequest represents the request body for updating an order.
+// Status accepts both the canonical DB enum values and the legacy SDK/UI
+// aliases (confirmed, in_production, quality_check, ready, delivered);
+// aliases are normalized before the write.
 type UpdateOrderRequest struct {
-	CustomerName  string         `json:"customer_name"`
-	CustomerEmail string         `json:"customer_email"`
-	Status        string         `json:"status"`
-	Priority      int            `json:"priority"`
-	DueDate       *time.Time     `json:"due_date"`
-	TotalAmount   float64        `json:"total_amount"`
-	Currency      string         `json:"currency"`
-	Metadata      map[string]any `json:"metadata"`
+	CustomerName    string         `json:"customer_name"`
+	CustomerEmail   string         `json:"customer_email"`
+	Status          string         `json:"status"`
+	Priority        int            `json:"priority"`
+	DueDate         *time.Time     `json:"due_date"`
+	TotalAmount     float64        `json:"total_amount"`
+	Currency        string         `json:"currency"`
+	ShippingAddress map[string]any `json:"shipping_address"`
+	Metadata        map[string]any `json:"metadata"`
 }
 
 // ListResponse represents a paginated list response.
@@ -83,7 +99,7 @@ type ListResponse struct {
 // @Produce json
 // @Param limit query int false "Number of results per page" default(20)
 // @Param offset query int false "Offset for pagination" default(0)
-// @Param status query string false "Filter by order status" Enums(received, processing, quality_check, ready, shipped, delivered, cancelled)
+// @Param status query string false "Filter by order status (canonical DB enum; legacy aliases confirmed/processing/in_production/quality_check/ready/delivered are normalized)" Enums(received, validated, scheduled, in_progress, completed, shipped, cancelled)
 // @Param priority query int false "Filter by priority level"
 // @Param from_date query string false "Filter from date (RFC3339 format)"
 // @Param to_date query string false "Filter to date (RFC3339 format)"
@@ -107,7 +123,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 	}
 
 	if status := c.Query("status"); status != "" {
-		s := types.OrderStatus(status)
+		s := types.NormalizeOrderStatus(types.OrderStatus(status))
 		filter.Status = &s
 	}
 
@@ -190,12 +206,12 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 
 // Create creates a new order.
 // @Summary Create a new order
-// @Description Creates a new order in received status
+// @Description Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}.
 // @Tags orders
 // @Accept json
 // @Produce json
-// @Param body body CreateOrderRequest true "Order creation data"
-// @Success 201 {object} types.Order "Created order"
+// @Param body body CreateOrderRequest true "Order creation data (optionally with inline items and shipping_address)"
+// @Success 201 {object} types.Order "Created order (or {order, items, tasks_created} when inline items were supplied)"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Failure 500 {object} map[string]string "Internal server error"
@@ -224,16 +240,17 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	tenantUUID, _ := uuid.Parse(tenantID)
 
 	order := &types.Order{
-		TenantID:      tenantUUID,
-		ExternalID:    req.ExternalID,
-		CustomerName:  req.CustomerName,
-		CustomerEmail: req.CustomerEmail,
-		Status:        types.OrderStatusReceived,
-		Priority:      req.Priority,
-		DueDate:       req.DueDate,
-		TotalAmount:   req.TotalAmount,
-		Currency:      req.Currency,
-		Metadata:      req.Metadata,
+		TenantID:        tenantUUID,
+		ExternalID:      req.ExternalID,
+		CustomerName:    req.CustomerName,
+		CustomerEmail:   req.CustomerEmail,
+		Status:          types.OrderStatusReceived,
+		Priority:        req.Priority,
+		DueDate:         req.DueDate,
+		TotalAmount:     req.TotalAmount,
+		Currency:        req.Currency,
+		ShippingAddress: req.ShippingAddress,
+		Metadata:        req.Metadata,
 	}
 
 	if order.Priority == 0 {
@@ -250,6 +267,51 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			"message": "Failed to create order",
 		})
 		return
+	}
+
+	// Create inline order items, if provided.
+	items := make([]types.OrderItem, 0, len(req.Items))
+	for _, itemReq := range req.Items {
+		item := types.OrderItem{
+			OrderID:        order.ID,
+			ProductName:    itemReq.ProductName,
+			ProductSKU:     itemReq.ProductSKU,
+			Quantity:       itemReq.Quantity,
+			UnitPrice:      itemReq.UnitPrice,
+			Specifications: itemReq.Specifications,
+			CADFileURL:     itemReq.CADFileURL,
+		}
+		if err := h.orderItemRepo.Create(c.Request.Context(), &item); err != nil {
+			h.log.WithError(err).WithField("product_name", item.ProductName).Warn("Failed to create inline order item")
+			continue
+		}
+		items = append(items, item)
+	}
+
+	userID, _ := middleware.GetUserID(c)
+	userUUID, _ := uuid.Parse(userID)
+
+	// Publish order.created through the outbox-backed publisher.
+	if h.publisher != nil {
+		if err := h.publisher.PublishEntityCreated(c.Request.Context(), pubsub.NamespaceOrders, order.TenantID, pubsub.EventOrderCreated, pubsub.EntityCreatedData{
+			EntityID:   order.ID,
+			EntityType: "order",
+			Name:       order.CustomerName,
+			CreatedBy:  userUUID,
+			CreatedAt:  time.Now().UTC(),
+			Metadata: map[string]any{
+				"external_id": order.ExternalID,
+				"item_count":  len(items),
+			},
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish order.created event")
+		}
+	}
+
+	// Auto-decompose the order into production tasks (config-gated).
+	var tasks []types.Task
+	if h.decomposition != nil && len(items) > 0 {
+		tasks = h.decomposition.DecomposeOrder(c.Request.Context(), order, items, userUUID)
 	}
 
 	// Record order creation for billing
@@ -270,20 +332,33 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		}()
 	}
 
-	h.log.WithField("order_id", order.ID).Info("Order created")
+	h.log.WithFields(logrus.Fields{
+		"order_id":   order.ID,
+		"item_count": len(items),
+		"task_count": len(tasks),
+	}).Info("Order created")
+
+	if len(items) > 0 {
+		c.JSON(http.StatusCreated, gin.H{
+			"order":         order,
+			"items":         items,
+			"tasks_created": len(tasks),
+		})
+		return
+	}
 	c.JSON(http.StatusCreated, order)
 }
 
 // Update modifies an existing order.
 // @Summary Update an order
-// @Description Updates order fields including status
+// @Description Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed.
 // @Tags orders
 // @Accept json
 // @Produce json
 // @Param id path string true "Order ID (UUID)"
 // @Param body body UpdateOrderRequest true "Order update data"
 // @Success 200 {object} types.Order "Updated order"
-// @Failure 400 {object} map[string]string "Validation error"
+// @Failure 400 {object} map[string]string "Validation error or invalid status"
 // @Failure 404 {object} map[string]string "Order not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
@@ -326,6 +401,8 @@ func (h *OrderHandler) Update(c *gin.Context) {
 		return
 	}
 
+	oldStatus := order.Status
+
 	// Update fields
 	if req.CustomerName != "" {
 		order.CustomerName = req.CustomerName
@@ -334,7 +411,18 @@ func (h *OrderHandler) Update(c *gin.Context) {
 		order.CustomerEmail = req.CustomerEmail
 	}
 	if req.Status != "" {
-		order.Status = types.OrderStatus(req.Status)
+		// Normalize legacy SDK/UI aliases onto the canonical DB enum and
+		// reject values the enum cannot store (previously these reached
+		// Postgres and failed with an opaque 500).
+		newStatus := types.NormalizeOrderStatus(types.OrderStatus(req.Status))
+		if !types.IsCanonicalOrderStatus(newStatus) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid_status",
+				"message": "Invalid order status: " + req.Status,
+			})
+			return
+		}
+		order.Status = newStatus
 	}
 	if req.Priority > 0 {
 		order.Priority = req.Priority
@@ -348,6 +436,9 @@ func (h *OrderHandler) Update(c *gin.Context) {
 	if req.Currency != "" {
 		order.Currency = req.Currency
 	}
+	if req.ShippingAddress != nil {
+		order.ShippingAddress = req.ShippingAddress
+	}
 	if req.Metadata != nil {
 		order.Metadata = req.Metadata
 	}
@@ -359,6 +450,20 @@ func (h *OrderHandler) Update(c *gin.Context) {
 			"message": "Failed to update order",
 		})
 		return
+	}
+
+	// Publish order.status_changed when the status actually moved.
+	if h.publisher != nil && order.Status != oldStatus {
+		if err := h.publisher.PublishOrderStatus(c.Request.Context(), order.TenantID, pubsub.OrderStatusData{
+			OrderID:         order.ID,
+			OrderExternalID: order.ExternalID,
+			OldStatus:       string(oldStatus),
+			NewStatus:       string(order.Status),
+			CustomerName:    order.CustomerName,
+			UpdatedAt:       time.Now().UTC(),
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish order.status_changed event")
+		}
 	}
 
 	h.log.WithField("order_id", order.ID).Info("Order updated")
@@ -387,6 +492,24 @@ func (h *OrderHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	// Fetch first so the cancellation event carries the previous status.
+	order, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get order")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to retrieve order",
+		})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "Order not found",
+		})
+		return
+	}
+
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
 		if err.Error() == "order not found" {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -401,6 +524,19 @@ func (h *OrderHandler) Delete(c *gin.Context) {
 			"message": "Failed to delete order",
 		})
 		return
+	}
+
+	if h.publisher != nil && order.Status != types.OrderStatusCancelled {
+		if err := h.publisher.PublishOrderStatus(c.Request.Context(), order.TenantID, pubsub.OrderStatusData{
+			OrderID:         order.ID,
+			OrderExternalID: order.ExternalID,
+			OldStatus:       string(order.Status),
+			NewStatus:       string(types.OrderStatusCancelled),
+			CustomerName:    order.CustomerName,
+			UpdatedAt:       time.Now().UTC(),
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish order.status_changed event")
+		}
 	}
 
 	h.log.WithField("order_id", id).Info("Order cancelled")
@@ -478,7 +614,7 @@ func (h *OrderHandler) ListItems(c *gin.Context) {
 
 // AddItem adds an item to an order.
 // @Summary Add item to order
-// @Description Adds a new line item to an existing order
+// @Description Adds a new line item to an existing order. When orders.auto_decompose is enabled the item also spawns its production task (with capability-based machine auto-assignment when orders.auto_assign is enabled).
 // @Tags orders
 // @Accept json
 // @Produce json
@@ -544,6 +680,15 @@ func (h *OrderHandler) AddItem(c *gin.Context) {
 			"message": "Failed to create order item",
 		})
 		return
+	}
+
+	// Auto-decompose the new item into its production task (config-gated).
+	// The item was just created, so no task can exist for it yet — this is
+	// naturally idempotent per item.
+	if h.decomposition != nil {
+		userID, _ := middleware.GetUserID(c)
+		userUUID, _ := uuid.Parse(userID)
+		h.decomposition.DecomposeOrder(c.Request.Context(), order, []types.OrderItem{*item}, userUUID)
 	}
 
 	h.log.WithFields(logrus.Fields{

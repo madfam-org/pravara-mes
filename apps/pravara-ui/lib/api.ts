@@ -256,20 +256,36 @@ export interface Order {
   due_date?: string;
   total_amount?: number;
   currency: string;
+  shipping_address?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
 
+/**
+ * Order status vocabulary.
+ *
+ * The database enum (source of truth) is: received, validated, scheduled,
+ * in_progress, completed, shipped, cancelled. The remaining names are legacy
+ * UI aliases the API still accepts and normalizes (confirmed -> validated,
+ * in_production/quality_check -> in_progress, ready -> completed,
+ * delivered -> shipped). The API only ever RETURNS canonical values.
+ */
 export type OrderStatus =
+  // Canonical (DB enum)
   | "received"
+  | "validated"
+  | "scheduled"
+  | "in_progress"
+  | "completed"
+  | "shipped"
+  | "cancelled"
+  // Legacy aliases (accepted on write, normalized by the API)
   | "confirmed"
   | "in_production"
   | "quality_check"
   | "ready"
-  | "shipped"
-  | "delivered"
-  | "cancelled";
+  | "delivered";
 
 export interface CreateOrderRequest {
   external_id?: string;
@@ -279,6 +295,7 @@ export interface CreateOrderRequest {
   due_date?: string;
   total_amount?: number;
   currency?: string;
+  shipping_address?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 
@@ -290,6 +307,7 @@ export interface UpdateOrderRequest {
   due_date?: string;
   total_amount?: number;
   currency?: string;
+  shipping_address?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 

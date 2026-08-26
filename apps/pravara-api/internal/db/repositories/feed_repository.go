@@ -77,10 +77,16 @@ func NewFeedRepository(db *sql.DB) *FeedRepository {
 }
 
 // GetCRMOrders returns active orders with task progress percentage.
+//
+// Status filters use only canonical order_status enum values. The previous
+// literals ('delivered', 'ready') are not in the enum, so Postgres rejected
+// the comparison and these feed queries failed at runtime; the canonical
+// terminal set is cancelled/shipped and "completed" maps the old
+// ready/delivered intent.
 func (r *FeedRepository) GetCRMOrders(ctx context.Context, limit, offset int) ([]CRMOrder, int, error) {
 	var total int
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM orders WHERE status NOT IN ('cancelled', 'delivered')`,
+		`SELECT COUNT(*) FROM orders WHERE status NOT IN ('cancelled', 'shipped')`,
 	).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count CRM orders: %w", err)
@@ -106,7 +112,7 @@ func (r *FeedRepository) GetCRMOrders(ctx context.Context, limit, offset int) ([
 			FROM tasks
 			GROUP BY order_id
 		) t ON t.order_id = o.id
-		WHERE o.status NOT IN ('cancelled', 'delivered')
+		WHERE o.status NOT IN ('cancelled', 'shipped')
 		ORDER BY o.priority DESC, o.due_date ASC NULLS LAST
 		LIMIT $1 OFFSET $2`,
 		limit, offset,
@@ -243,7 +249,7 @@ func (r *FeedRepository) GetSocialStats(ctx context.Context) (*SocialStats, erro
 			COUNT(*) FILTER (WHERE updated_at >= CURRENT_DATE),
 			COUNT(*) FILTER (WHERE updated_at >= date_trunc('week', CURRENT_DATE)),
 			COUNT(*) FILTER (WHERE updated_at >= date_trunc('month', CURRENT_DATE))
-		FROM orders WHERE status IN ('delivered', 'shipped', 'ready')`,
+		FROM orders WHERE status IN ('shipped', 'completed')`,
 	).Scan(&stats.OrdersCompletedDay, &stats.OrdersCompletedWeek, &stats.OrdersCompletedMonth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count completed orders: %w", err)

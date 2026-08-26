@@ -4,13 +4,19 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 
 ## Current Status
 
-**Version**: Phase 2.6 MES Industry Standard Features (Complete)
-**Last Updated**: March 3, 2026
+**Version**: Phase 2.6 MES Industry Standard Features (Complete) + Order→Dispatch Loop
+**Last Updated**: August 26, 2026
 **Total Services**: 10
+
+> **Verification gate:** completeness claims in this table are only as good
+> as [docs/RUNTIME_VERIFICATION_CHECKLIST.md](docs/RUNTIME_VERIFICATION_CHECKLIST.md).
+> A row may say "Complete" while its checklist boxes are still unchecked —
+> the checklist, not this table, is the record of what has actually been
+> verified against a running system.
 
 | Component | Status | Progress |
 |-----------|--------|----------|
-| pravara-api | Complete | 100% |
+| pravara-api | Complete* | 100%* |
 | pravara-ui | Complete | 100% |
 | telemetry-worker | Complete | 100% |
 | pravara-gateway | Complete | 100% |
@@ -33,6 +39,16 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 | Product Genealogy | Complete | 100% |
 | Work Instructions | Complete | 100% |
 | Inventory Management | Complete | 100% |
+| Order→Dispatch Loop | Implemented, needs runtime verification | — |
+
+\* pravara-api "Complete" previously overstated reality: until 2026-08 the
+event outbox was never written (the OutboxPublisher was constructed and
+discarded in `cmd/api/main.go`, so webhooks/`GET /v1/events`/CRM feeds ran on
+an empty table), routing was dead code (a 473-line AgentService with zero
+callers; `machines.capabilities` was never queried or even settable via the
+API), orders never decomposed into tasks, and order status never advanced
+from task state. The Order→Dispatch Loop work (below) closed those gaps; the
+runtime checklist gates the claim.
 
 ---
 
@@ -117,7 +133,10 @@ Live machine status, real-time UI updates, WebSocket infrastructure.
 - [x] Redis event publisher (`internal/pubsub/`)
 - [x] Real-time token endpoint (`GET /v1/realtime/token`)
 - [x] Centrifugo proxy auth (`POST /v1/realtime/auth`, `/subscribe`)
-- [x] Event publishing from handlers (tasks, orders, machines)
+- [x] Event publishing from handlers (tasks, orders, machines) — *corrected
+      2026-08: order handlers published nothing (no order.created /
+      order.status_changed) until the Order→Dispatch Loop work added them;
+      this box was checked prematurely*
 
 ### Backend (telemetry-worker)
 - [x] Redis event publisher for telemetry batches
@@ -262,6 +281,69 @@ Core MES capabilities aligned with MESA International standards.
 - [x] ForgeSight webhook integration for external inventory sync
 
 ---
+
+## Order→Dispatch Loop (2026-08)
+> **Status**: Implemented; runtime verification pending (see
+> [docs/RUNTIME_VERIFICATION_CHECKLIST.md](docs/RUNTIME_VERIFICATION_CHECKLIST.md) §4)
+
+Makes order → task → route → dispatch → status real end-to-end. The dispatch
+chain (task in_progress → task_commands → Redis → telemetry-worker → MQTT,
+acks back) already worked; the pieces before and around it did not.
+
+### Event outbox fix
+- [x] Outbox persistence folded into `pubsub.Publisher` (`EnableOutbox`);
+      previously the OutboxPublisher wrapper was constructed and discarded in
+      `cmd/api/main.go`, and Go method promotion meant the wrapper could never
+      have intercepted the `Publish*` helper methods anyway
+- [x] `event_outbox` now receives every published business event, feeding the
+      webhook dispatcher (HMAC, retries), `GET /v1/events`, and CRM feeds
+- [x] order.created / order.status_changed / task.created / task.updated
+      published from order+task handlers and the Cotiza webhook
+
+### Order→task auto-decomposition
+- [x] `OrderDecompositionService`: one production task per order item
+      (title from product_name × qty, links order/order_item, specifications
+      + cad_file_url carried into task metadata, backlog status)
+- [x] Wired into both intake paths (`POST /v1/orders` with inline items;
+      Cotiza webhook) and `POST /v1/orders/:id/items`
+- [x] Config-gated: `orders.auto_decompose` (default ON — creates rows and
+      events only; machine commands still dispatch exclusively on the
+      explicit task → in_progress transition)
+
+### Capability-based assignment (routing wired for real)
+- [x] `MachineAssignmentService` with a documented capability-matching
+      contract (item specifications → requirement tokens; machine
+      capabilities superset match) and a transparent scorer
+      (status weight − load penalty; least-recently-assigned tie-break)
+- [x] `machines.capabilities` now settable via the machine create/update API
+      and read by assignment (the column existed since genesis but was never
+      queried nor writable)
+- [x] No match → task stays unassigned + `task.assignment_failed` event +
+      UI warning notification (fail visible, not silent); items with no
+      declared requirements are left for human routing by design
+- [x] Dead code deleted: `services/agent_service.go` (473-line operator
+      scorer, zero callers, broken tenant plumbing) — "Intelligent
+      Scheduling" below remains future work, now with an honest baseline
+- [x] Config-gated: `orders.auto_assign` (default ON)
+
+### Order status roll-up + vocabulary reconciliation
+- [x] First task in_progress/quality_check → order `in_progress`; all tasks
+      completed → order `completed` (guarded single-statement SQL; never
+      regresses shipped/cancelled)
+- [x] Status vocab reconciled: DB enum (received/validated/scheduled/
+      in_progress/completed/shipped/cancelled) is the source of truth; legacy
+      SDK/UI names (confirmed, in_production, quality_check, ready,
+      delivered, processing) are normalized at the API boundary
+      (`types.NormalizeOrderStatus`) instead of reaching Postgres and failing
+- [x] CRM/social feed queries fixed: they compared against 'delivered' and
+      'ready', values the order_status enum rejects, so the feed SQL errored
+      at runtime; now canonical ('shipped'/'completed')
+- [x] `orders.shipping_address` JSONB (migration 025) + API/SDK/UI wiring
+- [x] Migration 026 adds `machine_status` value `'online'` — heartbeats
+      already wrote it but the genesis enum never contained it
+- [x] Migration runner created: `infra/db/migrate.sh` (`make db-migrate`
+      pointed at it since the Makefile existed, but the script did not) —
+      migrations 002–008 never existed; numbering continues from 024
 
 ## Phase 3.0: Mexican Compliance
 > **Status**: Planned | **Timeline**: 3-4 weeks
