@@ -1,0 +1,2 @@
+ALTER TABLE machines DROP COLUMN IF EXISTS metadata;
+ALTER TABLE machines DROP COLUMN IF EXISTS description;
