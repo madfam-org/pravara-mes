@@ -43,8 +43,8 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 	// Build query with filters
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
-		       status, priority, due_date, total_amount, currency, metadata,
-		       created_at, updated_at
+		       status, priority, due_date, total_amount, currency,
+		       shipping_address, metadata, created_at, updated_at
 		FROM orders
 		WHERE 1=1
 	`
@@ -113,16 +113,20 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 		var externalID, customerEmail sql.NullString
 		var dueDate sql.NullTime
 		var totalAmount sql.NullFloat64
-		var metadataJSON []byte
+		var shippingJSON, metadataJSON []byte
 
 		err := rows.Scan(
 			&order.ID, &order.TenantID, &externalID, &order.CustomerName,
 			&customerEmail, &order.Status, &order.Priority, &dueDate,
-			&totalAmount, &order.Currency, &metadataJSON,
+			&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
 			&order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan order: %w", err)
+		}
+
+		if len(shippingJSON) > 0 {
+			json.Unmarshal(shippingJSON, &order.ShippingAddress)
 		}
 
 		if externalID.Valid {
@@ -153,8 +157,8 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Order, error) {
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
-		       status, priority, due_date, total_amount, currency, metadata,
-		       created_at, updated_at
+		       status, priority, due_date, total_amount, currency,
+		       shipping_address, metadata, created_at, updated_at
 		FROM orders
 		WHERE id = $1
 	`
@@ -163,12 +167,12 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 	var externalID, customerEmail sql.NullString
 	var dueDate sql.NullTime
 	var totalAmount sql.NullFloat64
-	var metadataJSON []byte
+	var shippingJSON, metadataJSON []byte
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&order.ID, &order.TenantID, &externalID, &order.CustomerName,
 		&customerEmail, &order.Status, &order.Priority, &dueDate,
-		&totalAmount, &order.Currency, &metadataJSON,
+		&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -190,6 +194,9 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 	if totalAmount.Valid {
 		order.TotalAmount = totalAmount.Float64
 	}
+	if len(shippingJSON) > 0 {
+		json.Unmarshal(shippingJSON, &order.ShippingAddress)
+	}
 	if len(metadataJSON) > 0 {
 		json.Unmarshal(metadataJSON, &order.Metadata)
 	}
@@ -205,8 +212,9 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 	query := `
 		INSERT INTO orders (
 			id, tenant_id, external_id, customer_name, customer_email,
-			status, priority, due_date, total_amount, currency, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			status, priority, due_date, total_amount, currency,
+			shipping_address, metadata
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING created_at, updated_at
 	`
 
@@ -214,6 +222,7 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 		order.ID = uuid.New()
 	}
 
+	shippingJSON := marshalNullableJSON(order.ShippingAddress)
 	metadataJSON, _ := json.Marshal(order.Metadata)
 
 	var externalID, customerEmail *string
@@ -227,7 +236,7 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 	err := r.db.QueryRowContext(ctx, query,
 		order.ID, order.TenantID, externalID, order.CustomerName,
 		customerEmail, order.Status, order.Priority, order.DueDate,
-		order.TotalAmount, order.Currency, metadataJSON,
+		order.TotalAmount, order.Currency, shippingJSON, metadataJSON,
 	).Scan(&order.CreatedAt, &order.UpdatedAt)
 
 	if err != nil {
@@ -251,11 +260,13 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 			due_date = $6,
 			total_amount = $7,
 			currency = $8,
-			metadata = $9
+			shipping_address = $9,
+			metadata = $10
 		WHERE id = $1
 		RETURNING updated_at
 	`
 
+	shippingJSON := marshalNullableJSON(order.ShippingAddress)
 	metadataJSON, _ := json.Marshal(order.Metadata)
 
 	var customerEmail *string
@@ -266,7 +277,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 	err := r.db.QueryRowContext(ctx, query,
 		order.ID, order.CustomerName, customerEmail, order.Status,
 		order.Priority, order.DueDate, order.TotalAmount, order.Currency,
-		metadataJSON,
+		shippingJSON, metadataJSON,
 	).Scan(&order.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -311,8 +322,8 @@ func (r *OrderRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string) (*types.Order, error) {
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
-		       status, priority, due_date, total_amount, currency, metadata,
-		       created_at, updated_at
+		       status, priority, due_date, total_amount, currency,
+		       shipping_address, metadata, created_at, updated_at
 		FROM orders
 		WHERE external_id = $1
 	`
@@ -321,12 +332,12 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 	var extID, customerEmail sql.NullString
 	var dueDate sql.NullTime
 	var totalAmount sql.NullFloat64
-	var metadataJSON []byte
+	var shippingJSON, metadataJSON []byte
 
 	err := r.db.QueryRowContext(ctx, query, externalID).Scan(
 		&order.ID, &order.TenantID, &extID, &order.CustomerName,
 		&customerEmail, &order.Status, &order.Priority, &dueDate,
-		&totalAmount, &order.Currency, &metadataJSON,
+		&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -348,11 +359,99 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 	if totalAmount.Valid {
 		order.TotalAmount = totalAmount.Float64
 	}
+	if len(shippingJSON) > 0 {
+		json.Unmarshal(shippingJSON, &order.ShippingAddress)
+	}
 	if len(metadataJSON) > 0 {
 		json.Unmarshal(metadataJSON, &order.Metadata)
 	}
 
 	return &order, nil
+}
+
+// marshalNullableJSON serializes a map for a nullable JSONB column,
+// returning SQL NULL (nil) when the map itself is nil so absent data stays
+// NULL instead of becoming the JSON literal "null".
+func marshalNullableJSON(m map[string]any) []byte {
+	if m == nil {
+		return nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// MarkInProgressIfStarted advances an order to in_progress when it is still
+// in a pre-production status (received, validated, scheduled). Called by the
+// order roll-up when the first task of an order starts. The guard set makes
+// the call idempotent and prevents regressing later statuses (completed,
+// shipped, cancelled). Returns the previous status and whether a transition
+// happened.
+//
+// The row is locked (FOR UPDATE) while the guard is evaluated so concurrent
+// roll-ups cannot interleave. Tenant scoping is enforced by RLS, matching
+// the other order queries in this repository.
+func (r *OrderRepository) MarkInProgressIfStarted(ctx context.Context, orderID uuid.UUID) (types.OrderStatus, bool, error) {
+	query := `
+		WITH prev AS (
+			SELECT id, status FROM orders WHERE id = $1 FOR UPDATE
+		)
+		UPDATE orders o
+		SET status = 'in_progress'
+		FROM prev
+		WHERE o.id = prev.id
+		  AND prev.status IN ('received', 'validated', 'scheduled')
+		RETURNING prev.status
+	`
+
+	var previous types.OrderStatus
+	err := r.db.QueryRowContext(ctx, query, orderID).Scan(&previous)
+	if err == sql.ErrNoRows {
+		return "", false, nil // order missing or already at/past in_progress
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to mark order in progress: %w", err)
+	}
+
+	return previous, true, nil
+}
+
+// CompleteIfAllTasksDone advances an order to completed when every one of
+// its tasks is completed. Orders with no tasks are never auto-completed.
+// The guard set excludes completed, shipped, and cancelled so the roll-up
+// can neither repeat itself nor regress later statuses. Returns the previous
+// status and whether a transition happened.
+func (r *OrderRepository) CompleteIfAllTasksDone(ctx context.Context, orderID uuid.UUID) (types.OrderStatus, bool, error) {
+	query := `
+		WITH prev AS (
+			SELECT id, status FROM orders WHERE id = $1 FOR UPDATE
+		)
+		UPDATE orders o
+		SET status = 'completed'
+		FROM prev
+		WHERE o.id = prev.id
+		  AND prev.status IN ('received', 'validated', 'scheduled', 'in_progress')
+		  AND EXISTS (
+			SELECT 1 FROM tasks t WHERE t.order_id = o.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM tasks t WHERE t.order_id = o.id AND t.status <> 'completed'
+		  )
+		RETURNING prev.status
+	`
+
+	var previous types.OrderStatus
+	err := r.db.QueryRowContext(ctx, query, orderID).Scan(&previous)
+	if err == sql.ErrNoRows {
+		return "", false, nil // tasks still open, no tasks at all, or status past in_progress
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to complete order: %w", err)
+	}
+
+	return previous, true, nil
 }
 
 // Ensure pq is imported for array handling

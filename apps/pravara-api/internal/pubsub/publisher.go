@@ -11,14 +11,41 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 )
 
+// OutboxSink persists published events durably (event_outbox table) so the
+// webhook dispatcher, /v1/events history, and feed endpoints can consume
+// them. *repositories.OutboxRepository satisfies this interface.
+type OutboxSink interface {
+	InsertEvent(ctx context.Context, tenantID uuid.UUID, eventType, channelNamespace string, payload json.RawMessage) (*repositories.OutboxEvent, error)
+}
+
 // Publisher handles publishing events to Redis for Centrifugo distribution.
+//
+// When an OutboxSink is attached via EnableOutbox, every event that flows
+// through Publish or PublishToEntity — which includes every Publish* helper
+// method — is also persisted to the event outbox. Outbox persistence is
+// deliberately implemented here rather than in a wrapper type: Go method
+// promotion meant a wrapper's overridden Publish was bypassed by the helper
+// methods on the embedded *Publisher, so wrapped events never reached the
+// outbox (the pre-2026-08 OutboxPublisher bug).
 type Publisher struct {
 	client *redis.Client
 	log    *logrus.Logger
+	outbox OutboxSink
 	mu     sync.RWMutex
 	closed bool
+}
+
+// EnableOutbox attaches a durable event sink. Safe to call once during
+// startup, before the publisher is shared across goroutines. Outbox failures
+// are logged and never block or fail the real-time publish path.
+func (p *Publisher) EnableOutbox(sink OutboxSink) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.outbox = sink
 }
 
 // PublisherConfig contains configuration for the Publisher.
@@ -79,7 +106,8 @@ type CentrifugoMessage struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// Publish publishes an event to the appropriate Centrifugo channel via Redis.
+// Publish publishes an event to the appropriate Centrifugo channel via Redis
+// and, when an outbox sink is attached, persists it to the event outbox.
 func (p *Publisher) Publish(ctx context.Context, namespace ChannelNamespace, tenantID uuid.UUID, event *Event) error {
 	p.mu.RLock()
 	if p.closed {
@@ -89,10 +117,16 @@ func (p *Publisher) Publish(ctx context.Context, namespace ChannelNamespace, ten
 	p.mu.RUnlock()
 
 	channel := buildChannel(namespace, tenantID, nil)
-	return p.publishToChannel(ctx, channel, event)
+	err := p.publishToChannel(ctx, channel, event)
+
+	// Persist to outbox (best-effort, never blocks the real-time path).
+	p.persistToOutbox(ctx, namespace, tenantID, event)
+
+	return err
 }
 
-// PublishToEntity publishes an event to an entity-specific channel.
+// PublishToEntity publishes an event to an entity-specific channel and, when
+// an outbox sink is attached, persists it to the event outbox.
 func (p *Publisher) PublishToEntity(ctx context.Context, namespace ChannelNamespace, tenantID, entityID uuid.UUID, event *Event) error {
 	p.mu.RLock()
 	if p.closed {
@@ -102,7 +136,38 @@ func (p *Publisher) PublishToEntity(ctx context.Context, namespace ChannelNamesp
 	p.mu.RUnlock()
 
 	channel := buildChannel(namespace, tenantID, &entityID)
-	return p.publishToChannel(ctx, channel, event)
+	err := p.publishToChannel(ctx, channel, event)
+
+	// Persist to outbox (best-effort, never blocks the real-time path).
+	p.persistToOutbox(ctx, namespace, tenantID, event)
+
+	return err
+}
+
+// persistToOutbox inserts the event into the outbox table when a sink is
+// attached. Failures are logged but not propagated: durable delivery is
+// best-effort relative to the real-time path.
+func (p *Publisher) persistToOutbox(ctx context.Context, namespace ChannelNamespace, tenantID uuid.UUID, event *Event) {
+	p.mu.RLock()
+	sink := p.outbox
+	p.mu.RUnlock()
+
+	if sink == nil {
+		return
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		p.log.WithError(err).WithField("event_type", event.Type).Warn("Failed to marshal event for outbox")
+		return
+	}
+
+	if _, err := sink.InsertEvent(ctx, tenantID, string(event.Type), string(namespace), payload); err != nil {
+		p.log.WithError(err).WithFields(logrus.Fields{
+			"event_type": event.Type,
+			"tenant_id":  tenantID,
+		}).Warn("Failed to persist event to outbox")
+	}
 }
 
 // publishToChannel publishes an event to a specific Centrifugo channel.
@@ -184,6 +249,13 @@ func (p *Publisher) PublishTaskMove(ctx context.Context, tenantID uuid.UUID, dat
 // PublishTaskAssign publishes a task assignment event.
 func (p *Publisher) PublishTaskAssign(ctx context.Context, tenantID uuid.UUID, data TaskAssignData) error {
 	event := NewEvent(EventTaskAssigned, tenantID, data)
+	return p.Publish(ctx, NamespaceTasks, tenantID, event)
+}
+
+// PublishTaskAssignmentFailed publishes a task.assignment_failed event so
+// unassignable tasks are visible to operators and external consumers.
+func (p *Publisher) PublishTaskAssignmentFailed(ctx context.Context, tenantID uuid.UUID, data TaskAssignmentFailedData) error {
+	event := NewEvent(EventTaskAssignmentFailed, tenantID, data)
 	return p.Publish(ctx, NamespaceTasks, tenantID, event)
 }
 

@@ -40,17 +40,17 @@ func TestOrderRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
-					"status", "priority", "due_date", "total_amount", "currency", "metadata",
+					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 					"created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
-						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", []byte("{}"),
+						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
 						time.Now(), time.Now(),
 					).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-002", "Customer B", "customer2@example.com",
-						types.OrderStatusInProduction, 3, time.Now(), 2000.00, "USD", []byte("{}"),
+						types.OrderStatusInProduction, 3, time.Now(), 2000.00, "USD", nil, []byte("{}"),
 						time.Now(), time.Now(),
 					)
 
@@ -73,12 +73,12 @@ func TestOrderRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
-					"status", "priority", "due_date", "total_amount", "currency", "metadata",
+					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 					"created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
-						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", []byte("{}"),
+						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
 						time.Now(), time.Now(),
 					)
 
@@ -104,12 +104,12 @@ func TestOrderRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
-					"status", "priority", "due_date", "total_amount", "currency", "metadata",
+					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 					"created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
-						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", []byte("{}"),
+						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
 						time.Now(), time.Now(),
 					)
 
@@ -133,12 +133,12 @@ func TestOrderRepository_List(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
-					"status", "priority", "due_date", "total_amount", "currency", "metadata",
+					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 					"created_at", "updated_at",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-011", "Customer K", "customerk@example.com",
-						types.OrderStatusReceived, 3, time.Now(), 500.00, "USD", []byte("{}"),
+						types.OrderStatusReceived, 3, time.Now(), 500.00, "USD", nil, []byte("{}"),
 						time.Now(), time.Now(),
 					)
 
@@ -204,11 +204,11 @@ func TestOrderRepository_GetByID(t *testing.T) {
 
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
-					"status", "priority", "due_date", "total_amount", "currency", "metadata",
+					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 					"created_at", "updated_at",
 				}).AddRow(
 					id, uuid.New(), "EXT-001", "Customer A", "customer@example.com",
-					types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", metadataJSON,
+					types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, metadataJSON,
 					time.Now(), time.Now(),
 				)
 
@@ -515,11 +515,11 @@ func TestOrderRepository_GetByExternalID(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "tenant_id", "external_id", "customer_name", "customer_email",
-		"status", "priority", "due_date", "total_amount", "currency", "metadata",
+		"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
 		"created_at", "updated_at",
 	}).AddRow(
 		uuid.New(), uuid.New(), externalID, "Customer A", "customer@example.com",
-		types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", []byte("{}"),
+		types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
 		time.Now(), time.Now(),
 	)
 

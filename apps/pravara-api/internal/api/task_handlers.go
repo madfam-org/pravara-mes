@@ -22,6 +22,7 @@ type TaskHandler struct {
 	log        *logrus.Logger
 	publisher  *pubsub.Publisher
 	automation *services.AutomationService
+	rollup     *services.OrderRollupService
 }
 
 // SetPublisher sets the event publisher for real-time updates.
@@ -32,6 +33,13 @@ func (h *TaskHandler) SetPublisher(p *pubsub.Publisher) {
 // SetAutomation sets the automation service for machine-task integration.
 func (h *TaskHandler) SetAutomation(a *services.AutomationService) {
 	h.automation = a
+}
+
+// SetRollup sets the order roll-up service so task status changes advance
+// the parent order (first task started -> in_progress; all tasks completed
+// -> completed).
+func (h *TaskHandler) SetRollup(r *services.OrderRollupService) {
+	h.rollup = r
 }
 
 // NewTaskHandler creates a new task handler.
@@ -256,6 +264,29 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Publish task.created through the outbox-backed publisher.
+	if h.publisher != nil {
+		userID, _ := middleware.GetUserID(c)
+		userUUID, _ := uuid.Parse(userID)
+		metadata := map[string]any{}
+		if task.OrderID != nil {
+			metadata["order_id"] = task.OrderID.String()
+		}
+		if task.MachineID != nil {
+			metadata["machine_id"] = task.MachineID.String()
+		}
+		if err := h.publisher.PublishEntityCreated(c.Request.Context(), pubsub.NamespaceTasks, task.TenantID, pubsub.EventTaskCreated, pubsub.EntityCreatedData{
+			EntityID:   task.ID,
+			EntityType: "task",
+			Name:       task.Title,
+			CreatedBy:  userUUID,
+			CreatedAt:  time.Now().UTC(),
+			Metadata:   metadata,
+		}); err != nil {
+			h.log.WithError(err).Warn("Failed to publish task.created event")
+		}
+	}
+
 	h.log.WithField("task_id", task.ID).Info("Task created")
 	c.JSON(http.StatusCreated, task)
 }
@@ -311,6 +342,8 @@ func (h *TaskHandler) Update(c *gin.Context) {
 		return
 	}
 
+	oldStatus := task.Status
+
 	// Update fields
 	if req.OrderID != nil {
 		task.OrderID = req.OrderID
@@ -365,6 +398,33 @@ func (h *TaskHandler) Update(c *gin.Context) {
 			"message": "Failed to update task",
 		})
 		return
+	}
+
+	if task.Status != oldStatus {
+		// Publish task.updated so the status transition is durable/visible.
+		if h.publisher != nil {
+			userID, _ := middleware.GetUserID(c)
+			userUUID, _ := uuid.Parse(userID)
+			if err := h.publisher.PublishEntityUpdated(c.Request.Context(), pubsub.NamespaceTasks, task.TenantID, pubsub.EventTaskUpdated, pubsub.EntityUpdatedData{
+				EntityID:      task.ID,
+				EntityType:    "task",
+				Name:          task.Title,
+				ChangedFields: []string{"status"},
+				UpdatedBy:     userUUID,
+				UpdatedAt:     time.Now().UTC(),
+				Metadata: map[string]any{
+					"old_status": string(oldStatus),
+					"new_status": string(task.Status),
+				},
+			}); err != nil {
+				h.log.WithError(err).Warn("Failed to publish task.updated event")
+			}
+		}
+
+		// Roll the parent order's status up from its tasks.
+		if h.rollup != nil {
+			h.rollup.OnTaskStatusChanged(c.Request.Context(), task, task.Status)
+		}
 	}
 
 	h.log.WithField("task_id", task.ID).Info("Task updated")
@@ -478,6 +538,13 @@ func (h *TaskHandler) Move(c *gin.Context) {
 			}).Warn("Automation failed for task move")
 			// Don't fail the request - the move succeeded, automation is best-effort
 		}
+	}
+
+	// Roll the parent order's status up from its tasks (first task started
+	// -> in_progress; all tasks completed -> completed). Best-effort.
+	if oldStatus != newStatus && h.rollup != nil {
+		task.Status = newStatus
+		h.rollup.OnTaskStatusChanged(c.Request.Context(), task, newStatus)
 	}
 
 	// Publish task move event for real-time updates

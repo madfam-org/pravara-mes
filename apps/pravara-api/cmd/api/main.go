@@ -161,12 +161,14 @@ func main() {
 	apikeyRepo := repositories.NewAPIKeyRepository(database.DB)
 	feedRepo := repositories.NewFeedRepository(database.DB)
 
-	// Wrap publisher with outbox persistence
+	// Attach outbox persistence to the publisher. Every business event that
+	// handlers and services publish (task/order/machine lifecycle, commands,
+	// notifications, ...) is now also written to event_outbox, which feeds
+	// the webhook dispatcher, GET /v1/events history, and the CRM feeds.
+	// Previously an OutboxPublisher wrapper was constructed here and
+	// discarded, so the outbox stayed empty in production.
 	if publisher != nil {
-		outboxPublisher := pubsub.NewOutboxPublisher(publisher, outboxRepo, log)
-		// The outbox publisher is used internally; the original publisher is still
-		// passed to routes for backwards compat. The outbox publisher wraps it.
-		_ = outboxPublisher // Services that need outbox can use this directly
+		publisher.EnableOutbox(outboxRepo)
 	}
 
 	// Set Gin mode

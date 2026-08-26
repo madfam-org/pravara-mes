@@ -38,11 +38,15 @@ func NewMachineHandler(repo *repositories.MachineRepository, telemetryRepo *repo
 }
 
 // CreateMachineRequest represents the request body for creating a machine.
+// Capabilities is a list of normalized capability tokens (e.g.
+// ["3d_printing", "pla"]) matched against task requirements by the
+// capability-based auto-assignment (see services.MachineAssignmentService).
 type CreateMachineRequest struct {
 	Name           string         `json:"name" binding:"required"`
 	Code           string         `json:"code" binding:"required"`
 	Type           string         `json:"type" binding:"required"`
 	Description    string         `json:"description"`
+	Capabilities   []string       `json:"capabilities"`
 	MQTTTopic      string         `json:"mqtt_topic"`
 	Location       string         `json:"location"`
 	Specifications map[string]any `json:"specifications"`
@@ -56,6 +60,7 @@ type UpdateMachineRequest struct {
 	Type           string         `json:"type"`
 	Description    string         `json:"description"`
 	Status         string         `json:"status"`
+	Capabilities   []string       `json:"capabilities"`
 	MQTTTopic      string         `json:"mqtt_topic"`
 	Location       string         `json:"location"`
 	Specifications map[string]any `json:"specifications"`
@@ -219,6 +224,7 @@ func (h *MachineHandler) Create(c *gin.Context) {
 		Type:           req.Type,
 		Description:    req.Description,
 		Status:         types.MachineStatusOffline,
+		Capabilities:   req.Capabilities,
 		MQTTTopic:      req.MQTTTopic,
 		Location:       req.Location,
 		Specifications: req.Specifications,
@@ -314,6 +320,9 @@ func (h *MachineHandler) Update(c *gin.Context) {
 	}
 	if req.Status != "" {
 		machine.Status = types.MachineStatus(req.Status)
+	}
+	if req.Capabilities != nil {
+		machine.Capabilities = req.Capabilities
 	}
 	if req.MQTTTopic != "" {
 		machine.MQTTTopic = req.MQTTTopic
