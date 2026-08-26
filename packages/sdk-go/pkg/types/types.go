@@ -125,16 +125,16 @@ type User struct {
 
 // Order represents a manufacturing order (typically from Cotiza).
 type Order struct {
-	ID            uuid.UUID      `json:"id"`
-	TenantID      uuid.UUID      `json:"tenant_id"`
-	ExternalID    string         `json:"external_id,omitempty"`
-	CustomerName  string         `json:"customer_name"`
-	CustomerEmail string         `json:"customer_email,omitempty"`
-	Status        OrderStatus    `json:"status"`
-	Priority      int            `json:"priority"`
-	DueDate       *time.Time     `json:"due_date,omitempty"`
-	TotalAmount   float64        `json:"total_amount,omitempty"`
-	Currency      string         `json:"currency"`
+	ID            uuid.UUID   `json:"id"`
+	TenantID      uuid.UUID   `json:"tenant_id"`
+	ExternalID    string      `json:"external_id,omitempty"`
+	CustomerName  string      `json:"customer_name"`
+	CustomerEmail string      `json:"customer_email,omitempty"`
+	Status        OrderStatus `json:"status"`
+	Priority      int         `json:"priority"`
+	DueDate       *time.Time  `json:"due_date,omitempty"`
+	TotalAmount   float64     `json:"total_amount,omitempty"`
+	Currency      string      `json:"currency"`
 	// ShippingAddress holds delivery details as free-form JSON
 	// (e.g. line1, line2, city, state, postal_code, country, contact_name,
 	// contact_phone). Backed by orders.shipping_address (migration 025).
