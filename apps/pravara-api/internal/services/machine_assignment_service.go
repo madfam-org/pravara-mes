@@ -61,12 +61,12 @@ const loadPenaltyPerTask = 0.5
 
 // CandidateScore explains how a machine scored for an assignment decision.
 type CandidateScore struct {
-	Machine        types.Machine `json:"machine"`
-	Score          float64       `json:"score"`
-	StatusWeight   float64       `json:"status_weight"`
-	ActiveTasks    int           `json:"active_tasks"`
-	LastAssignedAt *time.Time    `json:"last_assigned_at,omitempty"`
-	CapabilityMatch bool         `json:"capability_match"`
+	Machine         types.Machine `json:"machine"`
+	Score           float64       `json:"score"`
+	StatusWeight    float64       `json:"status_weight"`
+	ActiveTasks     int           `json:"active_tasks"`
+	LastAssignedAt  *time.Time    `json:"last_assigned_at,omitempty"`
+	CapabilityMatch bool          `json:"capability_match"`
 }
 
 // AssignmentResult is the outcome of one auto-assignment attempt.
