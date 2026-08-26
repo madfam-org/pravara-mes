@@ -241,6 +241,58 @@ steps added.
 
 ---
 
+## 4. Order→Dispatch Loop (added 2026-08; ROADMAP "Order→Dispatch Loop")
+
+Unit tests cover decomposition, assignment, roll-up, outbox threading, and
+dispatcher pickup (`go test ./apps/pravara-api/...`), but none of the
+following has been verified against a running deployment. Deploy-order
+prerequisite: migrations 025 and 026 MUST be applied (`make db-migrate`)
+**before** the code deploy — the order queries reference
+`orders.shipping_address` and will fail on a database without it.
+
+### 4.1 Outbox actually fills
+- [ ] Create an order (`POST $API/v1/orders`), then confirm a row appears:
+      `SELECT event_type FROM event_outbox ORDER BY created_at DESC LIMIT 5`
+      shows `order.created` (previously this table stayed empty forever).
+- [ ] `GET $API/v1/events` (scope `read:events`) returns the same events.
+- [ ] Register a webhook subscription for `order.*` and confirm a signed
+      delivery (X-Pravara-Signature) arrives at the endpoint.
+
+### 4.2 Order→task decomposition
+- [ ] `POST $API/v1/orders` with inline `items` creates one task per item
+      (`GET /v1/tasks?order_id=...`), each carrying specifications +
+      cad_file_url in metadata.
+- [ ] A Cotiza webhook `order.created` with items does the same.
+- [ ] With `PRAVARA_ORDERS_AUTO_DECOMPOSE=false`, no tasks are created.
+
+### 4.3 Capability-based assignment
+- [ ] Create a machine with `capabilities: ["3d_printing","pla"]` and an
+      MQTT topic; an order item with specifications
+      `{"process":"3d_printing","material":"pla"}` yields a task with that
+      machine_id set.
+- [ ] An item requiring a capability no machine has yields an unassigned
+      task plus a `task.assignment_failed` event in the outbox and a warning
+      notification.
+- [ ] An item with no process/material/capabilities keys yields an
+      unassigned task and no failure event (left for human routing).
+
+### 4.4 Order status roll-up
+- [ ] Move one of an order's tasks to in_progress: the order flips to
+      in_progress and an `order.status_changed` event lands in the outbox.
+- [ ] Complete ALL of an order's tasks: the order flips to completed.
+- [ ] A shipped or cancelled order is never regressed by task changes.
+
+### 4.5 Status vocabulary + migrations
+- [ ] `PATCH $API/v1/orders/:id` with `{"status":"confirmed"}` persists
+      `validated` (alias normalization) and an unknown status returns 400.
+- [ ] `infra/db/migrate.sh status` lists 001→026 with 025/026 applied;
+      `make db-migrate` is idempotent on a second run.
+- [ ] After migration 026, a machine heartbeat
+      (`POST /v1/machines/:id/heartbeat`) no longer errors on the
+      `'online'` enum value against a genesis-built database.
+
+---
+
 *Each unchecked box is an unverified claim. When you verify one, check the
 box and append the date, environment (local / staging / production), and any
 deviation observed. If a step fails, do not uncheck-and-forget: file an issue

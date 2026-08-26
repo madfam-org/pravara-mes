@@ -40,14 +40,17 @@ interface OrderDialogProps {
   order?: Order;
 }
 
+// Selectable statuses: the canonical DB enum only. Legacy aliases
+// (confirmed, in_production, quality_check, ready, delivered) remain valid
+// on the wire — the API normalizes them — but offering them here produced
+// orders the database rejected before normalization existed.
 const ORDER_STATUSES: OrderStatus[] = [
   "received",
-  "confirmed",
-  "in_production",
-  "quality_check",
-  "ready",
+  "validated",
+  "scheduled",
+  "in_progress",
+  "completed",
   "shipped",
-  "delivered",
   "cancelled",
 ];
 

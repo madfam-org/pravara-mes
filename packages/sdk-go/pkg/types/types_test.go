@@ -30,6 +30,64 @@ func TestOrderStatus_Values(t *testing.T) {
 	}
 }
 
+func TestNormalizeOrderStatus(t *testing.T) {
+	tests := []struct {
+		in   OrderStatus
+		want OrderStatus
+	}{
+		// Canonical values pass through unchanged.
+		{OrderStatusReceived, OrderStatusReceived},
+		{OrderStatusValidated, OrderStatusValidated},
+		{OrderStatusScheduled, OrderStatusScheduled},
+		{OrderStatusInProgress, OrderStatusInProgress},
+		{OrderStatusCompleted, OrderStatusCompleted},
+		{OrderStatusShipped, OrderStatusShipped},
+		{OrderStatusCancelled, OrderStatusCancelled},
+		// Legacy SDK/UI aliases map onto the DB enum.
+		{OrderStatusConfirmed, OrderStatusValidated},
+		{OrderStatusInProduction, OrderStatusInProgress},
+		{"processing", OrderStatusInProgress},
+		{OrderStatusQualityCheck, OrderStatusInProgress},
+		{OrderStatusReady, OrderStatusCompleted},
+		{OrderStatusDelivered, OrderStatusShipped},
+		// Unknown values are returned unchanged for the caller to reject.
+		{"bogus", "bogus"},
+	}
+
+	for _, tc := range tests {
+		if got := NormalizeOrderStatus(tc.in); got != tc.want {
+			t.Errorf("NormalizeOrderStatus(%q): got %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestIsCanonicalOrderStatus(t *testing.T) {
+	for _, s := range []OrderStatus{
+		OrderStatusReceived, OrderStatusValidated, OrderStatusScheduled,
+		OrderStatusInProgress, OrderStatusCompleted, OrderStatusShipped,
+		OrderStatusCancelled,
+	} {
+		if !IsCanonicalOrderStatus(s) {
+			t.Errorf("IsCanonicalOrderStatus(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []OrderStatus{
+		OrderStatusConfirmed, OrderStatusInProduction, OrderStatusQualityCheck,
+		OrderStatusReady, OrderStatusDelivered, "bogus", "",
+	} {
+		if IsCanonicalOrderStatus(s) {
+			t.Errorf("IsCanonicalOrderStatus(%q) = true, want false", s)
+		}
+	}
+
+	// Every alias must normalize onto a canonical value.
+	for alias := range orderStatusAliases {
+		if !IsCanonicalOrderStatus(NormalizeOrderStatus(alias)) {
+			t.Errorf("alias %q does not normalize to a canonical status", alias)
+		}
+	}
+}
+
 func TestTaskStatus_Values(t *testing.T) {
 	statuses := []struct {
 		status   TaskStatus

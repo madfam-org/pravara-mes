@@ -23,6 +23,20 @@ type Config struct {
 	Webhooks   WebhooksConfig   `mapstructure:"webhooks"`
 	SSE        SSEConfig        `mapstructure:"sse"`
 	CORS       CORSConfig       `mapstructure:"cors"`
+	Orders     OrdersConfig     `mapstructure:"orders"`
+}
+
+// OrdersConfig holds order-intake automation settings.
+type OrdersConfig struct {
+	// AutoDecompose creates one production task per order item when an order
+	// with items arrives (API or Cotiza webhook). Default true: it only
+	// creates task rows and publishes events — no machine command is
+	// dispatched until a task is explicitly moved to in_progress.
+	AutoDecompose bool `mapstructure:"auto_decompose"`
+	// AutoAssign attempts capability-based machine assignment for tasks
+	// created by decomposition. Tasks whose item specifications express no
+	// capability requirements are left unassigned for a human to route.
+	AutoAssign bool `mapstructure:"auto_assign"`
 }
 
 // WebhooksConfig holds webhook dispatcher settings.
@@ -212,6 +226,10 @@ func setDefaults(v *viper.Viper) {
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"https://mes-app.madfam.io", "https://mes-admin.madfam.io"})
 	v.SetDefault("cors.status_public", true)
+
+	// Orders automation defaults
+	v.SetDefault("orders.auto_decompose", true)
+	v.SetDefault("orders.auto_assign", true)
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -266,6 +284,9 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("sse.keepalive_seconds", "SSE_KEEPALIVE_SECONDS")
 	v.BindEnv("cors.allowed_origins", "CORS_ALLOWED_ORIGINS")
 	v.BindEnv("cors.status_public", "CORS_STATUS_PUBLIC")
+
+	v.BindEnv("orders.auto_decompose", "ORDERS_AUTO_DECOMPOSE")
+	v.BindEnv("orders.auto_assign", "ORDERS_AUTO_ASSIGN")
 }
 
 // IsDevelopment returns true if running in development mode.
