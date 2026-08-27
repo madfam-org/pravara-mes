@@ -7,7 +7,6 @@
 > access as platform bootstrap or documented break-glass only, and record any
 > missing Enclii adapter gap.
 
-
 > **Cloud-native MES — owns fabrication-node routing and dispatch for physical jobs.**
 
 This file is self-contained: a Claude session on a fresh machine can operate
@@ -39,16 +38,17 @@ PravaraMES is the Manufacturing Execution System that owns fabrication-node rout
 
 ### Upstream dependencies (this repo consumes)
 
-- digifab-quoting / cotiza (accepted quote feed)
+- forj (WIRED — PAID storefront orders POST /v1/orders with a `Bearer prv_…` API key)
+- digifab-quoting / cotiza (PLANNED — no accepted-quote call exists yet; a `COTIZA_WEBHOOK_SECRET` receiver is configured but unfed)
 - fab nodes (internal + partner — OPC-UA, MQTT, printer APIs)
 - postgres (jobs, nodes, schedules)
 - redis + centrifugo (realtime websocket fanout)
-- janua (operator auth)
+- janua (operator auth; API-key auth runs alongside it for machine callers)
 
 ### Downstream consumers (this repo is consumed by)
 
 - phynd-crm (job status federation to client portal)
-- forj (accepted orders route into fab jobs here)
+- forj (WIRED — `order.status_changed` + `task.assignment_failed` delivered by the webhook_subscriptions dispatcher, HMAC-signed via `X-Pravara-Signature`, with exponential-backoff retry; prod subscription `forj-order-status` → `https://api.forj.design/api/webhooks/pravara`)
 - karafiel (completed-job CFDI emission)
 
 ### Key environment variables
@@ -58,6 +58,8 @@ PravaraMES is the Manufacturing Execution System that owns fabrication-node rout
 - `JANUA_JWKS_URI — auth`
 - `CENTRIFUGO_TOKEN_HMAC_SECRET — ws auth`
 - `NODE_CONN_* — per-fab-node credentials`
+- `ORDERS_AUTO_DECOMPOSE / ORDERS_AUTO_ASSIGN — order→task decomposition and capability-based machine assignment (both default true)`
+- `WEBHOOKS_DISPATCH_INTERVAL / WEBHOOKS_MAX_RETRIES / WEBHOOKS_RETENTION_DAYS — outbound webhook dispatcher`
 
 ---
 
@@ -73,7 +75,7 @@ below is embedded here so this document stands alone.
 | **Enclii** | `madfam-org/enclii` | PaaS control plane — all deploys go through this |
 | **Janua** | `madfam-org/janua` | OIDC/OAuth 2.0 provider — RS256 JWKS at `auth.madfam.io/.well-known/jwks.json` |
 | **Dhanam** | `madfam-org/dhanam` | Billing + payment gateways (Stripe, Mercado Pago, SPEI, etc.) |
-| **Selva** | `madfam-org/selva-office` | LLM inference routing + agent orchestration (formerly `selva-office`) |
+| **Selva** | `madfam-org/selva-office` | LLM inference routing + agent orchestration |
 | **Karafiel** | `madfam-org/karafiel` | Operational compliance — CFDI, NOM-151, e.firma, SAT-adjacent. Owns legal-ops / contract templates |
 | **Tezca** | `madfam-org/tezca` | Mexican law oracle (informational only — feeds Karafiel) |
 | **Cotiza** | `madfam-org/digifab-quoting` | MADFAM's quoting engine (fabrication + services) |
@@ -91,7 +93,7 @@ below is embedded here so this document stands alone.
 - **Billing**: credit metering + entitlements flow through Dhanam. See
   `madfam-org/dhanam` for the meter/entitlement/invoice APIs.
 - **Inference**: every LLM call should route through Selva
-  (`selva-office`, formerly `selva-office`) at `/v1` (OpenAI-compatible). Do not talk directly
+  (`selva-office`) at `/v1` (OpenAI-compatible). Do not talk directly
   to OpenAI / Anthropic from service code.
 - **CORS**: explicit allowlist per service. Wildcards are banned
   (audit 2026-04-23 H2/H5/H6).
@@ -137,11 +139,12 @@ to kubectl only for the gaps listed at the end of this section.
 # macOS
 brew install enclii/tap/enclii
 
-# Linux
-curl -sSL https://get.enclii.dev | bash
+# Linux / from source (any OS with Go 1.22+)
+git clone https://github.com/madfam-org/enclii.git
+cd enclii && make install-cli
 
-# From source (in the enclii repo)
-make build-cli && ./bin/enclii --version
+# Build only (no install)
+make build-cli && ./bin/enclii version
 ```
 
 ### Auth
@@ -185,7 +188,7 @@ enclii rollback pravara-api --to-revision 5
 enclii releases pravara-api                          # list builds
 enclii releases pravara-api --latest --output json
 
-# Secrets (routed through Lockbox → Vault → ESO → K8s)
+# Secrets (routed through Lockbox -> Vault -> ESO -> K8s)
 enclii secrets list pravara-api
 enclii secrets set MY_KEY=value --service pravara-api --secret
 enclii secrets rm MY_KEY --service pravara-api
@@ -205,7 +208,7 @@ enclii junctions list pravara-api
 enclii functions list
 
 # Local dev environment
-enclii local up         # spin up dependent services (postgres, redis, …)
+enclii local up         # spin up dependent services (postgres, redis, ...)
 enclii local logs
 enclii local down
 ```
@@ -260,7 +263,7 @@ go through Enclii web, API, or CLI.
 
 ## Document provenance
 
-Generated 2026-04-23 as part of the "each repo stands alone" docs sweep. If the
-ecosystem map or CLI reference drifts from reality, update the generator at
-`madfam-org/enclii/docs/templates/ECOSYSTEM.md.template` and re-render — don't
-edit per-repo copies in isolation.
+Generated 2026-04-23 as part of the "each repo stands alone" docs sweep. The
+generator and per-repo metadata live at `madfam-org/enclii/docs/templates/ecosystem/`.
+Re-render (don't hand-edit per-repo copies) when the ecosystem map or CLI
+reference needs to update across the fleet.
