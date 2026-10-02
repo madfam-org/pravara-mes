@@ -853,4 +853,6 @@ make dev
 
 ## License
 
-Copyright (c) 2026 MADFAM. All rights reserved.
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE).
+
+Copyright (c) 2026 MADFAM.
