@@ -2,7 +2,7 @@ module github.com/madfam-org/pravara-mes/apps/pravara-api
 
 go 1.25.0
 
-toolchain go1.25.9
+toolchain go1.25.14
 
 replace github.com/madfam-org/pravara-mes/packages/sdk-go => ../../packages/sdk-go
 
@@ -20,7 +20,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.11.1

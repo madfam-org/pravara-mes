@@ -2,7 +2,7 @@ module github.com/madfam-org/pravara-mes/apps/machine-adapter
 
 go 1.25.0
 
-toolchain go1.25.9
+toolchain go1.25.14
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1

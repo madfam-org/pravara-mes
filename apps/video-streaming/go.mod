@@ -2,7 +2,7 @@ module github.com/madfam-org/pravara-mes/apps/video-streaming
 
 go 1.25.0
 
-toolchain go1.25.9
+toolchain go1.25.14
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.2
