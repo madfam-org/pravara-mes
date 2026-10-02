@@ -186,7 +186,9 @@ is not built.
     npm's arborist error «Cannot read properties of null (reading
     'edgesOut')». The only path that resolves pulls in vitest 4.1.11,
     rolldown 1.2.12 and lightningcss 1.33, and lightningcss is also used by the
-    production Tailwind build. vite is dev-only.
+    production Tailwind build. vite is dev-only, and these are the 4 open
+    high-severity Dependabot alerts on `main`: 3 in admin, 1 in
+    pravara-landing, all with development scope.
 14. **Remaining moderate/low npm advisories.** *Engineering.* admin has 12
     moderate (posthog-js → `@opentelemetry/*`, dompurify, fflate,
     baseline-browser-mapping). luban-bridge has qs/body-parser via express 4
