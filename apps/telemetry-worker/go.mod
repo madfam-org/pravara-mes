@@ -2,7 +2,7 @@ module github.com/madfam-org/pravara-mes/apps/telemetry-worker
 
 go 1.25.0
 
-toolchain go1.25.9
+toolchain go1.25.14
 
 replace github.com/madfam-org/pravara-mes/packages/sdk-go => ../../packages/sdk-go
 
@@ -14,7 +14,7 @@ require (
 	github.com/lib/pq v1.11.2
 	github.com/madfam-org/pravara-mes/packages/sdk-go v0.0.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.11.1
@@ -49,10 +49,10 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
