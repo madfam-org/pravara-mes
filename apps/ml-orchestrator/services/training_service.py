@@ -7,7 +7,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
@@ -30,7 +30,9 @@ class TrainingService:
 
     def __init__(self):
         self.db_engine = None
-        self.mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "mlruns")
+        # MLflow 3 rejects the filesystem backend ("mlruns") by default, so the
+        # local default is a SQLite store; MLFLOW_TRACKING_URI still overrides it.
+        self.mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
         self.model_registry = {}
         self.training_jobs = {}
         self.training_schedule = {
@@ -121,10 +123,13 @@ class TrainingService:
                 model_path = f"models/{model_type}_model"
                 await self.save_model(model, model_path, model_type)
 
-                # Register model in MLflow
+                # Register model in MLflow. The trained objects are this
+                # service's own wrapper classes, which MLflow 3's default skops
+                # format cannot serialize; cloudpickle keeps the MLflow 2 behaviour.
                 mlflow.sklearn.log_model(
                     model,
-                    model_type,
+                    name=model_type,
+                    serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
                     registered_model_name=f"pravara_{model_type}_model"
                 )
 
