@@ -1,13 +1,27 @@
 # Pravara Mes
 
-Compact LLM context index for this repository.
+Compact LLM context index for this repository. PravaraMES is the MADFAM
+Manufacturing Execution System: it owns fabrication routing and dispatch for
+physical jobs (orders, tasks, machines, telemetry, quality).
 
 ## Read first
 
-- `AGENTS.md` — canonical agent operating instructions.
-- `README.md` — human/product overview when present.
-- `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context when present.
+- `AGENTS.md` — canonical agent operating instructions, including
+  «Repo facts» (what deploys, toolchains, gates).
+- `README.md` — product overview, API, «Testing», «Deployment» and
+  «Related repositories / contracts».
+- `ROADMAP.md` — status table (with a "Deployed" column) and the one
+  canonical pending-work list: «Pending work and roadmap ahead».
+- `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context (generated;
+  do not hand-edit).
 - `llms-full.txt` — full context map and durable operating contract.
+
+## Deployed vs not deployed
+
+Deployed by GitOps: pravara-api, telemetry-worker, pravara-ui,
+pravara-landing, pravara-gateway (Centrifugo), pravara-admin. Not built or
+deployed: visualization-engine, video-streaming (does not build),
+ml-orchestrator, luban-bridge, octoprint-connector, machine-adapter.
 
 ## Production operations
 

@@ -181,6 +181,13 @@ curl -X POST http://localhost:4507/api/gcode/analyze \
   -d '{"gcode": "G28\nG1 X100 Y100 Z10 F3000"}'
 ```
 
+`src/routes/__tests__/gcode.test.ts` drives real multipart uploads through
+the G-code routes. It covers the multer 2.x contract: the extension filter,
+`upload.single('gcode')`, files kept under `GCODE_UPLOAD_DIR`, and their
+deletion once read. This service is not in CI and not deployed. Its known
+`tsc` errors and red jest tests are listed in the repository's
+[ROADMAP.md, «Pending work and roadmap ahead»](../../ROADMAP.md#pending-work-and-roadmap-ahead).
+
 ## Supported Snapmaker Features
 
 ### Machine Models

@@ -58,9 +58,52 @@ redirect and should not become the source of truth again.
 Regenerate or repair these files with
 `internal-devops/scripts/sync-agent-docs.py` from the labspace ecosystem.
 
+## Repo facts (verified against `main`, 2026-10-02)
+
+- **What deploys.** Merging to `main` is the deploy.
+  `.github/workflows/build-deploy.yml` (path-filtered) builds pravara-api,
+  telemetry-worker, pravara-ui, pravara-landing and pravara-gateway;
+  `.github/workflows/deploy-admin.yml` builds pravara-admin (`apps/admin`).
+  Both sign with cosign and commit digests to
+  `infra/k8s/production/kustomization.yaml`, which Argo CD auto-syncs.
+  `**.md` and `docs/**` changes trigger no build. visualization-engine,
+  video-streaming, ml-orchestrator, luban-bridge, octoprint-connector and
+  machine-adapter are **not built or deployed** by any workflow. See
+  README.md «Deployment».
+- **Toolchains.** Go `go 1.25.0` with toolchain `go1.25.14` (`go.work`, each
+  `go.mod`, the builder images and `GO_VERSION` in the workflows move
+  together). Node 22 in CI. pravara-ui and pravara-landing use Next 15.5;
+  admin uses Next 16.3, where `next lint` no longer exists.
+- **Tests and gates.** CI gates the five `go.work` modules (vet, race tests,
+  golangci-lint, gofmt), pravara-ui (lint, typecheck, build; its tests are
+  `continue-on-error`) and pravara-landing (lint, typecheck, tests, build).
+  admin, luban-bridge, octoprint-connector and ml-orchestrator suites run
+  only locally. Commands are in README.md «Testing». Known red suites are
+  in the roadmap's pending list.
+- **Not in `go.work`.** apps/video-streaming does not build (pion API
+  drift). Do not add it to `go.work` until it does.
+- **Cross-repo contracts.** README.md «Related repositories / contracts»
+  lists each contract with the doc on the other side. Two contracts are known
+  to have drifted: Cotiza → Pravara dispatch and the Pravara → PhyndCRM
+  signature header. Do not "fix" one side without the owner's decision on
+  which side is canonical.
+- **Pending work.** The one canonical list is ROADMAP.md
+  [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
+  Don't start a second list here, in README or in the llms files.
+- **Public repository.** No internal hostnames, cluster or tunnel ids, client
+  names or unfixed-vulnerability detail in docs, PRs or commits. Write
+  "(tracked privately)" instead.
+- **ECOSYSTEM.md is generated** by enclii's
+  `docs/templates/ecosystem/generator.py`. Do not hand-edit it.
+
 ---
 
 ## Legacy CLAUDE.md guidance imported on 2026-05-13
+
+> **Note (2026-10-02):** the public front door at the site root is now the
+> standalone `apps/pravara-landing` app (see its README). The `/landing` route
+> and components in `apps/pravara-ui` described below remain during the
+> transition, and `landing-contract.test.tsx` still guards them.
 
 <!-- BEGIN LEGACY_CLAUDE_IMPORT -->
 

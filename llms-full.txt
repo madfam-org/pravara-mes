@@ -1,6 +1,6 @@
 # Pravara Mes Full LLM Context
 
-Generated: 2026-05-13
+Generated: 2026-05-13 (curated 2026-10-02)
 
 ## Purpose
 
@@ -32,6 +32,52 @@ break-glass emergencies when Enclii is unavailable or lacks an implemented
 adapter. Any break-glass use must record the actor, reason, target
 service/environment, commands executed, result, and follow-up Enclii adapter
 gap or incident link.
+
+## Repository map (verified against `main`, 2026-10-02)
+
+- `apps/pravara-api` (Go/Gin): REST API under `/v1`, behind a Janua OIDC JWT
+  or an `X-API-Key`. Hosts the order→task decomposition, capability-based
+  assignment, event outbox and outbound webhook dispatcher
+  (`X-Pravara-Signature: sha256=<hex>`), plus inbound webhooks for Cotiza,
+  Dhanam, ForgeSight and Tezca.
+- `apps/telemetry-worker` (Go): MQTT telemetry ingest and machine command
+  dispatch.
+- `apps/pravara-ui` (Next 15.5), `apps/pravara-landing` (Next 15.5, public
+  site root), `apps/admin` (Next 16.3, pravara-admin).
+- `apps/pravara-gateway`: Centrifugo configuration for real-time fan-out.
+- Not deployed: `apps/visualization-engine`, `apps/machine-adapter` (Go,
+  in `go.work`); `apps/video-streaming` (Go, not in `go.work`, does not
+  build); `apps/ml-orchestrator`, `apps/octoprint-connector` (Python);
+  `apps/luban-bridge` (Node).
+- `packages/sdk-go`: shared Go types.
+- `infra/k8s/production`: the overlay Argo CD syncs. It renders the
+  resources listed in `infra/k8s/base/kustomization.yaml`.
+
+## Deploy path
+
+Merging to `main` is the deploy. `.github/workflows/build-deploy.yml`
+(path-filtered) and `.github/workflows/deploy-admin.yml` build and sign the
+images and commit their digests to `infra/k8s/production/kustomization.yaml`.
+Argo CD auto-syncs that overlay. Docs-only changes trigger no build.
+
+## Tests
+
+Commands and the list of CI-gated suites: README.md «Testing». Suites not
+in CI (admin, luban-bridge, octoprint-connector, ml-orchestrator) and their
+known failures are tracked in the pending-work list below.
+
+## Cross-repo contracts
+
+README.md «Related repositories / contracts» is the table. It links the doc
+that defines each contract on the other side (Janua, digifab-quoting/Cotiza,
+phynd-crm, tezca, enclii). Two contracts have known drift: Cotiza → Pravara
+dispatch, and the Pravara → PhyndCRM signature header.
+
+## Pending work and roadmap
+
+The single canonical list is ROADMAP.md «Pending work and roadmap ahead»
+(priorities P0–P3; owner decision vs engineering; links). Do not copy it
+here; read it there.
 
 ## Repo entrypoints detected
 

@@ -419,7 +419,9 @@ G3 X0 Y10 Z-9 I-10 J0 F1000`
 	}
 
 	if len(arcSegments) < 2 {
-		t.Skip("not enough arc segments to verify even distribution")
+		// A 90-degree helical arc must be segmented; fewer than 2 segments
+		// means arc interpolation regressed, so fail rather than skip.
+		t.Fatalf("got %d arc segments, want >= 2 to verify even Z distribution", len(arcSegments))
 	}
 
 	// Calculate Z step for each segment
