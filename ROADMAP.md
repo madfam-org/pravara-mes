@@ -5,8 +5,9 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 ## Current Status
 
 **Version**: Phase 2.6 MES Industry Standard Features (Complete) + Order→Dispatch Loop
-**Last Updated**: August 26, 2026
-**Total Services**: 10
+**Last Updated**: October 2, 2026
+**Apps in this repo**: 12, of which 6 are deployed to production by GitOps (see the
+"Deployed" column and [Pending work and roadmap ahead](#pending-work-and-roadmap-ahead))
 
 > **Verification gate:** completeness claims in this table are only as good
 > as [docs/RUNTIME_VERIFICATION_CHECKLIST.md](docs/RUNTIME_VERIFICATION_CHECKLIST.md).
@@ -14,32 +15,34 @@ Cloud-native Manufacturing Execution System for the MADFAM ecosystem.
 > the checklist, not this table, is the record of what has actually been
 > verified against a running system.
 
-| Component | Status | Progress |
-|-----------|--------|----------|
-| pravara-api | Complete* | 100%* |
-| pravara-ui | Complete | 100% |
-| telemetry-worker | Complete | 100% |
-| pravara-gateway | Complete | 100% |
-| visualization-engine | Complete | 100% |
-| video-streaming | Complete | 100% |
-| ml-orchestrator | Complete | 100% |
-| luban-bridge | Complete | 100% |
-| octoprint-connector | Complete | 100% |
-| machine-adapter | In Progress | 70% |
-| Infrastructure | Complete | 100% |
-| CI/CD Pipeline | Complete | 100% |
-| Observability | Complete | 100% |
-| Security | Complete | 100% |
-| Quality Management | Complete | 100% |
-| Billing Integration | Complete | 100% |
-| OEE Analytics | Complete | 100% |
-| SPC Control Charts | Complete | 100% |
-| Maintenance CMMS | Complete | 100% |
-| Products & BOM | Complete | 100% |
-| Product Genealogy | Complete | 100% |
-| Work Instructions | Complete | 100% |
-| Inventory Management | Complete | 100% |
-| Order→Dispatch Loop | Implemented, needs runtime verification | — |
+| Component | Status | Progress | Deployed |
+|-----------|--------|----------|----------|
+| pravara-api | Complete* | 100%* | Yes |
+| pravara-ui | Complete | 100% | Yes |
+| pravara-admin | Live | — | Yes |
+| pravara-landing | Live | — | Yes |
+| telemetry-worker | Complete | 100% | Yes |
+| pravara-gateway (Centrifugo) | Complete | 100% | Yes |
+| visualization-engine | Code complete | — | No (pravara-api proxies to it; no image build) |
+| video-streaming | **Does not build** | — | No (not in `go.work`, CI or deploy) |
+| ml-orchestrator | Code complete, not enabled | — | No (`replicas: 0`, not in the base kustomization, no image build) |
+| luban-bridge | Code complete, tests partly red | — | No |
+| octoprint-connector | Code complete, tests partly red | — | No |
+| machine-adapter | In Progress | 70% | No |
+| Infrastructure | Complete | 100% | — |
+| CI/CD Pipeline | Complete | 100% | — |
+| Observability | Complete | 100% | — |
+| Security | Complete | 100% | — |
+| Quality Management | Complete | 100% | — |
+| Billing Integration | Complete | 100% | — |
+| OEE Analytics | Complete | 100% | — |
+| SPC Control Charts | Complete | 100% | — |
+| Maintenance CMMS | Complete | 100% | — |
+| Products & BOM | Complete | 100% | — |
+| Product Genealogy | Complete | 100% | — |
+| Work Instructions | Complete | 100% | — |
+| Inventory Management | Complete | 100% | — |
+| Order→Dispatch Loop | Implemented, needs runtime verification | — | — |
 
 \* pravara-api "Complete" previously overstated reality: until 2026-08 the
 event outbox was never written (the OutboxPublisher was constructed and
@@ -49,6 +52,190 @@ callers; `machines.capabilities` was never queried or even settable via the
 API), orders never decomposed into tasks, and order status never advanced
 from task state. The Order→Dispatch Loop work (below) closed those gaps; the
 runtime checklist gates the claim.
+
+**Deployed** means the image is built by `.github/workflows/build-deploy.yml`
+(pravara-api, telemetry-worker, pravara-ui, pravara-landing, pravara-gateway)
+or `.github/workflows/deploy-admin.yml` (pravara-admin), and its digest is
+committed to `infra/k8s/production/kustomization.yaml`, which Argo CD
+auto-syncs. No workflow builds or deploys anything else under `apps/`.
+
+---
+
+## Pending work and roadmap ahead
+
+This is the canonical pending-work list for the repo. README.md, AGENTS.md,
+`llms.txt` and `llms-full.txt` point here and do not keep their own copies.
+It was last reconciled against `main` on 2026-10-02, after
+[#45](https://github.com/madfam-org/pravara-mes/pull/45) and
+[#46](https://github.com/madfam-org/pravara-mes/pull/46). When an item lands,
+remove it here in the same PR.
+
+- **Priority:** P0 blocks production now. P1 breaks a cross-repo flow or must
+  land before the next enablement. P2 is quality, coverage or enablement debt.
+  P3 is cleanup or future scope.
+- **Type:** *Engineering* can be done in a PR. *Owner decision* needs a product
+  or ownership call first.
+
+No P0 items are open. The #45 "Build and Deploy" and "Deploy Admin" runs on
+`main` succeeded on 2026-10-02. #46 deployed nothing, because ml-orchestrator
+is not built.
+
+### P1
+
+1. **Cotiza → Pravara fabrication-dispatch contract drift.** *Owner decision,
+   then engineering.* Why it matters: accepted Cotiza fabrication quotes do not
+   become Pravara orders. Cotiza's dispatch is fire-and-forget, so the failure
+   is only a log line on the Cotiza side. Both sides on `main` as of
+   2026-10-02:
+
+   | | Cotiza sends ([`pravara-dispatch.service.ts`](https://github.com/madfam-org/digifab-quoting/blob/main/apps/api/src/integrations/pravara/pravara-dispatch.service.ts)) | Pravara accepts ([`webhook_handlers.go`](apps/pravara-api/internal/api/webhook_handlers.go)) |
+   |---|---|---|
+   | Route | `POST {PRAVARA_API_URL}/api/v1/mes/jobs` | `POST /v1/webhooks/cotiza`; no `mes/jobs` route exists |
+   | Signature header | `x-webhook-signature`, plus `x-webhook-timestamp` | `X-Cotiza-Signature` |
+   | Signature value | hex HMAC-SHA256 of the raw body | hex HMAC-SHA256 of the raw body (matches) |
+   | Shared secret env | `PRAVARA_DISPATCH_SECRET` | `COTIZA_WEBHOOK_SECRET` |
+   | Caller auth | the HMAC only | the `/v1` group also requires a Janua JWT or a Pravara API key |
+   | Payload | flat job: `orderId`, `externalId`, `engagement_id`, `currency`, `dueBy`, `items[]` (`quoteItemId`, `process`, `material`, `quantity`, `selections`, `files`, prices), `metadata` | envelope: `event` (`order.created`, `order.confirmed`, `order.updated`, `order.cancelled`), `timestamp`, `order` (`id` and `customer_name` required; `items[]` with `product_name` and `quantity` required) |
+
+   Decide which side is canonical: a Pravara intake route for Cotiza's job
+   shape, or Cotiza adopting Pravara's order envelope. Then change one side
+   and add a contract test on both. The Cotiza-side record is the drift note in
+   [digifab-quoting `AGENTS.md`, «Related repositories / contracts»](https://github.com/madfam-org/digifab-quoting/blob/main/AGENTS.md#related-repositories--contracts).
+   Nothing has been changed in code on either side.
+2. **Pravara → PhyndCRM status-webhook header drift.** *Engineering.* Why it
+   matters: fabrication status changes may not reach the PhyndCRM client
+   portal. The outbound dispatcher
+   ([`webhook_dispatcher.go`](apps/pravara-api/internal/services/webhook_dispatcher.go))
+   signs every delivery as `X-Pravara-Signature: sha256=<hex>`. PhyndCRM's
+   [`/api/webhooks/pravara`](https://github.com/madfam-org/phynd-crm/blob/main/apps/web/src/app/api/webhooks/pravara/route.ts)
+   verifies `x-webhook-signature` (it accepts the `sha256=` prefix) and would
+   reject a delivery that carries only `X-Pravara-Signature`. forj's receiver
+   verifies `X-Pravara-Signature`, so send both headers during any transition.
+   Also check the fields PhyndCRM reads (`event`, `status`,
+   `orderId`/`externalId`) against the outbox event payload. Event names:
+   [phynd-crm `docs/ENGAGEMENT_EVENT_TAXONOMY.md`](https://github.com/madfam-org/phynd-crm/blob/main/docs/ENGAGEMENT_EVENT_TAXONOMY.md).
+3. **Inbound webhook auth hardening checklist before relying on Cotiza intake
+   (tracked privately).** *Engineering.* Do it together with item 1.
+
+### P2
+
+4. **ml-orchestrator: enable or retire.** *Owner decision, then engineering.*
+   It is not deployed: `replicas: 0`, not listed in
+   `infra/k8s/base/kustomization.yaml`, and no workflow builds it. Before
+   enabling it:
+   - complete a data-access hardening pass (tracked privately);
+   - pin `xgboost`, `asyncpg` and `cachetools`, which the code imports but
+     `requirements.txt` does not list;
+   - fix the 8 pre-existing pytest failures recorded in #46 (anomaly_detection
+     2, predictive_maintenance 2, process_optimizer 1, quality_prediction 3);
+   - remove `torch`, which #46 moved to 2.14.1 but no code imports;
+   - upgrade fastapi 0.109 / starlette 0.35 and keras 2.15 (via tensorflow
+     2.15), which pip-audit still reports.
+
+   The mlflow 3 contract from #46 is covered by
+   `apps/ml-orchestrator/tests/test_training_service_mlflow.py`. The default
+   tracking URI is `sqlite:///mlflow.db` and `MLFLOW_TRACKING_URI` overrides it.
+   Models are logged with `log_model(name=…, serialization_format=cloudpickle)`.
+5. **luban-bridge test and type debt.** *Engineering.*
+   - `tsc --noEmit` reports 2 errors: `@types/cors` is missing, and the
+     `MockSerialPort.list` typing in `machine-discovery.test.ts` is wrong.
+   - jest has 3 failing tests: GCodeAnalyzer `validateGCode` «should detect
+     missing start code» and «should detect temperature limit violations»,
+     plus the Machine Routes discover test, which times out.
+   - 2 suites fail to run: `machine-discovery.test.ts` (the TS error) and
+     `snapmaker-protocol.test.ts` (its `jest.mock` factory references an
+     import before initialization).
+
+   The service is not in CI and not deployed. The multer 2.x upload path from
+   #45 is covered by `src/routes/__tests__/gcode.test.ts`.
+6. **octoprint-connector: 6 of 108 pytest tests fail.** *Engineering.* They
+   fail the same way with python-multipart 0.0.26 and 0.0.32 (#45).
+   fastapi 0.109 / starlette 0.35 need a fastapi upgrade. The service is not
+   in CI and not deployed.
+7. **CI does not gate several suites.** *Engineering.* `ci.yml` runs the
+   pravara-ui `npm run test:run` step with `continue-on-error: true`. admin
+   (vitest), luban-bridge (jest), octoprint-connector and ml-orchestrator
+   (pytest) have no CI job at all. Add each job once its suite is green
+   (items 4–6 and 8).
+8. **admin `npm run lint` is broken.** *Engineering.* Next 16 (admin is on
+   16.3.6) removed `next lint`. Move to the ESLint CLI with a flat config.
+   pravara-landing (Next 15.5) still uses the deprecated `next lint`, which
+   works there.
+9. **Manifest coverage audit.** *Engineering.* Argo CD syncs
+   `infra/k8s/production`, which renders only the resources listed in
+   `infra/k8s/base/kustomization.yaml`. `infra/k8s/base/observability/`,
+   `external-secrets/`, `ingress.yaml`, `ml-orchestrator.yaml` and other base
+   sub-directories are not referenced. Confirm what the platform applies
+   instead, then reference or retire each one (details tracked privately).
+10. **Runtime verification.** *Owner decision (operator time).* All 90 checks
+    in [docs/RUNTIME_VERIFICATION_CHECKLIST.md](docs/RUNTIME_VERIFICATION_CHECKLIST.md)
+    are unchecked, including the Order→Dispatch loop (§4). Until they are
+    checked, the "Complete" rows in the status table are self-reported.
+11. **pravara-ui token refresh handling.** *Engineering.* This was the open
+    Phase 1 item.
+
+### P3
+
+12. **video-streaming does not build.** *Owner decision (fix or retire).*
+    `peer.VideoTrack.WriteSample` is undefined, because a
+    `*webrtc.TrackLocalStaticRTP` has no `WriteSample`, and so is
+    `manager.streams`. The app is not in `go.work`, CI or deploy; #45 only
+    moved its `go.mod` pins.
+13. **The vite dev-dependency bump is blocked.** *Engineering.* admin is on
+    vite 8.0.0 and pravara-landing on 8.0.8. `npm update vite` fails with
+    npm's arborist error «Cannot read properties of null (reading
+    'edgesOut')». The only path that resolves pulls in vitest 4.1.11,
+    rolldown 1.2.12 and lightningcss 1.33, and lightningcss is also used by the
+    production Tailwind build. vite is dev-only, and these are the 4 open
+    high-severity Dependabot alerts on `main`: 3 in admin, 1 in
+    pravara-landing, all with development scope.
+14. **Remaining moderate/low npm advisories.** *Engineering.* admin has 12
+    moderate (posthog-js → `@opentelemetry/*`, dompurify, fflate,
+    baseline-browser-mapping). luban-bridge has qs/body-parser via express 4
+    (1 low, 1 moderate).
+15. **Observability backlog.** *Engineering.* Open Phase 2.5 items: Grafana
+    dashboards (the JSON configmap exists), Loki log aggregation, per-tenant
+    metrics isolation.
+16. **External Secrets Operator.** *Engineering.* Open Phase 2.5 Security
+    item; see item 9 for the unreferenced `external-secrets/` kustomization.
+17. **Invoice generation hooks.** *Owner decision.* Open Phase 2.5 Billing
+    item. Dhanam owns invoicing, and Pravara reports usage. Decide whether
+    Pravara needs any hook beyond usage events.
+18. **Phase 3.0 CFDI scope vs ecosystem ownership.** *Owner decision.* The
+    Phase 3.0 checklist puts CFDI XML generation, PAC validation and signing in
+    a Pravara `compliance-engine`. In the ecosystem, Karafiel issues CFDI and
+    already lists Pravara's completed jobs as an input (see ECOSYSTEM.md).
+    Either re-scope Phase 3.0 to emit completed-job events, keeping the
+    IMMEX/Annex 24 inventory tracking, or record why Pravara needs its own CFDI
+    path.
+19. **The Cotiza line in ECOSYSTEM.md is stale.** *Engineering
+    (enclii-owned).* It says no accepted-quote call exists yet. Cotiza does
+    call, at the drifted route in item 1. ECOSYSTEM.md is generated: update
+    [`docs/templates/ecosystem/metadata_fabrication.py`](https://github.com/madfam-org/enclii/blob/main/docs/templates/ecosystem/metadata_fabrication.py)
+    in enclii and re-render. Do not hand-edit it.
+20. **Landing demo-request endpoint.** *Owner decision (where leads go), then
+    engineering.* The CTA uses `mailto:` until `/api/demo-request` exists.
+21. **Close issue #38.** *Owner decision.*
+    [#38](https://github.com/madfam-org/pravara-mes/issues/38) (Dependency
+    graph) appears resolved: on 2026-10-02 the Dependency Review job ran on #45
+    and passed with no high-severity findings.
+
+### Roadmap ahead (feature work)
+
+The open checkboxes in the phase sections below are the feature roadmap:
+- machine-adapter completion (Phase 2.5b: full OPC-UA, Modbus TCP/RTU, edge
+  gateway);
+- Phase 3.0 Mexican compliance, after item 18;
+- Phase 4.0 AI and automation, which depends on item 4.
+
+The open Phase 1 and Phase 2.5 checkboxes have moved into the list above.
+
+### Known flaky tests
+
+No flaky test is known in the suites CI gates: the Go modules in `go.work`,
+pravara-ui and pravara-landing. The red tests in items 4–6 fail on every run.
+The one exception is the luban-bridge discover-route test, which fails by
+timeout and may depend on the environment.
 
 ---
 
@@ -108,7 +295,7 @@ Complete all core MVP features per the PRD.
 - [x] Create task dialog
 - [x] Create machine dialog
 - [x] Error toast notifications
-- [ ] Token refresh handling
+- [ ] Token refresh handling (tracked in [Pending work](#pending-work-and-roadmap-ahead), item 11)
 
 ### Telemetry Worker
 - [x] MQTT connection management
@@ -178,8 +365,10 @@ Enterprise-grade infrastructure and monitoring.
 - [ ] Loki log aggregation
 - [ ] Per-tenant metrics isolation
 
+The three open items above are tracked in [Pending work](#pending-work-and-roadmap-ahead), items 9 and 15.
+
 ### Security ✅
-- [ ] External Secrets Operator
+- [ ] External Secrets Operator (tracked in [Pending work](#pending-work-and-roadmap-ahead), item 16)
 - [x] Network policies (pod isolation)
 - [x] RBAC for service accounts
 - [x] Rate limiting (per-IP and per-tenant)
@@ -194,7 +383,7 @@ Enterprise-grade infrastructure and monitoring.
 - [x] Usage event recording (7 event types)
 - [x] Tenant usage tracking (Redis-based)
 - [x] Usage reporting API endpoints
-- [ ] Invoice generation hooks (requires Dhanam API)
+- [ ] Invoice generation hooks (requires Dhanam API; tracked in [Pending work](#pending-work-and-roadmap-ahead), item 17)
 
 ---
 
@@ -202,6 +391,11 @@ Enterprise-grade infrastructure and monitoring.
 > **Status**: In Progress | **Timeline**: 2-3 weeks
 
 Digital twin visualization, ML-driven quality prediction, and multi-protocol machine connectivity.
+
+> The ✅ marks below mean the code was written. None of these services is
+> deployed to production, and video-streaming does not build. See the status
+> table's "Deployed" column and [Pending work](#pending-work-and-roadmap-ahead),
+> items 4–6 and 12.
 
 ### Visualization Engine ✅
 - [x] 3D visualization and G-code simulation
@@ -350,6 +544,10 @@ acks back) already worked; the pieces before and around it did not.
 
 Full regulatory compliance for Mexican market.
 
+> **Scope under review:** in the MADFAM ecosystem, Karafiel owns CFDI
+> issuance. The CFDI items below are kept until the owner decides
+> ([Pending work](#pending-work-and-roadmap-ahead), item 18).
+
 ### CFDI 4.0 Integration
 - [ ] Invoice XML generation
 - [ ] SAT PAC validation via Tezca
@@ -377,7 +575,7 @@ apps/compliance-engine/
 ## Phase 4.0: Advanced AI & Automation
 > **Status**: Future | **Timeline**: TBD
 
-Advanced intelligent manufacturing operations building on the ml-orchestrator foundation (deployed in Phase 2.5b).
+Advanced intelligent manufacturing operations building on the ml-orchestrator foundation (code-complete in Phase 2.5b but not deployed; see [Pending work](#pending-work-and-roadmap-ahead), item 4).
 
 ### Predictive Maintenance (builds on Phase 2.6 OEE + Maintenance CMMS)
 - [ ] Advanced failure prediction models using OEE trend data
@@ -452,7 +650,11 @@ Advanced intelligent manufacturing operations building on the ml-orchestrator fo
 | **Snapmaker/Luban** | 2.5b | ✅ Implemented |
 | **OctoPrint** | 2.5b | ✅ Implemented |
 | **ForgeSight** | 2.5b | ✅ Implemented |
-| **Tezca Labs** | 3.0 | Planned |
+| **Tezca Labs** | 3.0 | Law-change webhook implemented (`/v1/webhooks/tezca`); compliance-engine planned |
+| **Yantra4D** | — | ✅ Hyperobject import (`/v1/import/yantra4d`) |
+| **Forj** | — | ✅ Orders in via API key; `order.status_changed` out via webhook subscriptions |
+| **Cotiza** | — | ⚠️ Inbound webhook implemented; contract drift with Cotiza's dispatcher (Pending work, item 1) |
+| **PhyndCRM** | — | ⚠️ Outbound status webhook; signature-header drift (Pending work, item 2) |
 
 ---
 
@@ -473,10 +675,11 @@ make test
 ```
 
 ### Deployment
-```bash
-# Deploy via enclii
-enclii deploy --service pravara-api --env production
-```
+Merging to `main` is the deploy. `build-deploy.yml` (path-filtered per service)
+and `deploy-admin.yml` build and sign the images and commit their digests to
+`infra/k8s/production/kustomization.yaml`; Argo CD auto-syncs that overlay.
+Docs-only changes (`**.md`, `docs/**`) do not trigger a build. Routine
+production operations go through Enclii (see [ECOSYSTEM.md](./ECOSYSTEM.md)).
 
 ---
 

@@ -8,7 +8,10 @@ Central documentation index for the PravaraMES manufacturing execution system.
 |----------|-------------|
 | [README.md](../README.md) | Project overview and quick start |
 | [PRD.md](../PRD.md) | Product requirements document |
-| [ROADMAP.md](../ROADMAP.md) | Development phases and milestones |
+| [ROADMAP.md](../ROADMAP.md) | Status table (with what is deployed), phases, and the canonical [pending-work list](../ROADMAP.md#pending-work-and-roadmap-ahead) |
+| [RUNTIME_VERIFICATION_CHECKLIST.md](./RUNTIME_VERIFICATION_CHECKLIST.md) | Runtime checks that gate the roadmap's "Complete" claims |
+| [ECOSYSTEM.md](../ECOSYSTEM.md) | MADFAM ecosystem and Enclii operations context (generated) |
+| [README «Related repositories / contracts»](../README.md#related-repositories--contracts) | Cross-repo contracts, linked to the other side's doc |
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
 
 ## API Documentation
@@ -28,20 +31,26 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Quality | `/v1/quality/*` | Certificates, inspections, batch lots |
 | Billing | `/v1/billing` | Usage tracking |
 | Realtime | `/v1/realtime` | WebSocket authentication |
-| Webhooks | `/v1/webhooks` | External integrations |
+| Webhooks (inbound) | `/v1/webhooks/{cotiza,dhanam,forgesight,tezca}` | Signed inbound events; the Cotiza contract has drifted (see README «Related repositories / contracts») |
+| Webhook subscriptions | `/v1/webhooks/subscriptions` | Outbound webhooks, signed `X-Pravara-Signature` |
 | Yantra4D Import | `/v1/import/yantra4d` | Hyperobject import from Yantra4D |
-| Tezca Webhook | `/v1/webhooks/tezca` | Law change notifications from Tezca |
 
 ## Application READMEs
 
-| Application | README | Description |
-|-------------|--------|-------------|
-| pravara-api | [README](../apps/pravara-api/README.md) | REST API server |
-| pravara-ui | [README](../apps/pravara-ui/README.md) | Next.js dashboard |
-| telemetry-worker | [README](../apps/telemetry-worker/README.md) | MQTT processor |
-| machine-adapter | — | Machine connectivity adapter with dynamic registration |
-| visualization-engine | — | 3D factory floor visualization with Yantra4D import |
-| sdk-go | [README](../packages/sdk-go/README.md) | Shared Go types |
+| Application | README | Description | Deployed |
+|-------------|--------|-------------|----------|
+| pravara-api | [README](../apps/pravara-api/README.md) | REST API server | Yes |
+| pravara-ui | [README](../apps/pravara-ui/README.md) | Next.js dashboard | Yes |
+| pravara-landing | [README](../apps/pravara-landing/README.md) | Public marketing site | Yes |
+| admin (pravara-admin) | — | Admin console (Next 16) | Yes |
+| telemetry-worker | [README](../apps/telemetry-worker/README.md) | MQTT processor | Yes |
+| machine-adapter | — | Machine connectivity adapter with dynamic registration | No |
+| visualization-engine | — | 3D factory floor visualization with Yantra4D import | No |
+| luban-bridge | [README](../apps/luban-bridge/README.md) | Snapmaker/Luban bridge | No |
+| octoprint-connector | — | OctoPrint manager | No |
+| ml-orchestrator | — | ML/AI pipeline (`replicas: 0`) | No |
+| video-streaming | — | WebRTC streaming (does not build today) | No |
+| sdk-go | [README](../packages/sdk-go/README.md) | Shared Go types | — |
 
 ## Internal Package Documentation
 
@@ -67,19 +76,10 @@ Central documentation index for the PravaraMES manufacturing execution system.
 
 | File | Description |
 |------|-------------|
-| [llms.txt](../llms.txt) | AI-friendly project summary |
+| [AGENTS.md](../AGENTS.md) | Canonical agent instructions and verified repo facts |
+| [llms.txt](../llms.txt) | Compact LLM context index |
+| [llms-full.txt](../llms-full.txt) | Full LLM context map |
 | [.cursorrules](../.cursorrules) | Cursor AI code patterns |
-| [.claude/CONTEXT.md](../.claude/CONTEXT.md) | Claude Code project context |
-
-### Agent Skills
-
-| Skill | Description |
-|-------|-------------|
-| [creating-endpoint.md](../.claude/skills/creating-endpoint.md) | Create new API endpoints |
-| [adding-realtime-events.md](../.claude/skills/adding-realtime-events.md) | Add real-time updates |
-| [adding-component.md](../.claude/skills/adding-component.md) | Add React components |
-| [debugging-guide.md](../.claude/skills/debugging-guide.md) | Debug common issues |
-| [database-migration.md](../.claude/skills/database-migration.md) | Database migrations |
 
 ## Machine Adapter Documentation
 

@@ -71,8 +71,8 @@ The system now features complete multi-tool 3D printing support with real-time p
 
 | Layer | Technology |
 |-------|------------|
-| **Backend API** | Go 1.24 + Gin |
-| **Frontend** | Next.js 15 + React 19 + Radix UI + Tailwind CSS |
+| **Backend API** | Go 1.25 (toolchain 1.25.14) + Gin |
+| **Frontend** | Next.js 15 (pravara-ui, landing) / Next.js 16 (admin) + React 19 + Radix UI + Tailwind CSS |
 | **3D Visualization** | Three.js + React Three Fiber |
 | **Video Streaming** | WebRTC + FFmpeg |
 | **ML/AI** | Python + FastAPI + TensorFlow + Scikit-learn |
@@ -153,17 +153,24 @@ PRAVARA_REDIS_PORT=6379
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| pravara-api | 4500 | REST API (Go/Gin) |
-| pravara-ui | 4501 | Web Dashboard (Next.js) |
-| telemetry-worker | 4502 | MQTT Telemetry Processor |
-| pravara-gateway | 8000 | Real-Time WebSocket Gateway (Centrifugo) |
-| visualization-engine | 4205 | 3D Factory Visualization (Go) |
-| video-streaming | 4206 | WebRTC Video Streaming (Go) |
-| ml-orchestrator | 4207 | ML/AI Pipeline (Python/FastAPI) |
-| luban-bridge | 4507 | Snapmaker/Luban Integration (Node.js) |
-| octoprint-connector | 4508 | OctoPrint Manager (Python/FastAPI) |
+| Service | Port (local) | Description | Deployed |
+|---------|------|-------------|----------|
+| pravara-api | 4500 | REST API (Go/Gin) | Yes |
+| pravara-ui | 4501 | Web Dashboard (Next.js) | Yes |
+| pravara-admin | — | Admin console (Next.js 16, `apps/admin`) | Yes |
+| pravara-landing | — | Public marketing site (Next.js) | Yes |
+| telemetry-worker | 4502 | MQTT Telemetry Processor | Yes |
+| pravara-gateway | 8000 | Real-Time WebSocket Gateway (Centrifugo) | Yes |
+| visualization-engine | 4205 | 3D Factory Visualization (Go) | No |
+| video-streaming | 4206 | WebRTC Video Streaming (Go); does not build today | No |
+| ml-orchestrator | 4207 | ML/AI Pipeline (Python/FastAPI) | No (`replicas: 0`) |
+| luban-bridge | 4507 | Snapmaker/Luban Integration (Node.js) | No |
+| octoprint-connector | 4508 | OctoPrint Manager (Python/FastAPI) | No |
+
+"Deployed" means the image is built by `build-deploy.yml` or `deploy-admin.yml`
+and pinned in `infra/k8s/production/kustomization.yaml`; see
+[Deployment](#deployment). Open work on the undeployed services is in
+[ROADMAP.md, «Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
 
 ## Project Structure
 
@@ -285,10 +292,16 @@ pravara-mes/
 
 ### Webhooks API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/v1/webhooks/cotiza` | Cotiza Studio order webhook |
-| POST | `/v1/webhooks/forgesight` | ForgeSight integration (planned) |
+Inbound webhooks sit under the authenticated `/v1` group (Janua JWT or
+`X-API-Key`) and, when the matching secret is set, also verify a per-sender
+HMAC-SHA256 signature header.
+
+| Method | Endpoint | Signature header | Description |
+|--------|----------|------------------|-------------|
+| POST | `/v1/webhooks/cotiza` | `X-Cotiza-Signature` | Cotiza order events (`order.created`/`confirmed`/`updated`/`cancelled`). **Contract drift:** Cotiza's dispatcher does not call this route; see [Related repositories / contracts](#related-repositories--contracts) |
+| POST | `/v1/webhooks/dhanam` | `X-Dhanam-Signature` | Dhanam billing events |
+| POST | `/v1/webhooks/forgesight` | `X-ForgeSight-Signature` | ForgeSight price/inventory events |
+| POST | `/v1/webhooks/tezca` | `X-Tezca-Signature` (`sha256=<hex>`) | Tezca law-change notifications |
 
 ### Webhook Subscriptions API
 
@@ -732,45 +745,75 @@ Critical alerts configured for:
 # Run all tests
 make test
 
-# Run API tests
-cd apps/pravara-api && go test ./...
+# Go modules in go.work (what CI runs, per module)
+cd apps/pravara-api && go test ./... -race -short
+cd apps/telemetry-worker && go test ./... -race -short
+cd apps/machine-adapter && go test ./... -race -short
+cd apps/visualization-engine && go test ./... -race -short
+cd packages/sdk-go && go test ./... -race -short
 
-# Run telemetry worker tests
-cd apps/telemetry-worker && go test ./...
+# Front ends
+cd apps/pravara-ui && npm run test:run
+cd apps/pravara-landing && npm run test:run
+cd apps/admin && npm test            # vitest run
 
-# Run SDK tests
-cd packages/sdk-go && go test ./...
+# Services that are not deployed (not in CI)
+cd apps/luban-bridge && npm test     # jest
+cd apps/octoprint-connector && pytest
+cd apps/ml-orchestrator && pytest    # needs pytest-asyncio
 
 # Run with coverage
 make test-coverage
 ```
 
+What CI gates (`ci.yml`, `pr-validation.yml`): `go vet`, `go test -race -short`,
+golangci-lint and gofmt for the five `go.work` modules; lint, typecheck and build
+for pravara-ui (its `test:run` step is `continue-on-error`); lint, tests and
+build for pravara-landing; and the NetworkPolicy port lint and K8s validation.
+admin, luban-bridge, octoprint-connector and ml-orchestrator tests are not in CI.
+Known red suites and the plan to gate them are in
+[ROADMAP.md, «Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead), items 4–8.
+
 ## Deployment
 
-PravaraMES is deployed via [enclii](https://github.com/madfam-org/enclii) GitOps platform.
+PravaraMES is deployed via the [enclii](https://github.com/madfam-org/enclii) GitOps platform. Merging to `main` is the deploy:
 
-### Kubernetes Deployment
+1. `.github/workflows/build-deploy.yml` path-filters the push and rebuilds only
+   the changed services among pravara-api, telemetry-worker, pravara-ui,
+   pravara-landing and pravara-gateway. `.github/workflows/deploy-admin.yml`
+   rebuilds pravara-admin on `apps/admin/**` changes. Both workflows sign the
+   images with cosign.
+2. Each workflow commits the new image digests to
+   `infra/k8s/production/kustomization.yaml` (`deploy: update digests to …`,
+   `deploy(admin): update digest to …`).
+3. Argo CD auto-syncs `infra/k8s/production`, which renders the resources
+   listed in `infra/k8s/base/kustomization.yaml`.
 
-```bash
-# Apply base manifests
-kubectl apply -k infra/k8s/base
+Changes to `**.md` and `docs/**` trigger no build. Nothing else under `apps/`
+is built or deployed. Signed-digest pinning is described in
+[enclii `docs/runbooks/SIGNED_GITOPS_DIGESTS.md`](https://github.com/madfam-org/enclii/blob/main/docs/runbooks/SIGNED_GITOPS_DIGESTS.md).
 
-# Apply production overlays
-kubectl apply -k infra/k8s/production
-```
+Routine production operations (status, logs, rollback, secrets) go through
+Enclii; see [ECOSYSTEM.md](./ECOSYSTEM.md). Raw `kubectl apply -k
+infra/k8s/production` is break-glass only.
 
-### enclii Deployment
+## Related repositories / contracts
 
-```bash
-# Deploy API to production
-enclii deploy --service pravara-api --env production
+| Contract | Pravara side | Other side |
+|----------|--------------|------------|
+| Operator and API auth (Janua OIDC, RS256 via JWKS, audience checked; API keys run alongside) | `apps/pravara-api/internal/auth/oidc.go`, `internal/middleware/` | [janua `docs/guides/ECOSYSTEM_INTEGRATION.md`](https://github.com/madfam-org/janua/blob/main/docs/guides/ECOSYSTEM_INTEGRATION.md) |
+| Cotiza → Pravara fabrication dispatch (**drifted**) | `POST /v1/webhooks/cotiza`, `X-Cotiza-Signature` (`internal/api/webhook_handlers.go`) | [digifab-quoting `pravara-dispatch.service.ts`](https://github.com/madfam-org/digifab-quoting/blob/main/apps/api/src/integrations/pravara/pravara-dispatch.service.ts) POSTs `/api/v1/mes/jobs` with `x-webhook-signature`. Its drift note: [digifab-quoting `AGENTS.md`](https://github.com/madfam-org/digifab-quoting/blob/main/AGENTS.md#related-repositories--contracts) |
+| Pravara → PhyndCRM fabrication status (**header drift**) | outbound webhook subscriptions, `X-Pravara-Signature: sha256=<hex>` (`internal/services/webhook_dispatcher.go`) | [phynd-crm `/api/webhooks/pravara`](https://github.com/madfam-org/phynd-crm/blob/main/apps/web/src/app/api/webhooks/pravara/route.ts) verifies `x-webhook-signature`; event names: [phynd-crm `docs/ENGAGEMENT_EVENT_TAXONOMY.md`](https://github.com/madfam-org/phynd-crm/blob/main/docs/ENGAGEMENT_EVENT_TAXONOMY.md) |
+| Tezca → Pravara law-change webhook | `POST /v1/webhooks/tezca`, `X-Tezca-Signature: sha256=<hex>` | [tezca `apps/api/tasks.py`](https://github.com/madfam-org/tezca/blob/main/apps/api/tasks.py) (signs and delivers) |
+| Forj → Pravara orders; Pravara → Forj status | `POST /v1/orders` with an API key; `order.status_changed` and `task.assignment_failed` via webhook subscriptions (`X-Pravara-Signature`) | forj (private repository) |
+| Dhanam billing events; ForgeSight price feed | `POST /v1/webhooks/dhanam` (`X-Dhanam-Signature`); `POST /v1/webhooks/forgesight` (`X-ForgeSight-Signature`) | Dhanam and ForgeSight (private repositories; sender side not re-verified in the 2026-10-02 pass) |
+| Karafiel CFDI on completed jobs | not wired; see [ROADMAP pending item 18](./ROADMAP.md#pending-work-and-roadmap-ahead) | Karafiel (private repository) |
+| Build, sign and digest pin; ecosystem context | `.github/workflows/build-deploy.yml`, `deploy-admin.yml`; `ECOSYSTEM.md` (generated) | [enclii `docs/runbooks/SIGNED_GITOPS_DIGESTS.md`](https://github.com/madfam-org/enclii/blob/main/docs/runbooks/SIGNED_GITOPS_DIGESTS.md); ECOSYSTEM.md source: [enclii `docs/templates/ecosystem/metadata_fabrication.py`](https://github.com/madfam-org/enclii/blob/main/docs/templates/ecosystem/metadata_fabrication.py) |
 
-# Deploy UI to production
-enclii deploy --service pravara-ui --env production
+## Pending work and roadmap
 
-# Deploy telemetry worker
-enclii deploy --service telemetry-worker --env production
-```
+The one current list (priorities P0–P3, owner decision vs engineering, links)
+is [ROADMAP.md, «Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
 
 ## Development Commands
 

@@ -31,6 +31,13 @@ not verified away:
   (Dhanam API) are unchecked.
 - **pravara-ui / Phase 1** — table says 100%, but token refresh handling is
   unchecked.
+- **Not deployed (2026-10-02)** — no workflow builds or deploys
+  visualization-engine, video-streaming, ml-orchestrator, luban-bridge,
+  octoprint-connector or machine-adapter, so §1.5–§1.10 can only be checked
+  locally. video-streaming does not build, so §1.6 cannot pass yet.
+  ml-orchestrator has 8 known pytest failures and octoprint-connector has 6
+  (§1.7). The ROADMAP status table now has a "Deployed" column, and these
+  items are tracked in ROADMAP.md «Pending work and roadmap ahead».
 
 ---
 
