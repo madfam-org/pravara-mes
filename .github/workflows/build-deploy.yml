@@ -31,7 +31,7 @@ jobs:
   # ===========================================================================
   changes:
     name: Detect Changed Services
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pravara-api: ${{ steps.filter.outputs.pravara-api }}
       pravara-ui: ${{ steps.filter.outputs.pravara-ui }}
@@ -71,7 +71,7 @@ jobs:
   # ===========================================================================
   build-go:
     name: Build ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: |
       needs.changes.outputs.pravara-api == 'true' ||
@@ -198,7 +198,7 @@ jobs:
   # ===========================================================================
   build-ui:
     name: Build pravara-ui
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.pravara-ui == 'true'
     permissions:
@@ -299,7 +299,7 @@ jobs:
   # ===========================================================================
   build-landing:
     name: Build pravara-landing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.pravara-landing == 'true'
     permissions:
@@ -391,7 +391,7 @@ jobs:
   # ===========================================================================
   build-gateway:
     name: Build pravara-gateway
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.pravara-gateway == 'true'
     permissions:
@@ -483,7 +483,7 @@ jobs:
   # ===========================================================================
   commit-digests:
     name: Commit Image Digests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - changes
       - build-go
@@ -570,7 +570,7 @@ jobs:
   # ===========================================================================
   report-lifecycle:
     name: Report Lifecycle Events
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - changes
       - build-go

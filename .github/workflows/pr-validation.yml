@@ -30,7 +30,7 @@ jobs:
   # ===========================================================================
   go-lint:
     name: Go Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
   # ===========================================================================
   go-test:
     name: Go Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -182,7 +182,7 @@ jobs:
   # ===========================================================================
   go-fmt:
     name: Go Format Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -210,7 +210,7 @@ jobs:
   # ===========================================================================
   ui-lint:
     name: UI Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/pravara-ui
@@ -240,7 +240,7 @@ jobs:
   # ===========================================================================
   ui-build:
     name: UI Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/pravara-ui
@@ -270,7 +270,7 @@ jobs:
   # ===========================================================================
   landing-lint:
     name: Landing Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/pravara-landing
@@ -302,7 +302,7 @@ jobs:
   # ===========================================================================
   landing-build:
     name: Landing Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/pravara-landing
@@ -328,7 +328,7 @@ jobs:
   # ===========================================================================
   k8s-validate:
     name: K8s Validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -351,7 +351,7 @@ jobs:
   # ===========================================================================
   pr-status:
     name: PR Status Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - go-lint
       - go-test
