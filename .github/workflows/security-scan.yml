@@ -28,7 +28,7 @@ jobs:
   # ===========================================================================
   gosec:
     name: Go Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -67,7 +67,7 @@ jobs:
   # ===========================================================================
   npm-audit:
     name: NPM Security Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/pravara-ui
@@ -115,7 +115,7 @@ jobs:
   # ===========================================================================
   trivy-scan:
     name: Trivy Container Scan - ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -190,7 +190,7 @@ jobs:
   # ===========================================================================
   trivy-fs:
     name: Trivy Filesystem Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -245,7 +245,7 @@ jobs:
   # ===========================================================================
   dependency-review:
     name: Dependency Review
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -278,7 +278,7 @@ jobs:
   # ===========================================================================
   placeholder-scan:
     name: Placeholder Secret Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -311,7 +311,7 @@ jobs:
   # ===========================================================================
   security-summary:
     name: Security Scan Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - gosec
       - npm-audit
