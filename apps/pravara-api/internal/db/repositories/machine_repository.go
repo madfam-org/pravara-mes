@@ -15,11 +15,11 @@ import (
 
 // MachineRepository handles machine database operations.
 type MachineRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewMachineRepository creates a new machine repository.
-func NewMachineRepository(db *sql.DB) *MachineRepository {
+func NewMachineRepository(db DBTX) *MachineRepository {
 	return &MachineRepository{db: db}
 }
 
@@ -41,9 +41,9 @@ func (r *MachineRepository) List(ctx context.Context, filter MachineFilter) ([]t
 		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM machines WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM machines WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -109,7 +109,7 @@ func (r *MachineRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.M
 		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -133,7 +133,7 @@ func (r *MachineRepository) GetByCode(ctx context.Context, code string) (*types.
 		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
-		WHERE code = $1
+		WHERE code = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, code)
@@ -210,7 +210,7 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 			location = $9,
 			specifications = $10,
 			metadata = $11
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -251,7 +251,7 @@ func (r *MachineRepository) Update(ctx context.Context, machine *types.Machine) 
 // offline, error, plus 'online' (added by migration 026).
 // Returns an error if the machine is not found.
 func (r *MachineRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status types.MachineStatus) error {
-	query := `UPDATE machines SET status = $2 WHERE id = $1`
+	query := `UPDATE machines SET status = $2 WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id, status)
 	if err != nil {
@@ -271,7 +271,7 @@ func (r *MachineRepository) UpdateStatus(ctx context.Context, id uuid.UUID, stat
 // The heartbeat mechanism is used to detect offline machines.
 // Returns an error if the machine is not found.
 func (r *MachineRepository) UpdateHeartbeat(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE machines SET last_heartbeat = $2, status = 'online' WHERE id = $1`
+	query := `UPDATE machines SET last_heartbeat = $2, status = 'online' WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id, time.Now())
 	if err != nil {
@@ -290,7 +290,7 @@ func (r *MachineRepository) UpdateHeartbeat(ctx context.Context, id uuid.UUID) e
 // This is a hard delete - the machine record is not recoverable.
 // Returns an error if the machine is not found.
 func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM machines WHERE id = $1`
+	query := `DELETE FROM machines WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -317,7 +317,7 @@ func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold ti
 		       last_heartbeat, created_at, updated_at
 		FROM machines
 		WHERE status = 'online'
-		  AND (last_heartbeat IS NULL OR last_heartbeat < $1)
+		  AND (last_heartbeat IS NULL OR last_heartbeat < $1) AND ` + tenantMatch + `
 	`
 
 	cutoff := time.Now().Add(-threshold)

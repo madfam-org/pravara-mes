@@ -14,11 +14,11 @@ import (
 
 // SPCRepository handles SPC (Statistical Process Control) database operations.
 type SPCRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewSPCRepository creates a new SPC repository.
-func NewSPCRepository(db *sql.DB) *SPCRepository {
+func NewSPCRepository(db DBTX) *SPCRepository {
 	return &SPCRepository{db: db}
 }
 
@@ -69,7 +69,7 @@ func (r *SPCRepository) ListLimits(ctx context.Context, machineID uuid.UUID) ([]
 		       ucl, lcl, usl, lsl, sample_count, sample_start, sample_end,
 		       is_active, metadata, created_at, updated_at
 		FROM spc_control_limits
-		WHERE machine_id = $1
+		WHERE machine_id = $1 AND ` + tenantMatch + `
 		ORDER BY metric_type ASC, created_at DESC
 	`
 
@@ -99,7 +99,7 @@ func (r *SPCRepository) GetLimitByID(ctx context.Context, id uuid.UUID) (*SPCCon
 		       ucl, lcl, usl, lsl, sample_count, sample_start, sample_end,
 		       is_active, metadata, created_at, updated_at
 		FROM spc_control_limits
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -178,7 +178,7 @@ func (r *SPCRepository) ComputeLimits(ctx context.Context, machineID uuid.UUID, 
 		FROM telemetry
 		WHERE machine_id = $1
 		  AND metric_type = $2
-		  AND timestamp >= $3
+		  AND timestamp >= $3 AND ` + tenantMatch + `
 	`
 
 	var mean, stddev sql.NullFloat64
@@ -237,7 +237,7 @@ func (r *SPCRepository) ListViolations(ctx context.Context, machineID uuid.UUID,
 		       acknowledged, acknowledged_by, acknowledged_at, notes,
 		       metadata, created_at
 		FROM spc_violations
-		WHERE machine_id = $1
+		WHERE machine_id = $1 AND ` + tenantMatch + `
 	`
 
 	var args []interface{}
@@ -305,7 +305,7 @@ func (r *SPCRepository) AcknowledgeViolation(ctx context.Context, id, userID uui
 			acknowledged_by = $2,
 			acknowledged_at = NOW(),
 			notes = $3
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING id
 	`
 

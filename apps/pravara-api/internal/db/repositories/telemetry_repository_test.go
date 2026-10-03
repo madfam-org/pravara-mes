@@ -31,7 +31,7 @@ func TestTelemetryRepository_List_NoFilters(t *testing.T) {
 		telemetryID, tenantID, machineID, timestamp, "temperature", 45.2, "celsius", []byte(`{"sensor":"S001"}`), createdAt,
 	)
 
-	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 ORDER BY timestamp DESC").
+	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 AND tenant_id = (.+) ORDER BY timestamp DESC").
 		WillReturnRows(rows)
 
 	ctx := context.Background()
@@ -81,7 +81,7 @@ func TestTelemetryRepository_List_WithFilters(t *testing.T) {
 		"id", "tenant_id", "machine_id", "timestamp", "metric_type", "value", "unit", "metadata", "created_at",
 	})
 
-	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 AND machine_id = (.+) AND metric_type = (.+) AND timestamp >= (.+) AND timestamp <= (.+) ORDER BY timestamp DESC LIMIT (.+)").
+	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 AND tenant_id = (.+) AND machine_id = (.+) AND metric_type = (.+) AND timestamp >= (.+) AND timestamp <= (.+) ORDER BY timestamp DESC LIMIT (.+)").
 		WithArgs(machineID, metricType, fromTime, toTime, 100).
 		WillReturnRows(rows)
 
@@ -214,7 +214,6 @@ func TestTelemetryRepository_CreateBatch_Success(t *testing.T) {
 	}
 
 	mock.ExpectBegin()
-	mock.ExpectPrepare("INSERT INTO telemetry")
 
 	metadata1, _ := json.Marshal(records[0].Metadata)
 	mock.ExpectExec("INSERT INTO telemetry").
@@ -524,7 +523,6 @@ func TestTelemetryRepository_CreateBatch_GeneratesIDs(t *testing.T) {
 	}
 
 	mock.ExpectBegin()
-	mock.ExpectPrepare("INSERT INTO telemetry")
 
 	mock.ExpectExec("INSERT INTO telemetry").
 		WithArgs(
@@ -577,7 +575,7 @@ func TestTelemetryRepository_List_WithMetadata(t *testing.T) {
 		telemetryID, tenantID, machineID, timestamp, "temperature", 45.2, "celsius", metadataJSON, createdAt,
 	)
 
-	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 ORDER BY timestamp DESC").
+	mock.ExpectQuery("SELECT (.+) FROM telemetry WHERE 1=1 AND tenant_id = (.+) ORDER BY timestamp DESC").
 		WillReturnRows(rows)
 
 	ctx := context.Background()

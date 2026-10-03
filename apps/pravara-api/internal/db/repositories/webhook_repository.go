@@ -35,15 +35,20 @@ type WebhookDelivery struct {
 	LastError      *string    `json:"last_error,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// TenantID is the owning subscription's tenant. It is filled only by
+	// GetPendingDeliveries, so the dispatcher can process each delivery in
+	// that tenant's scope.
+	TenantID uuid.UUID `json:"-"`
 }
 
 // WebhookRepository handles webhook subscription and delivery database operations.
 type WebhookRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewWebhookRepository creates a new webhook repository.
-func NewWebhookRepository(db *sql.DB) *WebhookRepository {
+func NewWebhookRepository(db DBTX) *WebhookRepository {
 	return &WebhookRepository{db: db}
 }
 
@@ -69,7 +74,7 @@ func (r *WebhookRepository) GetSubscriptionByID(ctx context.Context, id uuid.UUI
 	var sub WebhookSubscription
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, name, url, secret, event_types, is_active, created_at, updated_at
-		 FROM webhook_subscriptions WHERE id = $1`,
+		 FROM webhook_subscriptions WHERE id = $1 AND `+tenantMatch,
 		id,
 	).Scan(&sub.ID, &sub.TenantID, &sub.Name, &sub.URL, &sub.Secret,
 		pq.Array(&sub.EventTypes), &sub.IsActive, &sub.CreatedAt, &sub.UpdatedAt)
@@ -86,7 +91,7 @@ func (r *WebhookRepository) GetSubscriptionByID(ctx context.Context, id uuid.UUI
 func (r *WebhookRepository) ListSubscriptions(ctx context.Context) ([]WebhookSubscription, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, tenant_id, name, url, secret, event_types, is_active, created_at, updated_at
-		 FROM webhook_subscriptions
+		 FROM webhook_subscriptions WHERE `+tenantMatch+`
 		 ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -111,7 +116,7 @@ func (r *WebhookRepository) UpdateSubscription(ctx context.Context, sub *Webhook
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE webhook_subscriptions
 		 SET name = $2, url = $3, secret = $4, event_types = $5, is_active = $6
-		 WHERE id = $1`,
+		 WHERE id = $1 AND `+tenantMatch,
 		sub.ID, sub.Name, sub.URL, sub.Secret, pq.Array(sub.EventTypes), sub.IsActive,
 	)
 	if err != nil {
@@ -127,7 +132,7 @@ func (r *WebhookRepository) UpdateSubscription(ctx context.Context, sub *Webhook
 // DeleteSubscription deletes a webhook subscription.
 func (r *WebhookRepository) DeleteSubscription(ctx context.Context, id uuid.UUID) error {
 	result, err := r.db.ExecContext(ctx,
-		`DELETE FROM webhook_subscriptions WHERE id = $1`, id,
+		`DELETE FROM webhook_subscriptions WHERE id = $1 AND `+tenantMatch, id,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to delete webhook subscription: %w", err)
@@ -188,19 +193,22 @@ func (r *WebhookRepository) UpdateDelivery(ctx context.Context, delivery *Webhoo
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE webhook_deliveries
 		 SET status = $2, http_status = $3, attempt_count = $4, next_retry_at = $5, last_error = $6
-		 WHERE id = $1`,
+		 WHERE id = $1 AND `+deliveryTenantMatch,
 		delivery.ID, delivery.Status, delivery.HTTPStatus, delivery.AttemptCount,
 		delivery.NextRetryAt, delivery.LastError,
 	)
 	return err
 }
 
-// GetPendingDeliveries retrieves deliveries that need to be attempted.
+// GetPendingDeliveries retrieves deliveries that need to be attempted, across
+// tenants. Production callers run it in the read-only system scope.
 func (r *WebhookRepository) GetPendingDeliveries(ctx context.Context, limit int) ([]WebhookDelivery, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT d.id, d.subscription_id, d.event_id, d.status, d.http_status,
-		        d.attempt_count, d.next_retry_at, d.last_error, d.created_at, d.updated_at
+		        d.attempt_count, d.next_retry_at, d.last_error, d.created_at, d.updated_at,
+		        s.tenant_id
 		 FROM webhook_deliveries d
+		 JOIN webhook_subscriptions s ON s.id = d.subscription_id
 		 WHERE d.status IN ('pending', 'failed')
 		 AND (d.next_retry_at IS NULL OR d.next_retry_at <= NOW())
 		 ORDER BY d.created_at ASC
@@ -216,7 +224,8 @@ func (r *WebhookRepository) GetPendingDeliveries(ctx context.Context, limit int)
 	for rows.Next() {
 		var d WebhookDelivery
 		if err := rows.Scan(&d.ID, &d.SubscriptionID, &d.EventID, &d.Status, &d.HTTPStatus,
-			&d.AttemptCount, &d.NextRetryAt, &d.LastError, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			&d.AttemptCount, &d.NextRetryAt, &d.LastError, &d.CreatedAt, &d.UpdatedAt,
+			&d.TenantID); err != nil {
 			return nil, fmt.Errorf("failed to scan webhook delivery: %w", err)
 		}
 		deliveries = append(deliveries, d)
@@ -228,7 +237,7 @@ func (r *WebhookRepository) GetPendingDeliveries(ctx context.Context, limit int)
 func (r *WebhookRepository) ListDeliveriesBySubscription(ctx context.Context, subscriptionID uuid.UUID, limit, offset int) ([]WebhookDelivery, int, error) {
 	var total int
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM webhook_deliveries WHERE subscription_id = $1`,
+		`SELECT COUNT(*) FROM webhook_deliveries WHERE subscription_id = $1 AND `+deliveryTenantMatch,
 		subscriptionID,
 	).Scan(&total)
 	if err != nil {
@@ -239,7 +248,7 @@ func (r *WebhookRepository) ListDeliveriesBySubscription(ctx context.Context, su
 		`SELECT id, subscription_id, event_id, status, http_status,
 		        attempt_count, next_retry_at, last_error, created_at, updated_at
 		 FROM webhook_deliveries
-		 WHERE subscription_id = $1
+		 WHERE subscription_id = $1 AND `+deliveryTenantMatch+`
 		 ORDER BY created_at DESC
 		 LIMIT $2 OFFSET $3`,
 		subscriptionID, limit, offset,

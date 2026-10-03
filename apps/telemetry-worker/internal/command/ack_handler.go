@@ -12,6 +12,8 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/tenantctx"
 )
 
 // AckHandler handles command acknowledgments from machines via MQTT.
@@ -168,6 +170,8 @@ func (h *AckHandler) handleAckMessage(client mqtt.Client, msg mqtt.Message) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// The store scopes every statement to the topic's tenant segment.
+	ctx = tenantctx.WithTopicSegment(ctx, tenantctx.SegmentOf(msg.Topic()))
 
 	// Look up machine to get tenant ID
 	var tenantID, machineID uuid.UUID

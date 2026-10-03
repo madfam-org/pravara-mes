@@ -14,11 +14,11 @@ import (
 
 // OrderItemRepository handles order item database operations.
 type OrderItemRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOrderItemRepository creates a new order item repository.
-func NewOrderItemRepository(db *sql.DB) *OrderItemRepository {
+func NewOrderItemRepository(db DBTX) *OrderItemRepository {
 	return &OrderItemRepository{db: db}
 }
 
@@ -30,7 +30,7 @@ func (r *OrderItemRepository) List(ctx context.Context, orderID uuid.UUID) ([]ty
 		SELECT id, order_id, product_name, product_sku, quantity, unit_price,
 		       specifications, cad_file_url, created_at
 		FROM order_items
-		WHERE order_id = $1
+		WHERE order_id = $1 AND ` + orderItemTenantMatch + `
 		ORDER BY created_at ASC
 	`
 
@@ -83,7 +83,7 @@ func (r *OrderItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*types
 		SELECT id, order_id, product_name, product_sku, quantity, unit_price,
 		       specifications, cad_file_url, created_at
 		FROM order_items
-		WHERE id = $1
+		WHERE id = $1 AND ` + orderItemTenantMatch + `
 	`
 
 	var item types.OrderItem
@@ -174,7 +174,7 @@ func (r *OrderItemRepository) Update(ctx context.Context, item *types.OrderItem)
 			unit_price = $5,
 			specifications = $6,
 			cad_file_url = $7
-		WHERE id = $1
+		WHERE id = $1 AND ` + orderItemTenantMatch + `
 	`
 
 	specificationsJSON, _ := json.Marshal(item.Specifications)
@@ -212,7 +212,7 @@ func (r *OrderItemRepository) Update(ctx context.Context, item *types.OrderItem)
 // This is a hard delete - the item record is not recoverable.
 // Returns an error if the item is not found.
 func (r *OrderItemRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE id = $1`, id)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE id = $1 AND `+orderItemTenantMatch, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete order item: %w", err)
 	}
@@ -229,7 +229,7 @@ func (r *OrderItemRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // This is typically used when deleting an order to clean up related items.
 // Does not return an error if the order has no items.
 func (r *OrderItemRepository) DeleteByOrderID(ctx context.Context, orderID uuid.UUID) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE order_id = $1`, orderID)
+	_, err := r.db.ExecContext(ctx, `DELETE FROM order_items WHERE order_id = $1 AND `+orderItemTenantMatch, orderID)
 	if err != nil {
 		return fmt.Errorf("failed to delete order items: %w", err)
 	}
@@ -241,7 +241,7 @@ func (r *OrderItemRepository) DeleteByOrderID(ctx context.Context, orderID uuid.
 // Useful for pagination or validation before order submission.
 func (r *OrderItemRepository) Count(ctx context.Context, orderID uuid.UUID) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM order_items WHERE order_id = $1`, orderID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM order_items WHERE order_id = $1 AND `+orderItemTenantMatch, orderID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count order items: %w", err)
 	}

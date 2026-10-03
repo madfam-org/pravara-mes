@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"net/http"
@@ -56,8 +57,14 @@ func handleAPIKeyAuth(c *gin.Context, rawKey string, apikeyRepo *repositories.AP
 	hash := sha256.Sum256([]byte(rawKey))
 	keyHash := fmt.Sprintf("%x", hash)
 
-	// Look up the key
-	key, err := apikeyRepo.GetByHash(c.Request.Context(), keyHash)
+	// Look up the key. The tenant is not known yet, so the lookup runs in the
+	// read-only system scope (migration 028 policy system_scope_read).
+	var key *repositories.APIKey
+	err := db.RunInSystemScope(c.Request.Context(), database.DB, "apikey.lookup", func(ctx context.Context) error {
+		var lookupErr error
+		key, lookupErr = apikeyRepo.GetByHash(ctx, keyHash)
+		return lookupErr
+	})
 	if err != nil {
 		log.WithError(err).Error("Failed to look up API key")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
@@ -93,33 +100,27 @@ func handleAPIKeyAuth(c *gin.Context, rawKey string, apikeyRepo *repositories.AP
 		return
 	}
 
-	// Set tenant context for RLS
-	if err := database.SetTenantID(key.TenantID.String()); err != nil {
-		log.WithError(err).Error("Failed to set tenant ID in database")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"error":   "internal_error",
-			"message": "Failed to establish tenant context",
-		})
-		return
-	}
-
 	// Store auth info in context
 	c.Set(string(ContextKeyTenantID), key.TenantID.String())
 	c.Set(string(ContextKeyUserID), "apikey:"+key.ID.String())
 	c.Set(string(ContextKeyScopes), key.Scopes)
 	c.Set(string(ContextKeyAuthMethod), "apikey")
 
-	// Update last used (fire and forget)
+	// Update last used (fire and forget) in its own transaction for the key's
+	// tenant, detached from the request transaction.
+	tenantID := key.TenantID.String()
+	keyID := key.ID
+	bg := context.WithoutCancel(c.Request.Context())
 	go func() {
-		_ = apikeyRepo.UpdateLastUsed(c.Request.Context(), key.ID)
+		err := db.RunInTenantTx(bg, database.DB, tenantID, func(ctx context.Context) error {
+			return apikeyRepo.UpdateLastUsed(ctx, keyID)
+		})
+		if err != nil {
+			log.WithError(err).Debug("Failed to update API key last_used_at")
+		}
 	}()
 
-	c.Next()
-
-	// Clean up tenant context after request
-	if err := database.ClearTenantID(); err != nil {
-		log.WithError(err).Warn("Failed to clear tenant ID from database")
-	}
+	runInTenantScope(c, database, tenantID, log)
 }
 
 func handleJWTAuth(c *gin.Context, verifier *auth.OIDCVerifier, database *db.DB, log *logrus.Logger) {
@@ -155,26 +156,11 @@ func handleJWTAuth(c *gin.Context, verifier *auth.OIDCVerifier, database *db.DB,
 		return
 	}
 
-	// Set tenant ID in database session for RLS
-	if err := database.SetTenantID(claims.TenantID); err != nil {
-		log.WithError(err).Error("Failed to set tenant ID in database")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"error":   "internal_error",
-			"message": "Failed to establish tenant context",
-		})
-		return
-	}
-
 	// Store claims in context
 	c.Set(string(ContextKeyClaims), claims)
 	c.Set(string(ContextKeyTenantID), claims.TenantID)
 	c.Set(string(ContextKeyUserID), claims.Subject)
 	c.Set(string(ContextKeyAuthMethod), "jwt")
 
-	c.Next()
-
-	// Clean up tenant context after request
-	if err := database.ClearTenantID(); err != nil {
-		log.WithError(err).Warn("Failed to clear tenant ID from database")
-	}
+	runInTenantScope(c, database, claims.TenantID, log)
 }
