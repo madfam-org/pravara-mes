@@ -259,8 +259,8 @@ func (h *SPCHandler) AcknowledgeViolation(c *gin.Context) {
 		req = AcknowledgeViolationRequest{}
 	}
 
-	userID, _ := middleware.GetUserID(c)
-	userUUID, _ := uuid.Parse(userID)
+	// acknowledged_by references users; machine callers are recorded as NULL.
+	userUUID := middleware.ActorUserUUID(c)
 
 	if err := h.spcRepo.AcknowledgeViolation(c.Request.Context(), violationID, userUUID, req.Notes); err != nil {
 		if err.Error() == "SPC violation not found" {

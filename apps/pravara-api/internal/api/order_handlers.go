@@ -288,8 +288,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		items = append(items, item)
 	}
 
-	userID, _ := middleware.GetUserID(c)
-	userUUID, _ := uuid.Parse(userID)
+	userUUID := middleware.ActorUUID(c)
 
 	// Publish order.created through the outbox-backed publisher.
 	if h.publisher != nil {
@@ -686,8 +685,7 @@ func (h *OrderHandler) AddItem(c *gin.Context) {
 	// The item was just created, so no task can exist for it yet — this is
 	// naturally idempotent per item.
 	if h.decomposition != nil {
-		userID, _ := middleware.GetUserID(c)
-		userUUID, _ := uuid.Parse(userID)
+		userUUID := middleware.ActorUUID(c)
 		h.decomposition.DecomposeOrder(c.Request.Context(), order, []types.OrderItem{*item}, userUUID)
 	}
 

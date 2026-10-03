@@ -56,6 +56,13 @@ type Claims struct {
 	Email    string   `json:"email"`
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
+
+	// Machine-token claims (Janua client_credentials grant). Human tokens
+	// carry none of them; see machine_claims.go.
+	Scope     ScopeClaim `json:"scope,omitempty"`
+	TokenUse  string     `json:"token_use,omitempty"`
+	ActorType string     `json:"actor_type,omitempty"`
+	ClientID  string     `json:"client_id,omitempty"`
 }
 
 // NewOIDCVerifier creates a new OIDC token verifier.
