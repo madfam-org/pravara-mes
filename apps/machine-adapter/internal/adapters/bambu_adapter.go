@@ -2,10 +2,14 @@
 package adapters
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,7 +32,12 @@ type BambuStatus struct {
 	SpeedLevel   int     // Speed level percentage
 	FanSpeed     int     // Part cooling fan speed (0-15 mapped to 0-100%)
 	AMSHumidity  []int   // Humidity per AMS slot
-	LastUpdate   time.Time
+	GcodeState   string  // raw gcode_state (IDLE, PREPARE, RUNNING, PAUSE, FINISH, FAILED)
+	JobFile      string  // subtask_name or gcode_file of the current/last job
+	Trays        []LoadedMaterial
+	// ExternalSpool is the spool on the external holder (vt_tray), when reported.
+	ExternalSpool *LoadedMaterial
+	LastUpdate    time.Time
 }
 
 // BambuAdapter handles communication with Bambu Lab printers via MQTT over TLS.
@@ -43,6 +52,17 @@ type BambuAdapter struct {
 	connected  bool
 	status     BambuStatus
 	seqID      atomic.Int64
+
+	// LAN connection details kept for FTPS uploads (bambu_jobs.go).
+	host       string
+	accessCode string
+	// TLSPinSHA256 optionally pins the printer's self-signed certificate
+	// (lowercase hex SHA-256 of the leaf DER). Set it before Connect.
+	TLSPinSHA256 string
+	// Ports override the LAN defaults (8883 MQTT, 990 FTPS); zero keeps them.
+	MQTTPort, FTPSPort int
+	// ProjectURLPrefix overrides DefaultBambuProjectURLPrefix.
+	ProjectURLPrefix string
 
 	// Telemetry callback for publishing metrics
 	OnTelemetry TelemetryCallback
@@ -62,20 +82,22 @@ func NewBambuAdapter(definition *registry.MachineDefinition, log *logrus.Logger)
 // The serial is the printer's serial number used in MQTT topic paths.
 func (a *BambuAdapter) Connect(host, accessCode, serial string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.connected {
+		a.mu.Unlock()
 		return fmt.Errorf("already connected")
 	}
-
 	a.serial = serial
-
+	a.host = host
+	a.accessCode = accessCode
 	// Bambu printers use TLS on port 8883 with self-signed certificates.
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // Printer uses self-signed cert
+	tlsConfig := a.tlsConfig()
+	mqttPort := 8883
+	if a.MQTTPort > 0 {
+		mqttPort = a.MQTTPort
 	}
+	a.mu.Unlock()
 
-	broker := fmt.Sprintf("tls://%s:8883", host)
+	broker := fmt.Sprintf("tls://%s", net.JoinHostPort(host, strconv.Itoa(mqttPort)))
 	opts := mqtt.NewClientOptions().
 		AddBroker(broker).
 		SetClientID(fmt.Sprintf("pravara-mes-%s", serial)).
@@ -83,45 +105,74 @@ func (a *BambuAdapter) Connect(host, accessCode, serial string) error {
 		SetPassword(accessCode).
 		SetTLSConfig(tlsConfig).
 		SetAutoReconnect(true).
-		SetConnectRetry(true).
-		SetConnectRetryInterval(5 * time.Second).
+		SetConnectRetry(false).
 		SetKeepAlive(30 * time.Second).
-		SetOnConnectHandler(func(_ mqtt.Client) {
+		SetOnConnectHandler(func(c mqtt.Client) {
 			a.log.Info("Connected to Bambu printer MQTT broker")
-			// Re-subscribe on reconnect
-			a.subscribe()
+			// (Re-)subscribe on every connect, including automatic reconnects.
+			a.subscribeOn(c)
 		}).
 		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
 			a.log.WithError(err).Warn("MQTT connection lost")
 		})
 
-	a.client = mqtt.NewClient(opts)
-	token := a.client.Connect()
+	client := mqtt.NewClient(opts)
+	token := client.Connect()
 	if !token.WaitTimeout(10 * time.Second) {
+		client.Disconnect(0)
 		return fmt.Errorf("MQTT connection timeout")
 	}
 	if token.Error() != nil {
 		return fmt.Errorf("MQTT connection failed: %w", token.Error())
 	}
 
+	a.mu.Lock()
+	a.client = client
 	a.connected = true
-	a.subscribe()
+	a.mu.Unlock()
 
 	a.log.WithFields(logrus.Fields{
 		"host":   host,
 		"serial": serial,
 	}).Info("Connected to Bambu Lab printer")
 
-	// Request initial status
-	a.publishCommand("push_status", nil)
+	// Request a full status report.
+	if err := a.publishCommand("push_status", nil); err != nil {
+		a.log.WithError(err).Warn("push_status request failed")
+	}
 
 	return nil
 }
 
-// subscribe registers the MQTT topic handler for report messages.
-func (a *BambuAdapter) subscribe() {
+// tlsConfig returns the TLS settings for the printer's LAN services. The
+// printer presents a self-signed certificate, so chain verification is off;
+// when TLSPinSHA256 is set the leaf certificate must match it.
+func (a *BambuAdapter) tlsConfig() *tls.Config {
+	cfg := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // self-signed printer certificate; optional pin below
+		MinVersion:         tls.VersionTLS12,
+	}
+	if pin := strings.ToLower(strings.TrimSpace(a.TLSPinSHA256)); pin != "" {
+		cfg.VerifyConnection = func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("printer presented no certificate")
+			}
+			sum := sha256.Sum256(cs.PeerCertificates[0].Raw)
+			if hex.EncodeToString(sum[:]) != pin {
+				return fmt.Errorf("printer certificate does not match the configured pin")
+			}
+			return nil
+		}
+	}
+	return cfg
+}
+
+// subscribeOn registers the MQTT topic handler for report messages.
+func (a *BambuAdapter) subscribeOn(c mqtt.Client) {
+	a.mu.RLock()
 	topic := fmt.Sprintf("device/%s/report", a.serial)
-	token := a.client.Subscribe(topic, 1, a.handleReport)
+	a.mu.RUnlock()
+	token := c.Subscribe(topic, 1, a.handleReport)
 	if !token.WaitTimeout(5 * time.Second) {
 		a.log.Warn("MQTT subscribe timeout")
 		return
@@ -152,21 +203,32 @@ func (a *BambuAdapter) handleReport(_ mqtt.Client, msg mqtt.Message) {
 }
 
 // bambuPrintReport represents the "print" section of a Bambu Lab report message.
+// P1/A1 printers send incremental reports, so every field is optional and only
+// fields present in a message update the status.
 type bambuPrintReport struct {
-	GcodeState       string  `json:"gcode_state"`
-	NozzleTemper     float64 `json:"nozzle_temper"`
-	NozzleTargetTemp float64 `json:"nozzle_target_temper"`
-	BedTemper        float64 `json:"bed_temper"`
-	BedTargetTemp    float64 `json:"bed_target_temper"`
-	ChamberTemper    float64 `json:"chamber_temper"`
-	MCPercent        int     `json:"mc_percent"`
-	SpdLvl           int     `json:"spd_lvl"`
-	FanSpeed         string  `json:"big_fan1_speed"`
+	GcodeState       string   `json:"gcode_state"`
+	NozzleTemper     *float64 `json:"nozzle_temper"`
+	NozzleTargetTemp *float64 `json:"nozzle_target_temper"`
+	BedTemper        *float64 `json:"bed_temper"`
+	BedTargetTemp    *float64 `json:"bed_target_temper"`
+	ChamberTemper    *float64 `json:"chamber_temper"`
+	MCPercent        *int     `json:"mc_percent"`
+	SpdLvl           *int     `json:"spd_lvl"`
+	FanSpeed         string   `json:"big_fan1_speed"`
+	GcodeFile        string   `json:"gcode_file"`
+	SubtaskName      string   `json:"subtask_name"`
 	AMS              *struct {
 		AMS []struct {
 			Humidity string `json:"humidity"`
+			Tray     []struct {
+				ID       string `json:"id"`
+				TrayType string `json:"tray_type"`
+			} `json:"tray"`
 		} `json:"ams"`
 	} `json:"ams"`
+	VtTray *struct {
+		TrayType string `json:"tray_type"`
+	} `json:"vt_tray"`
 }
 
 // processReport updates internal status and emits telemetry from a report.
@@ -174,28 +236,51 @@ func (a *BambuAdapter) processReport(r *bambuPrintReport) {
 	a.mu.Lock()
 
 	if r.GcodeState != "" {
+		a.status.GcodeState = r.GcodeState
 		a.status.State = a.mapState(r.GcodeState)
 	}
-	a.status.NozzleTemp = r.NozzleTemper
-	a.status.NozzleTarget = r.NozzleTargetTemp
-	a.status.BedTemp = r.BedTemper
-	a.status.BedTarget = r.BedTargetTemp
-	a.status.ChamberTemp = r.ChamberTemper
-	a.status.PrintPercent = r.MCPercent
-	a.status.SpeedLevel = r.SpdLvl
+	setF := func(dst *float64, v *float64) {
+		if v != nil {
+			*dst = *v
+		}
+	}
+	setF(&a.status.NozzleTemp, r.NozzleTemper)
+	setF(&a.status.NozzleTarget, r.NozzleTargetTemp)
+	setF(&a.status.BedTemp, r.BedTemper)
+	setF(&a.status.BedTarget, r.BedTargetTemp)
+	setF(&a.status.ChamberTemp, r.ChamberTemper)
+	if r.MCPercent != nil {
+		a.status.PrintPercent = *r.MCPercent
+	}
+	if r.SpdLvl != nil {
+		a.status.SpeedLevel = *r.SpdLvl
+	}
+	if r.SubtaskName != "" {
+		a.status.JobFile = r.SubtaskName
+	} else if r.GcodeFile != "" {
+		a.status.JobFile = r.GcodeFile
+	}
 
 	if fanVal, err := strconv.Atoi(r.FanSpeed); err == nil {
 		a.status.FanSpeed = fanVal
 	}
 
-	// Parse AMS humidity
+	// Parse AMS humidity and loaded trays (AMS units in order, then the external spool).
 	if r.AMS != nil && r.AMS.AMS != nil {
 		a.status.AMSHumidity = make([]int, len(r.AMS.AMS))
-		for i, slot := range r.AMS.AMS {
-			if h, err := strconv.Atoi(slot.Humidity); err == nil {
+		var trays []LoadedMaterial
+		for i, unit := range r.AMS.AMS {
+			if h, err := strconv.Atoi(unit.Humidity); err == nil {
 				a.status.AMSHumidity[i] = h
 			}
+			for _, t := range unit.Tray {
+				trays = append(trays, LoadedMaterial{Vendor: t.TrayType, Loaded: t.TrayType != ""})
+			}
 		}
+		a.status.Trays = trays
+	}
+	if r.VtTray != nil {
+		a.status.ExternalSpool = &LoadedMaterial{Vendor: r.VtTray.TrayType, Loaded: r.VtTray.TrayType != ""}
 	}
 
 	a.status.LastUpdate = time.Now()
