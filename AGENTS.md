@@ -69,12 +69,13 @@ Regenerate or repair these files with
   `**.md` and `docs/**` changes trigger no build. visualization-engine,
   video-streaming, ml-orchestrator, luban-bridge, octoprint-connector and
   machine-adapter are **not built or deployed** by any workflow. See
-  README.md «Deployment».
+  README.md «Deployment». machine-adapter runs on site boxes as the
+  Sparkplug B edge node (`deploy/edge/`, `packages/sparkplug/`).
 - **Toolchains.** Go `go 1.25.0` with toolchain `go1.25.14` (`go.work`, each
   `go.mod`, the builder images and `GO_VERSION` in the workflows move
   together). Node 22 in CI. pravara-ui and pravara-landing use Next 15.5;
   admin uses Next 16.3, where `next lint` no longer exists.
-- **Tests and gates.** CI gates the five `go.work` modules (vet, race tests,
+- **Tests and gates.** CI gates the six `go.work` modules (vet, race tests,
   golangci-lint, gofmt), pravara-ui (lint, typecheck, build; its tests are
   `continue-on-error`) and pravara-landing (lint, typecheck, tests, build).
   admin, luban-bridge, octoprint-connector and ml-orchestrator suites run
