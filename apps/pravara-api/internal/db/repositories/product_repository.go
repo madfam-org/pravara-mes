@@ -84,9 +84,9 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter) ([]P
 		       cad_file_url, parametric_specs, is_active, metadata,
 		       created_at, updated_at
 		FROM product_definitions
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM product_definitions WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM product_definitions WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -158,7 +158,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*Product
 		       cad_file_url, parametric_specs, is_active, metadata,
 		       created_at, updated_at
 		FROM product_definitions
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -181,7 +181,7 @@ func (r *ProductRepository) GetBySKU(ctx context.Context, sku, version string) (
 		       cad_file_url, parametric_specs, is_active, metadata,
 		       created_at, updated_at
 		FROM product_definitions
-		WHERE sku = $1 AND version = $2
+		WHERE sku = $1 AND version = $2 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, sku, version)
@@ -252,7 +252,7 @@ func (r *ProductRepository) Update(ctx context.Context, product *ProductDefiniti
 			parametric_specs = $7,
 			is_active = $8,
 			metadata = $9
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -286,7 +286,7 @@ func (r *ProductRepository) Update(ctx context.Context, product *ProductDefiniti
 // Delete permanently removes a product definition from the database.
 // Returns an error if the product is not found.
 func (r *ProductRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM product_definitions WHERE id = $1`
+	query := `DELETE FROM product_definitions WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -308,7 +308,7 @@ func (r *ProductRepository) ListBOMItems(ctx context.Context, productID uuid.UUI
 		       quantity, unit, estimated_cost, currency, supplier, sort_order,
 		       created_at, updated_at
 		FROM bom_items
-		WHERE product_definition_id = $1
+		WHERE product_definition_id = $1 AND ` + tenantMatch + `
 		ORDER BY sort_order ASC
 	`
 
@@ -372,7 +372,7 @@ func (r *ProductRepository) CreateBOMItem(ctx context.Context, item *BOMItem) er
 // DeleteBOMItem permanently removes a BOM item from the database.
 // Returns an error if the BOM item is not found.
 func (r *ProductRepository) DeleteBOMItem(ctx context.Context, itemID uuid.UUID) error {
-	query := `DELETE FROM bom_items WHERE id = $1`
+	query := `DELETE FROM bom_items WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, itemID)
 	if err != nil {

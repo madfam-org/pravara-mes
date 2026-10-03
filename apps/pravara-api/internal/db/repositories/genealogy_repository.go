@@ -97,9 +97,9 @@ func (r *GenealogyRepository) List(ctx context.Context, filter GenealogyFilter) 
 		       serial_number, lot_number, status, sealed_at, sealed_by,
 		       seal_hash, birth_cert_url, metadata, created_at, updated_at
 		FROM product_genealogy
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM product_genealogy WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM product_genealogy WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -200,7 +200,7 @@ func (r *GenealogyRepository) GetByID(ctx context.Context, id uuid.UUID) (*Produ
 		       serial_number, lot_number, status, sealed_at, sealed_by,
 		       seal_hash, birth_cert_url, metadata, created_at, updated_at
 		FROM product_genealogy
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -265,7 +265,7 @@ func (r *GenealogyRepository) Update(ctx context.Context, record *ProductGenealo
 			lot_number = $10,
 			status = $11,
 			metadata = $12
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -298,7 +298,7 @@ func (r *GenealogyRepository) Seal(ctx context.Context, id uuid.UUID, hash, birt
 			sealed_by = $3,
 			seal_hash = $4,
 			birth_cert_url = $5
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -345,7 +345,7 @@ func (r *GenealogyRepository) GetTree(ctx context.Context, id uuid.UUID) (*Genea
 			       cad_file_url, parametric_specs, is_active, metadata,
 			       created_at, updated_at
 			FROM product_definitions
-			WHERE id = $1
+			WHERE id = $1 AND ` + tenantMatch + `
 		`
 		row := r.db.QueryRowContext(ctx, pdQuery, *record.ProductDefinitionID)
 		pd, err := scanProductDefinition(row)
@@ -359,7 +359,7 @@ func (r *GenealogyRepository) GetTree(ctx context.Context, id uuid.UUID) (*Genea
 			       quantity, unit, estimated_cost, currency, supplier, sort_order,
 			       created_at, updated_at
 			FROM bom_items
-			WHERE product_definition_id = $1
+			WHERE product_definition_id = $1 AND ` + tenantMatch + `
 			ORDER BY sort_order ASC
 		`
 		bomRows, err := r.db.QueryContext(ctx, bomQuery, *record.ProductDefinitionID)
@@ -380,7 +380,7 @@ func (r *GenealogyRepository) GetTree(ctx context.Context, id uuid.UUID) (*Genea
 		       material_name, material_code, quantity_consumed, unit,
 		       created_at
 		FROM genealogy_material_consumption
-		WHERE genealogy_id = $1
+		WHERE genealogy_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at ASC
 	`
 	mcRows, err := r.db.QueryContext(ctx, mcQuery, id)
@@ -404,7 +404,7 @@ func (r *GenealogyRepository) ListMaterials(ctx context.Context, genealogyID uui
 		       material_name, material_code, quantity_consumed, unit,
 		       created_at
 		FROM genealogy_material_consumption
-		WHERE genealogy_id = $1
+		WHERE genealogy_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at ASC
 	`
 

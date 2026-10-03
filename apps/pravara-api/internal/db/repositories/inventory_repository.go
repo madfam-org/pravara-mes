@@ -78,9 +78,9 @@ func (r *InventoryRepository) ListItems(ctx context.Context, filter InventoryFil
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM inventory_items WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM inventory_items WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -151,7 +151,7 @@ func (r *InventoryRepository) GetItemByID(ctx context.Context, id uuid.UUID) (*I
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -219,7 +219,7 @@ func (r *InventoryRepository) UpdateItem(ctx context.Context, item *InventoryIte
 			unit_cost = $10,
 			currency = $11,
 			metadata = $12
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -357,7 +357,7 @@ func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UU
 			quantity_on_hand = quantity_on_hand + $2,
 			quantity_available = (quantity_on_hand + $2) - quantity_reserved,
 			updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING quantity_on_hand
 	`
 
@@ -405,7 +405,7 @@ func (r *InventoryRepository) GetLowStock(ctx context.Context) ([]InventoryItem,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
 		WHERE (quantity_on_hand - quantity_reserved) <= reorder_point
-		  AND reorder_point > 0
+		  AND reorder_point > 0 AND ` + tenantMatch + `
 		ORDER BY (quantity_on_hand - quantity_reserved) / NULLIF(reorder_point, 0) ASC
 	`
 
@@ -435,7 +435,7 @@ func (r *InventoryRepository) ListTransactions(ctx context.Context, itemID uuid.
 		       quantity, running_balance, reference_type, reference_id,
 		       notes, created_by, created_at
 		FROM inventory_transactions
-		WHERE inventory_item_id = $1
+		WHERE inventory_item_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at DESC
 	`
 

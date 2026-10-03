@@ -41,7 +41,7 @@ func (r *TelemetryRepository) List(ctx context.Context, filter TelemetryFilter) 
 	query := `
 		SELECT id, tenant_id, machine_id, timestamp, metric_type, value, unit, metadata, created_at
 		FROM telemetry
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
 
 	var args []interface{}
@@ -171,7 +171,7 @@ func (r *TelemetryRepository) GetLatest(ctx context.Context, machineID uuid.UUID
 	query := `
 		SELECT id, tenant_id, machine_id, timestamp, metric_type, value, unit, metadata, created_at
 		FROM telemetry
-		WHERE machine_id = $1 AND metric_type = $2
+		WHERE machine_id = $1 AND metric_type = $2 AND ` + tenantMatch + `
 		ORDER BY timestamp DESC
 		LIMIT 1
 	`
@@ -216,7 +216,7 @@ func (r *TelemetryRepository) GetAggregated(ctx context.Context, machineID uuid.
 			COUNT(*) as count
 		FROM telemetry
 		WHERE machine_id = $1 AND metric_type = $2
-		  AND timestamp >= $3 AND timestamp <= $4
+		  AND timestamp >= $3 AND timestamp <= $4 AND `+tenantMatch+`
 		GROUP BY bucket
 		ORDER BY bucket ASC
 	`, timeBucket)
@@ -253,7 +253,7 @@ func (r *TelemetryRepository) GetAggregated(ctx context.Context, machineID uuid.
 // Returns the number of deleted rows. Used for data retention/cleanup jobs.
 // Should be run periodically to prevent unbounded table growth.
 func (r *TelemetryRepository) DeleteOlderThan(ctx context.Context, before time.Time) (int64, error) {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM telemetry WHERE timestamp < $1`, before)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM telemetry WHERE timestamp < $1 AND `+tenantMatch, before)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete old telemetry: %w", err)
 	}

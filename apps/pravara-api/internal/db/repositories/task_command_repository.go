@@ -100,7 +100,7 @@ func (r *TaskCommandRepository) UpdateStatus(ctx context.Context, commandID uuid
 		    error_message = NULLIF($3, ''),
 		    acked_at = CASE WHEN $2 = 'acknowledged' THEN NOW() ELSE acked_at END,
 		    completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
-		WHERE command_id = $1
+		WHERE command_id = $1 AND ` + tenantMatch + `
 	`
 
 	result, err := r.db.ExecContext(ctx, query, commandID, status, errorMsg)
@@ -126,7 +126,7 @@ func (r *TaskCommandRepository) GetByCommandID(ctx context.Context, commandID uu
 		       status, parameters, issued_by, issued_at, acked_at, completed_at,
 		       error_message, created_at, updated_at
 		FROM task_commands
-		WHERE command_id = $1
+		WHERE command_id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, commandID)
@@ -153,7 +153,7 @@ func (r *TaskCommandRepository) GetActiveByTaskID(ctx context.Context, taskID uu
 		       status, parameters, issued_by, issued_at, acked_at, completed_at,
 		       error_message, created_at, updated_at
 		FROM task_commands
-		WHERE task_id = $1 AND status IN ('pending', 'sent', 'acknowledged')
+		WHERE task_id = $1 AND status IN ('pending', 'sent', 'acknowledged') AND ` + tenantMatch + `
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
@@ -182,7 +182,7 @@ func (r *TaskCommandRepository) GetActiveByMachineID(ctx context.Context, machin
 		       status, parameters, issued_by, issued_at, acked_at, completed_at,
 		       error_message, created_at, updated_at
 		FROM task_commands
-		WHERE machine_id = $1 AND status IN ('pending', 'sent', 'acknowledged')
+		WHERE machine_id = $1 AND status IN ('pending', 'sent', 'acknowledged') AND ` + tenantMatch + `
 		ORDER BY created_at DESC
 	`
 
@@ -218,7 +218,7 @@ func (r *TaskCommandRepository) GetByTaskID(ctx context.Context, taskID uuid.UUI
 		       status, parameters, issued_by, issued_at, acked_at, completed_at,
 		       error_message, created_at, updated_at
 		FROM task_commands
-		WHERE task_id = $1
+		WHERE task_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at DESC
 	`
 

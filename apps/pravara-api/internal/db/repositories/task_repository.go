@@ -43,9 +43,9 @@ func (r *TaskRepository) List(ctx context.Context, filter TaskFilter) ([]types.T
 		       title, description, status, priority, estimated_minutes, actual_minutes,
 		       kanban_position, started_at, completed_at, metadata, created_at, updated_at
 		FROM tasks
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM tasks WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM tasks WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -125,7 +125,7 @@ func (r *TaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Task
 		       title, description, status, priority, estimated_minutes, actual_minutes,
 		       kanban_position, started_at, completed_at, metadata, created_at, updated_at
 		FROM tasks
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -201,7 +201,7 @@ func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 			started_at = $13,
 			completed_at = $14,
 			metadata = $15
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -242,7 +242,7 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 		var tenantID uuid.UUID
 
 		err = tx.QueryRowContext(ctx,
-			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1`, id,
+			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch, id,
 		).Scan(&tenantID, &currentStatus, &currentPosition)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("task not found")
@@ -298,7 +298,7 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 
 		// Update the task's status and position
 		_, err = tx.ExecContext(ctx,
-			`UPDATE tasks SET status = $2, kanban_position = $3 WHERE id = $1`,
+			`UPDATE tasks SET status = $2, kanban_position = $3 WHERE id = $1 AND `+tenantMatch,
 			id, newStatus, newPosition,
 		)
 		if err != nil {
@@ -314,7 +314,7 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 // Passing nil for both clears all assignments.
 // Returns an error if the task is not found.
 func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, machineID *uuid.UUID) error {
-	query := `UPDATE tasks SET assigned_user_id = $2, machine_id = $3 WHERE id = $1`
+	query := `UPDATE tasks SET assigned_user_id = $2, machine_id = $3 WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id, nullUUID(userID), nullUUID(machineID))
 	if err != nil {
@@ -333,7 +333,7 @@ func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, m
 // This is a hard delete - the task record is not recoverable.
 // Returns an error if the task is not found.
 func (r *TaskRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM tasks WHERE id = $1`
+	query := `DELETE FROM tasks WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {

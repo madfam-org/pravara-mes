@@ -87,7 +87,7 @@ func (r *OutboxRepository) GetPendingEvents(ctx context.Context, limit int) ([]O
 // MarkDelivered marks an event as delivered.
 func (r *OutboxRepository) MarkDelivered(ctx context.Context, eventID uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE event_outbox SET delivered = TRUE WHERE id = $1`,
+		`UPDATE event_outbox SET delivered = TRUE WHERE id = $1 AND `+tenantMatch,
 		eventID,
 	)
 	return err
@@ -96,8 +96,8 @@ func (r *OutboxRepository) MarkDelivered(ctx context.Context, eventID uuid.UUID)
 // ListEvents retrieves events with filtering (tenant-scoped via RLS).
 func (r *OutboxRepository) ListEvents(ctx context.Context, filter OutboxEventFilter) ([]OutboxEvent, int, error) {
 	query := `SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
-		 FROM event_outbox WHERE 1=1`
-	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE 1=1`
+		 FROM event_outbox WHERE 1=1 AND ` + tenantMatch
+	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE 1=1 AND ` + tenantMatch
 	args := []interface{}{}
 	argIdx := 1
 
@@ -174,7 +174,7 @@ func (r *OutboxRepository) GetEventByID(ctx context.Context, id uuid.UUID) (*Out
 	var event OutboxEvent
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
-		 FROM event_outbox WHERE id = $1`,
+		 FROM event_outbox WHERE id = $1 AND `+tenantMatch,
 		id,
 	).Scan(&event.ID, &event.TenantID, &event.EventType, &event.ChannelNamespace,
 		&event.Payload, &event.Delivered, &event.CreatedAt)
@@ -191,7 +191,7 @@ func (r *OutboxRepository) GetEventByID(ctx context.Context, id uuid.UUID) (*Out
 func (r *OutboxRepository) GetEventTypes(ctx context.Context) ([]EventTypeCount, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT event_type, COUNT(*) as count
-		 FROM event_outbox
+		 FROM event_outbox WHERE `+tenantMatch+`
 		 GROUP BY event_type
 		 ORDER BY count DESC`,
 	)
@@ -238,7 +238,7 @@ func (r *OutboxRepository) TenantsWithPurgeableEvents(ctx context.Context, older
 // PurgeOldEvents deletes events older than the specified number of days.
 func (r *OutboxRepository) PurgeOldEvents(ctx context.Context, olderThanDays int) (int64, error) {
 	result, err := r.db.ExecContext(ctx,
-		`DELETE FROM event_outbox WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE`,
+		`DELETE FROM event_outbox WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE AND `+tenantMatch,
 		olderThanDays,
 	)
 	if err != nil {
@@ -252,9 +252,9 @@ func (r *OutboxRepository) GetEventsByEntityFromPayload(ctx context.Context, ent
 	idStr := entityID.String()
 	query := `SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
 		 FROM event_outbox
-		 WHERE payload::text LIKE '%' || $1 || '%'
+		 WHERE payload::text LIKE '%' || $1 || '%' AND ` + tenantMatch + `
 		 ORDER BY created_at DESC`
-	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE payload::text LIKE '%' || $1 || '%'`
+	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE payload::text LIKE '%' || $1 || '%' AND ` + tenantMatch
 
 	var total int
 	if err := r.db.QueryRowContext(ctx, countQuery, idStr).Scan(&total); err != nil {

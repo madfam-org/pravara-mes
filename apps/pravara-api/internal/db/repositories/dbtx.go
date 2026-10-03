@@ -18,3 +18,11 @@ const tenantMatch = "tenant_id = NULLIF(current_setting('app.current_tenant_id',
 func tenantMatchOn(alias string) string {
 	return alias + "." + tenantMatch
 }
+
+// orderItemTenantMatch scopes order_items, which carry no tenant_id, through
+// their order.
+const orderItemTenantMatch = "order_id IN (SELECT id FROM orders WHERE " + tenantMatch + ")"
+
+// deliveryTenantMatch scopes webhook_deliveries, which carry no tenant_id,
+// through their subscription.
+const deliveryTenantMatch = "subscription_id IN (SELECT id FROM webhook_subscriptions WHERE " + tenantMatch + ")"
