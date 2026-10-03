@@ -35,7 +35,7 @@ var goldenVectors = []struct {
 	{
 		// DDATA: timestamp=1000, metrics=[{alias:5, timestamp:1000, double_value:21.5}], seq=7
 		name: "ddata_alias_double",
-		hex: "08e807" + "120e" + "1005" + "18e807" + "69" + "0000000000803540" + "1807",
+		hex:  "08e807" + "120e" + "1005" + "18e807" + "69" + "0000000000803540" + "1807",
 		payload: &pb.Payload{Timestamp: proto.Uint64(1000), Seq: proto.Uint64(7), Metrics: []*pb.Payload_Metric{{
 			Alias: proto.Uint64(5), Timestamp: proto.Uint64(1000),
 			Value: &pb.Payload_Metric_DoubleValue{DoubleValue: 21.5},
