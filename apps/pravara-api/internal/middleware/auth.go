@@ -62,6 +62,7 @@ func AuthMiddleware(verifier *auth.OIDCVerifier, database *db.DB, log *logrus.Lo
 		c.Set(string(ContextKeyClaims), claims)
 		c.Set(string(ContextKeyTenantID), claims.TenantID)
 		c.Set(string(ContextKeyUserID), claims.Subject)
+		setJWTCaller(c, claims)
 
 		// Every statement of this request runs in one transaction bound to
 		// the token's tenant (set_config(..., true) inside the transaction).

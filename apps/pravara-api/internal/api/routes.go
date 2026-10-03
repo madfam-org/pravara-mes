@@ -208,6 +208,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	// =========================================================================
 	v1 := router.Group("/v1")
 	v1.Use(authMiddleware)
+	v1.Use(middleware.EnforceRouteScopes(MachineRouteScopes(), log))
 	{
 		// Orders endpoints
 		orders := v1.Group("/orders")
@@ -445,7 +446,6 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		if deps.OutboxRepo != nil {
 			eventHandler := NewEventHistoryHandler(deps.OutboxRepo, log)
 			events := v1.Group("/events")
-			events.Use(middleware.RequireScope("read:events"))
 			{
 				events.GET("", eventHandler.ListEvents)
 				events.GET("/types", eventHandler.GetEventTypes)
@@ -467,7 +467,6 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 
 			// CRM feeds
 			crmFeed := v1.Group("/feeds/crm")
-			crmFeed.Use(middleware.RequireScope("read:feeds"))
 			{
 				crmFeed.GET("/orders", feedHandler.CRMOrders)
 				crmFeed.GET("/orders/:id/timeline", feedHandler.CRMOrderTimeline)
@@ -476,7 +475,6 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 
 			// Social media feeds
 			socialFeed := v1.Group("/feeds/social")
-			socialFeed.Use(middleware.RequireScope("read:feeds"))
 			{
 				socialFeed.GET("/milestones", feedHandler.SocialMilestones)
 				socialFeed.GET("/stats", feedHandler.SocialStats)
@@ -490,7 +488,6 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		if deps.StatusDB != nil {
 			statusHandler := NewStatusHandler(deps.StatusDB, log).WithTenantDB(tdb)
 			statusFeed := v1.Group("/feeds/status")
-			statusFeed.Use(middleware.RequireScope("read:status"))
 			{
 				statusFeed.GET("/detailed", statusHandler.DetailedStatus)
 				statusFeed.GET("/incidents", statusHandler.Incidents)
