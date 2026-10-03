@@ -492,8 +492,7 @@ func (h *WorkInstructionHandler) AcknowledgeStep(c *gin.Context) {
 		return
 	}
 
-	userIDStr, _ := middleware.GetUserID(c)
-	userID, _ := uuid.Parse(userIDStr)
+	userID := middleware.ActorUUID(c)
 
 	if h.wiService != nil {
 		if err := h.wiService.AcknowledgeStep(c.Request.Context(), taskID, wiID, req.StepNumber, userID); err != nil {

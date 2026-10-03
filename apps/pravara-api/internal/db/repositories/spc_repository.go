@@ -310,7 +310,7 @@ func (r *SPCRepository) AcknowledgeViolation(ctx context.Context, id, userID uui
 	`
 
 	var returnedID uuid.UUID
-	err := r.db.QueryRowContext(ctx, query, id, userID, notes).Scan(&returnedID)
+	err := r.db.QueryRowContext(ctx, query, id, nullUUID(&userID), notes).Scan(&returnedID)
 
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("SPC violation not found")
