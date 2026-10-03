@@ -13,11 +13,11 @@ import (
 
 // WorkInstructionRepository handles work instruction database operations.
 type WorkInstructionRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewWorkInstructionRepository creates a new work instruction repository.
-func NewWorkInstructionRepository(db *sql.DB) *WorkInstructionRepository {
+func NewWorkInstructionRepository(db DBTX) *WorkInstructionRepository {
 	return &WorkInstructionRepository{db: db}
 }
 

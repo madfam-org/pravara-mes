@@ -35,15 +35,20 @@ type WebhookDelivery struct {
 	LastError      *string    `json:"last_error,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// TenantID is the owning subscription's tenant. It is filled only by
+	// GetPendingDeliveries, so the dispatcher can process each delivery in
+	// that tenant's scope.
+	TenantID uuid.UUID `json:"-"`
 }
 
 // WebhookRepository handles webhook subscription and delivery database operations.
 type WebhookRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewWebhookRepository creates a new webhook repository.
-func NewWebhookRepository(db *sql.DB) *WebhookRepository {
+func NewWebhookRepository(db DBTX) *WebhookRepository {
 	return &WebhookRepository{db: db}
 }
 
@@ -195,12 +200,15 @@ func (r *WebhookRepository) UpdateDelivery(ctx context.Context, delivery *Webhoo
 	return err
 }
 
-// GetPendingDeliveries retrieves deliveries that need to be attempted.
+// GetPendingDeliveries retrieves deliveries that need to be attempted, across
+// tenants. Production callers run it in the read-only system scope.
 func (r *WebhookRepository) GetPendingDeliveries(ctx context.Context, limit int) ([]WebhookDelivery, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT d.id, d.subscription_id, d.event_id, d.status, d.http_status,
-		        d.attempt_count, d.next_retry_at, d.last_error, d.created_at, d.updated_at
+		        d.attempt_count, d.next_retry_at, d.last_error, d.created_at, d.updated_at,
+		        s.tenant_id
 		 FROM webhook_deliveries d
+		 JOIN webhook_subscriptions s ON s.id = d.subscription_id
 		 WHERE d.status IN ('pending', 'failed')
 		 AND (d.next_retry_at IS NULL OR d.next_retry_at <= NOW())
 		 ORDER BY d.created_at ASC
@@ -216,7 +224,8 @@ func (r *WebhookRepository) GetPendingDeliveries(ctx context.Context, limit int)
 	for rows.Next() {
 		var d WebhookDelivery
 		if err := rows.Scan(&d.ID, &d.SubscriptionID, &d.EventID, &d.Status, &d.HTTPStatus,
-			&d.AttemptCount, &d.NextRetryAt, &d.LastError, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			&d.AttemptCount, &d.NextRetryAt, &d.LastError, &d.CreatedAt, &d.UpdatedAt,
+			&d.TenantID); err != nil {
 			return nil, fmt.Errorf("failed to scan webhook delivery: %w", err)
 		}
 		deliveries = append(deliveries, d)

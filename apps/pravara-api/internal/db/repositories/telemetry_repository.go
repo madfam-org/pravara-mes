@@ -10,16 +10,17 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // TelemetryRepository handles telemetry database operations.
 type TelemetryRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewTelemetryRepository creates a new telemetry repository.
-func NewTelemetryRepository(db *sql.DB) *TelemetryRepository {
+func NewTelemetryRepository(db DBTX) *TelemetryRepository {
 	return &TelemetryRepository{db: db}
 }
 
@@ -134,39 +135,33 @@ func (r *TelemetryRepository) CreateBatch(ctx context.Context, records []types.T
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return db.InTx(ctx, r.db, func(tx DBTX) error {
+		var err error
 
-	stmt, err := tx.PrepareContext(ctx, `
+		const insertTelemetry = `
 		INSERT INTO telemetry (
 			id, tenant_id, machine_id, timestamp, metric_type, value, unit, metadata
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
+	`
 
-	for i := range records {
-		if records[i].ID == uuid.Nil {
-			records[i].ID = uuid.New()
+		for i := range records {
+			if records[i].ID == uuid.Nil {
+				records[i].ID = uuid.New()
+			}
+			metadataJSON, _ := json.Marshal(records[i].Metadata)
+
+			_, err = tx.ExecContext(ctx, insertTelemetry,
+				records[i].ID, records[i].TenantID, records[i].MachineID,
+				records[i].Timestamp, records[i].MetricType, records[i].Value,
+				records[i].Unit, metadataJSON,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert telemetry: %w", err)
+			}
 		}
-		metadataJSON, _ := json.Marshal(records[i].Metadata)
 
-		_, err = stmt.ExecContext(ctx,
-			records[i].ID, records[i].TenantID, records[i].MachineID,
-			records[i].Timestamp, records[i].MetricType, records[i].Value,
-			records[i].Unit, metadataJSON,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert telemetry: %w", err)
-		}
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // GetLatest retrieves the most recent telemetry record for a specific machine and metric type.

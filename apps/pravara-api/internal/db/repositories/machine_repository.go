@@ -15,11 +15,11 @@ import (
 
 // MachineRepository handles machine database operations.
 type MachineRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewMachineRepository creates a new machine repository.
-func NewMachineRepository(db *sql.DB) *MachineRepository {
+func NewMachineRepository(db DBTX) *MachineRepository {
 	return &MachineRepository{db: db}
 }
 

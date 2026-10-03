@@ -44,17 +44,17 @@ type OEEFilter struct {
 
 // OEERepository handles OEE snapshot database operations.
 type OEERepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOEERepository creates a new OEE repository.
-func NewOEERepository(db *sql.DB) *OEERepository {
+func NewOEERepository(db DBTX) *OEERepository {
 	return &OEERepository{db: db}
 }
 
 // DB returns the underlying database connection for use by services
 // that need to perform cross-table queries.
-func (r *OEERepository) DB() *sql.DB {
+func (r *OEERepository) DB() DBTX {
 	return r.db
 }
 

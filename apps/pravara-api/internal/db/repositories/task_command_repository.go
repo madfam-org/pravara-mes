@@ -37,13 +37,13 @@ type TaskCommand struct {
 // This repository manages the command queue between tasks and machines,
 // providing command dispatch tracking and status management for machine control.
 type TaskCommandRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewTaskCommandRepository creates a new task command repository.
 // The returned repository is ready to perform database operations
 // for task command management and tracking.
-func NewTaskCommandRepository(db *sql.DB) *TaskCommandRepository {
+func NewTaskCommandRepository(db DBTX) *TaskCommandRepository {
 	return &TaskCommandRepository{db: db}
 }
 

@@ -14,11 +14,11 @@ import (
 
 // SPCRepository handles SPC (Statistical Process Control) database operations.
 type SPCRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewSPCRepository creates a new SPC repository.
-func NewSPCRepository(db *sql.DB) *SPCRepository {
+func NewSPCRepository(db DBTX) *SPCRepository {
 	return &SPCRepository{db: db}
 }
 

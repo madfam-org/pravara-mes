@@ -9,15 +9,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // InventoryRepository handles inventory database operations.
 type InventoryRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewInventoryRepository creates a new inventory repository.
-func NewInventoryRepository(db *sql.DB) *InventoryRepository {
+func NewInventoryRepository(db DBTX) *InventoryRepository {
 	return &InventoryRepository{db: db}
 }
 
@@ -346,14 +348,11 @@ func (r *InventoryRepository) UpsertBySKU(ctx context.Context, item *InventoryIt
 // an inventory transaction record with a running balance.
 // Positive quantity adds stock, negative quantity removes stock.
 func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UUID, quantity float64, txnType string, refType *string, refID *uuid.UUID, userID *uuid.UUID, notes *string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return db.InTx(ctx, r.db, func(tx DBTX) error {
+		var err error
 
-	// Update quantity on hand and recalculate available
-	updateQuery := `
+		// Update quantity on hand and recalculate available
+		updateQuery := `
 		UPDATE inventory_items SET
 			quantity_on_hand = quantity_on_hand + $2,
 			quantity_available = (quantity_on_hand + $2) - quantity_reserved,
@@ -362,17 +361,17 @@ func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UU
 		RETURNING quantity_on_hand
 	`
 
-	var newBalance float64
-	err = tx.QueryRowContext(ctx, updateQuery, itemID, quantity).Scan(&newBalance)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("inventory item not found")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to adjust inventory quantity: %w", err)
-	}
+		var newBalance float64
+		err = tx.QueryRowContext(ctx, updateQuery, itemID, quantity).Scan(&newBalance)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("inventory item not found")
+		}
+		if err != nil {
+			return fmt.Errorf("failed to adjust inventory quantity: %w", err)
+		}
 
-	// Create transaction record
-	txnQuery := `
+		// Create transaction record
+		txnQuery := `
 		INSERT INTO inventory_transactions (
 			id, tenant_id, inventory_item_id, transaction_type,
 			quantity, running_balance, reference_type, reference_id,
@@ -384,16 +383,17 @@ func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UU
 		)
 	`
 
-	txnID := uuid.New()
-	_, err = tx.ExecContext(ctx, txnQuery,
-		txnID, itemID, txnType, quantity, newBalance,
-		refType, refID, notes, userID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create inventory transaction: %w", err)
-	}
+		txnID := uuid.New()
+		_, err = tx.ExecContext(ctx, txnQuery,
+			txnID, itemID, txnType, quantity, newBalance,
+			refType, refID, notes, userID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create inventory transaction: %w", err)
+		}
 
-	return tx.Commit()
+		return nil
+	})
 }
 
 // GetLowStock retrieves inventory items where available stock is at or below the reorder point.

@@ -54,25 +54,27 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	}
 	verifier := auth.NewOIDCVerifier(oidcConfig, log)
 
-	// Initialize repositories (database.DB is the embedded *sql.DB)
-	orderRepo := repositories.NewOrderRepository(database.DB)
-	orderItemRepo := repositories.NewOrderItemRepository(database.DB)
-	taskRepo := repositories.NewTaskRepository(database.DB)
-	machineRepo := repositories.NewMachineRepository(database.DB)
-	telemetryRepo := repositories.NewTelemetryRepository(database.DB)
-	qualityCertRepo := repositories.NewQualityCertificateRepository(database.DB)
-	inspectionRepo := repositories.NewInspectionRepository(database.DB)
-	batchLotRepo := repositories.NewBatchLotRepository(database.DB)
-	taskCmdRepo := repositories.NewTaskCommandRepository(database.DB)
+	// Repositories run every statement inside the request's (or job's)
+	// tenant-scoped transaction; see internal/db/tenant_scope.go.
+	tdb := database.Tenant(log)
+	orderRepo := repositories.NewOrderRepository(tdb)
+	orderItemRepo := repositories.NewOrderItemRepository(tdb)
+	taskRepo := repositories.NewTaskRepository(tdb)
+	machineRepo := repositories.NewMachineRepository(tdb)
+	telemetryRepo := repositories.NewTelemetryRepository(tdb)
+	qualityCertRepo := repositories.NewQualityCertificateRepository(tdb)
+	inspectionRepo := repositories.NewInspectionRepository(tdb)
+	batchLotRepo := repositories.NewBatchLotRepository(tdb)
+	taskCmdRepo := repositories.NewTaskCommandRepository(tdb)
 
 	// Phase 2.6+ repositories
-	oeeRepo := repositories.NewOEERepository(database.DB)
-	maintRepo := repositories.NewMaintenanceRepository(database.DB)
-	productRepo := repositories.NewProductRepository(database.DB)
-	genealogyRepo := repositories.NewGenealogyRepository(database.DB)
-	wiRepo := repositories.NewWorkInstructionRepository(database.DB)
-	spcRepo := repositories.NewSPCRepository(database.DB)
-	inventoryRepo := repositories.NewInventoryRepository(database.DB)
+	oeeRepo := repositories.NewOEERepository(tdb)
+	maintRepo := repositories.NewMaintenanceRepository(tdb)
+	productRepo := repositories.NewProductRepository(tdb)
+	genealogyRepo := repositories.NewGenealogyRepository(tdb)
+	wiRepo := repositories.NewWorkInstructionRepository(tdb)
+	spcRepo := repositories.NewSPCRepository(tdb)
+	inventoryRepo := repositories.NewInventoryRepository(tdb)
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
@@ -85,7 +87,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	tezcaWebhookHandler := NewTezcaWebhookHandler(log, cfg.Tezca.WebhookSecret, tezcaSvc)
 
 	// Initialize Dhanam webhook handler
-	invoiceRepo := billing.NewInvoiceRepository(database.DB)
+	invoiceRepo := billing.NewInvoiceRepository(tdb)
 	dhanamWebhookHandler := billing.NewWebhookHandler(invoiceRepo, cfg.Dhanam.WebhookSecret, log)
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
 	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
@@ -486,7 +488,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		// Status feeds (authenticated, detailed)
 		// =====================================================================
 		if deps.StatusDB != nil {
-			statusHandler := NewStatusHandler(deps.StatusDB, log)
+			statusHandler := NewStatusHandler(deps.StatusDB, log).WithTenantDB(tdb)
 			statusFeed := v1.Group("/feeds/status")
 			statusFeed.Use(middleware.RequireScope("read:status"))
 			{

@@ -29,11 +29,11 @@ type APIKey struct {
 
 // APIKeyRepository handles API key database operations.
 type APIKeyRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewAPIKeyRepository creates a new API key repository.
-func NewAPIKeyRepository(db *sql.DB) *APIKeyRepository {
+func NewAPIKeyRepository(db DBTX) *APIKeyRepository {
 	return &APIKeyRepository{db: db}
 }
 

@@ -16,11 +16,11 @@ import (
 
 // QualityCertificateRepository handles quality certificate database operations.
 type QualityCertificateRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewQualityCertificateRepository creates a new quality certificate repository.
-func NewQualityCertificateRepository(db *sql.DB) *QualityCertificateRepository {
+func NewQualityCertificateRepository(db DBTX) *QualityCertificateRepository {
 	return &QualityCertificateRepository{db: db}
 }
 
@@ -340,11 +340,11 @@ func scanQualityCertificate(scanner interface {
 
 // InspectionRepository handles inspection database operations.
 type InspectionRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewInspectionRepository creates a new inspection repository.
-func NewInspectionRepository(db *sql.DB) *InspectionRepository {
+func NewInspectionRepository(db DBTX) *InspectionRepository {
 	return &InspectionRepository{db: db}
 }
 
@@ -646,11 +646,11 @@ func scanInspection(scanner interface {
 
 // BatchLotRepository handles batch lot database operations.
 type BatchLotRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewBatchLotRepository creates a new batch lot repository.
-func NewBatchLotRepository(db *sql.DB) *BatchLotRepository {
+func NewBatchLotRepository(db DBTX) *BatchLotRepository {
 	return &BatchLotRepository{db: db}
 }
 

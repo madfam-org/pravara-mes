@@ -80,11 +80,11 @@ type GenealogyTree struct {
 
 // GenealogyRepository handles product genealogy database operations.
 type GenealogyRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewGenealogyRepository creates a new genealogy repository.
-func NewGenealogyRepository(db *sql.DB) *GenealogyRepository {
+func NewGenealogyRepository(db DBTX) *GenealogyRepository {
 	return &GenealogyRepository{db: db}
 }
 

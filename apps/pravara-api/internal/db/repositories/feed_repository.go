@@ -68,11 +68,11 @@ type SocialHighlight struct {
 
 // FeedRepository handles optimized feed aggregate queries.
 type FeedRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewFeedRepository creates a new feed repository.
-func NewFeedRepository(db *sql.DB) *FeedRepository {
+func NewFeedRepository(db DBTX) *FeedRepository {
 	return &FeedRepository{db: db}
 }
 

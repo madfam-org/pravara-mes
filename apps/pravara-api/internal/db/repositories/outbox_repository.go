@@ -34,11 +34,11 @@ type OutboxEventFilter struct {
 
 // OutboxRepository handles event outbox database operations.
 type OutboxRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOutboxRepository creates a new outbox repository.
-func NewOutboxRepository(db *sql.DB) *OutboxRepository {
+func NewOutboxRepository(db DBTX) *OutboxRepository {
 	return &OutboxRepository{db: db}
 }
 
@@ -65,7 +65,8 @@ func (r *OutboxRepository) InsertEvent(ctx context.Context, tenantID uuid.UUID, 
 	return event, nil
 }
 
-// GetPendingEvents retrieves undelivered events. This bypasses RLS (called by system dispatcher).
+// GetPendingEvents retrieves undelivered events across tenants. Production
+// callers run it in the read-only system scope (migration 028).
 func (r *OutboxRepository) GetPendingEvents(ctx context.Context, limit int) ([]OutboxEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
@@ -208,6 +209,30 @@ func (r *OutboxRepository) GetEventTypes(ctx context.Context) ([]EventTypeCount,
 		result = append(result, etc)
 	}
 	return result, rows.Err()
+}
+
+// TenantsWithPurgeableEvents lists tenants that own delivered events older
+// than olderThanDays, across tenants. Production callers run it in the
+// read-only system scope and then purge per tenant.
+func (r *OutboxRepository) TenantsWithPurgeableEvents(ctx context.Context, olderThanDays int) ([]uuid.UUID, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT tenant_id FROM event_outbox
+		 WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE`,
+		olderThanDays,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tenants with purgeable events: %w", err)
+	}
+	defer rows.Close()
+	var tenants []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan tenant id: %w", err)
+		}
+		tenants = append(tenants, id)
+	}
+	return tenants, rows.Err()
 }
 
 // PurgeOldEvents deletes events older than the specified number of days.

@@ -83,16 +83,16 @@ type WorkOrderFilter struct {
 
 // MaintenanceRepository handles maintenance schedule and work order database operations.
 type MaintenanceRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewMaintenanceRepository creates a new maintenance repository.
-func NewMaintenanceRepository(db *sql.DB) *MaintenanceRepository {
+func NewMaintenanceRepository(db DBTX) *MaintenanceRepository {
 	return &MaintenanceRepository{db: db}
 }
 
 // DB returns the underlying database connection.
-func (r *MaintenanceRepository) DB() *sql.DB {
+func (r *MaintenanceRepository) DB() DBTX {
 	return r.db
 }
 

@@ -16,11 +16,11 @@ import (
 
 // OrderRepository handles order database operations.
 type OrderRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOrderRepository creates a new order repository.
-func NewOrderRepository(db *sql.DB) *OrderRepository {
+func NewOrderRepository(db DBTX) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 

@@ -67,11 +67,11 @@ type ProductFilter struct {
 
 // ProductRepository handles product definition database operations.
 type ProductRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewProductRepository creates a new product repository.
-func NewProductRepository(db *sql.DB) *ProductRepository {
+func NewProductRepository(db DBTX) *ProductRepository {
 	return &ProductRepository{db: db}
 }
 
