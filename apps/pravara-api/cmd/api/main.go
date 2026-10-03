@@ -225,6 +225,23 @@ func main() {
 		go healthRecorder.Start(ctx)
 	}
 
+	// Background: liveness sweep marks machines offline when their
+	// heartbeat goes stale (per tenant, with an outbox event per change).
+	if cfg.Liveness.Enabled {
+		var notifier services.RealtimeNotifier
+		if publisher != nil {
+			notifier = publisher
+		}
+		offlineSweeper := services.NewOfflineSweeper(
+			repositories.NewMachineRepository(database.DB),
+			notifier,
+			time.Duration(cfg.Liveness.HeartbeatTimeoutSeconds)*time.Second,
+			time.Duration(cfg.Liveness.SweepIntervalSeconds)*time.Second,
+			log,
+		)
+		offlineSweeper.Start(ctx)
+	}
+
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),

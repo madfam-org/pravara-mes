@@ -305,37 +305,43 @@ func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// GetOfflineMachines returns machines that haven't sent a heartbeat recently.
-// Only machines currently marked as 'online' are checked.
-// The threshold parameter specifies how long since the last heartbeat before
-// a machine is considered offline (e.g., 5 minutes).
-// Used by the health check worker to detect stale connections.
-func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold time.Duration) ([]types.Machine, error) {
+// GetOfflineMachines returns the tenant's machines that are still marked
+// 'online' but have not sent a heartbeat within threshold. The query runs in
+// a tenant-scoped transaction with an explicit tenant predicate. Used by the
+// liveness sweep (services.OfflineSweeper), which then marks each one
+// offline with a guarded update.
+func (r *MachineRepository) GetOfflineMachines(ctx context.Context, tenantID uuid.UUID, threshold time.Duration) ([]types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
 		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
-		WHERE status = 'online'
-		  AND (last_heartbeat IS NULL OR last_heartbeat < $1)
+		WHERE tenant_id = $1
+		  AND status = 'online'
+		  AND (last_heartbeat IS NULL OR last_heartbeat < $2)
 	`
 
 	cutoff := time.Now().Add(-threshold)
-	rows, err := r.db.QueryContext(ctx, query, cutoff)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query offline machines: %w", err)
-	}
-	defer rows.Close()
-
 	var machines []types.Machine
-	for rows.Next() {
-		machine, err := r.scanMachine(rows)
+	err := withTenantTx(ctx, r.db, tenantID, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, query, tenantID, cutoff)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("failed to query offline machines: %w", err)
 		}
-		machines = append(machines, *machine)
-	}
+		defer rows.Close()
 
+		for rows.Next() {
+			machine, err := r.scanMachine(rows)
+			if err != nil {
+				return err
+			}
+			machines = append(machines, *machine)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
 	return machines, nil
 }
 
