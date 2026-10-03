@@ -9,7 +9,8 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/lib/pq v1.11.2
+	github.com/madfam-org/pravara-mes/packages/sparkplug v0.0.0-00010101000000-000000000000
+	github.com/mochi-mqtt/server/v2 v2.7.9
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
@@ -48,6 +49,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/rs/xid v1.4.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
@@ -74,3 +76,5 @@ require (
 )
 
 replace github.com/madfam-org/pravara-mes/packages/sdk-go => ../../packages/sdk-go
+
+replace github.com/madfam-org/pravara-mes/packages/sparkplug => ../../packages/sparkplug
