@@ -216,10 +216,10 @@ func (l *CommandLedger) ApplyAck(ctx context.Context, a command.AckApplication) 
 
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE task_commands
-			SET status = $3,
+			SET status = $3::varchar,
 			    acked_at = COALESCE(acked_at, NOW()),
-			    error_message = CASE WHEN $3 = 'failed' THEN $4 ELSE error_message END,
-			    completed_at = CASE WHEN $3 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+			    error_message = CASE WHEN $3::varchar = 'failed' THEN $4::text ELSE error_message END,
+			    completed_at = CASE WHEN $3::varchar IN ('completed', 'failed') THEN NOW() ELSE completed_at END
 			WHERE command_id = $1 AND tenant_id = $2`,
 			a.CommandID, a.Machine.TenantID, newStatus, message,
 		); err != nil {
