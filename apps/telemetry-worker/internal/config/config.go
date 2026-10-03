@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -20,8 +22,49 @@ type Config struct {
 }
 
 // CommandConfig holds command dispatcher configuration.
+//
+// Commands are consumed from a Redis stream with a consumer group, so a
+// command survives a worker restart; every outcome is written back to the
+// task_commands ledger.
 type CommandConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+	// StreamKey is the Redis stream the API appends commands to.
+	StreamKey string `mapstructure:"stream_key"`
+	// ConsumerGroup is the stream consumer group shared by worker replicas.
+	ConsumerGroup string `mapstructure:"consumer_group"`
+	// ConsumerName identifies this replica inside the group (default: hostname).
+	ConsumerName string `mapstructure:"consumer_name"`
+	// MaxAttempts bounds MQTT publish attempts before a command is failed.
+	MaxAttempts int `mapstructure:"max_attempts"`
+	// RetryIdleSeconds is how long an unacknowledged stream entry stays idle
+	// before it is reclaimed (retry after a failed attempt or a crash).
+	RetryIdleSeconds int `mapstructure:"retry_idle_seconds"`
+	// AckTimeoutSeconds is the deadline for a machine to acknowledge a sent command.
+	AckTimeoutSeconds int `mapstructure:"ack_timeout_seconds"`
+	// DispatchTimeoutSeconds is the deadline for a queued command to be sent at all.
+	DispatchTimeoutSeconds int `mapstructure:"dispatch_timeout_seconds"`
+	// SweepIntervalSeconds is how often overdue commands are expired.
+	SweepIntervalSeconds int `mapstructure:"sweep_interval_seconds"`
+}
+
+// RetryIdle returns RetryIdleSeconds as a duration.
+func (c *CommandConfig) RetryIdle() time.Duration {
+	return time.Duration(c.RetryIdleSeconds) * time.Second
+}
+
+// AckTimeout returns AckTimeoutSeconds as a duration.
+func (c *CommandConfig) AckTimeout() time.Duration {
+	return time.Duration(c.AckTimeoutSeconds) * time.Second
+}
+
+// DispatchTimeout returns DispatchTimeoutSeconds as a duration.
+func (c *CommandConfig) DispatchTimeout() time.Duration {
+	return time.Duration(c.DispatchTimeoutSeconds) * time.Second
+}
+
+// SweepInterval returns SweepIntervalSeconds as a duration.
+func (c *CommandConfig) SweepInterval() time.Duration {
+	return time.Duration(c.SweepIntervalSeconds) * time.Second
 }
 
 // MQTTConfig holds MQTT broker configuration.
@@ -128,6 +171,14 @@ func Load() (*Config, error) {
 
 	// Command dispatcher defaults
 	v.SetDefault("command.enabled", true)
+	v.SetDefault("command.stream_key", "pravara:commands")
+	v.SetDefault("command.consumer_group", "telemetry-worker")
+	v.SetDefault("command.consumer_name", defaultConsumerName())
+	v.SetDefault("command.max_attempts", 3)
+	v.SetDefault("command.retry_idle_seconds", 30)
+	v.SetDefault("command.ack_timeout_seconds", 120)
+	v.SetDefault("command.dispatch_timeout_seconds", 600)
+	v.SetDefault("command.sweep_interval_seconds", 15)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -161,4 +212,13 @@ func Load() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// defaultConsumerName returns the host name (the pod name in Kubernetes), so
+// each replica owns a distinct consumer inside the stream group.
+func defaultConsumerName() string {
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "telemetry-worker"
 }
