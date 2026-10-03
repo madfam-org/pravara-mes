@@ -150,6 +150,14 @@ func (h *Handler) messageHandler(client mqtt.Client, msg mqtt.Message) {
 	topicRoot := h.cfg.MQTT.TopicRoot
 	observability.MQTTMessagesReceived.WithLabelValues(topicRoot, tenant).Inc()
 
+	// The command channel ({machine_topic}/cmd and {machine_topic}/ack)
+	// shares the telemetry wildcard. Those messages are not telemetry and
+	// must not refresh a machine's heartbeat or online status.
+	if channel := controlChannel(topic); channel != "" {
+		observability.MQTTControlTopicsSkipped.WithLabelValues(channel).Inc()
+		return
+	}
+
 	var payload TelemetryPayload
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		h.log.WithError(err).WithField("topic", topic).Debug("Failed to parse telemetry payload")
@@ -160,6 +168,20 @@ func (h *Handler) messageHandler(client mqtt.Client, msg mqtt.Message) {
 		Topic:   topic,
 		Payload: payload,
 	}
+}
+
+// controlChannel returns "cmd" or "ack" when topic is a machine command
+// channel topic ({tenant}/{site}/{area}/{line}/{machine}/cmd|ack), else "".
+func controlChannel(topic string) string {
+	parts := strings.Split(topic, "/")
+	if len(parts) != 6 {
+		return ""
+	}
+	switch parts[5] {
+	case "cmd", "ack":
+		return parts[5]
+	}
+	return ""
 }
 
 // Start begins processing telemetry messages.
@@ -210,6 +232,10 @@ func (h *Handler) processMessage(ctx context.Context, msg *TelemetryMessage) {
 	parts := strings.Split(msg.Topic, "/")
 	if len(parts) < 6 {
 		h.log.WithField("topic", msg.Topic).Debug("Invalid topic format")
+		return
+	}
+
+	if controlChannel(msg.Topic) != "" {
 		return
 	}
 
