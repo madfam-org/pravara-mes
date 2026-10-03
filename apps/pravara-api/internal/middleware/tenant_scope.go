@@ -49,7 +49,7 @@ func runInTenantScope(c *gin.Context, database *db.DB, tenantID string, log *log
 	} else if scope.Active() {
 		// Statements after the response started: end them with the same rule.
 		var endErr error
-		if w.ResponseWriter.Status() < http.StatusBadRequest {
+		if w.Status() < http.StatusBadRequest {
 			endErr = scope.Commit()
 		} else {
 			endErr = scope.Rollback()
@@ -73,7 +73,7 @@ type scopeCommitWriter struct {
 
 func (w *scopeCommitWriter) decide() {
 	w.decided = true
-	if w.ResponseWriter.Status() >= http.StatusBadRequest {
+	if w.Status() >= http.StatusBadRequest {
 		if err := w.scope.Rollback(); err != nil {
 			w.log.WithError(err).Warn("Failed to roll back request transaction")
 		}
@@ -82,7 +82,7 @@ func (w *scopeCommitWriter) decide() {
 	if err := w.scope.Commit(); err != nil {
 		w.log.WithError(err).Error("Failed to commit request transaction")
 		w.replaced = true
-		if !w.ResponseWriter.Written() {
+		if !w.Written() {
 			h := w.ResponseWriter.Header()
 			h.Del("Content-Length")
 			h.Set("Content-Type", "application/json; charset=utf-8")

@@ -54,7 +54,7 @@ func TestIngest_TenantFromTopic_RealDB(t *testing.T) {
 
 	pool, err := sql.Open("postgres", raw)
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	var super, bypass bool
 	require.NoError(t, pool.QueryRow(`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`).Scan(&super, &bypass))
 	require.False(t, super || bypass, "must run as a role subject to RLS")
@@ -79,7 +79,7 @@ func TestIngest_TenantFromTopic_RealDB(t *testing.T) {
 
 	store, err := db.NewStore(&dbCfg)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 	h := NewHandler(&config.Config{Worker: config.WorkerConfig{BatchSize: 1000, NumWorkers: 1}}, store, log)

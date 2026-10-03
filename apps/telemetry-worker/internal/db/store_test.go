@@ -40,7 +40,7 @@ var machineCols = []string{
 
 func TestStore_CreateBatch_OneTransactionPerTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantA, tenantB := uuid.New(), uuid.New()
@@ -75,7 +75,7 @@ func TestStore_CreateBatch_OneTransactionPerTenant(t *testing.T) {
 
 func TestStore_CreateBatch_Empty(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	if err := store.CreateBatch(context.Background(), []types.Telemetry{}); err != nil {
@@ -91,7 +91,7 @@ func TestStore_CreateBatch_Empty(t *testing.T) {
 
 func TestStore_CreateBatch_RollsBackOnError(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID := uuid.New()
@@ -111,7 +111,7 @@ func TestStore_CreateBatch_RollsBackOnError(t *testing.T) {
 
 func TestStore_CreateBatch_RejectsNilTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	records := []types.Telemetry{{ID: uuid.New(), MachineID: uuid.New(), Timestamp: time.Now(), MetricType: "x"}}
@@ -125,7 +125,7 @@ func TestStore_CreateBatch_RejectsNilTenant(t *testing.T) {
 
 func TestStore_ResolveMachine_BySlugAndCode(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID, machineID := uuid.New(), uuid.New()
@@ -172,7 +172,7 @@ func TestStore_ResolveMachine_BySlugAndCode(t *testing.T) {
 
 func TestStore_ResolveMachine_ByTenantUUID(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID := uuid.New()
@@ -193,7 +193,7 @@ func TestStore_ResolveMachine_ByTenantUUID(t *testing.T) {
 
 func TestStore_ResolveMachine_UnknownTenantIsDroppedAndCached(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("nobody").
@@ -213,7 +213,7 @@ func TestStore_ResolveMachine_UnknownTenantIsDroppedAndCached(t *testing.T) {
 
 func TestStore_ResolveMachine_NullableFields(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID, machineID := uuid.New(), uuid.New()
@@ -242,7 +242,7 @@ func TestStore_ResolveMachine_NullableFields(t *testing.T) {
 
 func TestStore_UpdateMachineHeartbeat_TenantScoped(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID, machineID := uuid.New(), uuid.New()
@@ -262,7 +262,7 @@ func TestStore_UpdateMachineHeartbeat_TenantScoped(t *testing.T) {
 
 func TestStore_AckPath_UsesTopicTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	tenantID, commandID := uuid.New(), uuid.New()
@@ -286,7 +286,7 @@ func TestStore_AckPath_UsesTopicTenant(t *testing.T) {
 
 func TestStore_AckPath_WithoutTopicTenantFails(t *testing.T) {
 	db, mock := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 
 	err := store.UpdateCommandStatus(context.Background(), uuid.New(), "acknowledged", "")
@@ -304,7 +304,7 @@ func TestStore_AckPath_WithoutTopicTenantFails(t *testing.T) {
 
 func TestStore_Stats(t *testing.T) {
 	db, _ := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store := newStoreWithDB(db)
 	_ = store.Stats()
 }

@@ -16,7 +16,7 @@ owner through `infra/db/migrate.sh`.
 - A restrictive `tenant_references` policy (also 028) requires every
   foreign key from a tenant table to point at a parent row of the same
   tenant, because foreign-key checks themselves ignore row-level security.
-- The application sets that value with
+- The application sets `app.current_tenant_id` with
   `SELECT set_config('app.current_tenant_id', $1, true)` as the first
   statement of each transaction (`apps/pravara-api/internal/db/tenant_scope.go`,
   `apps/telemetry-worker/internal/db/tenant_tx.go`). Nothing is set on a

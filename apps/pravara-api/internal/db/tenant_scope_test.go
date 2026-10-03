@@ -20,7 +20,7 @@ const setTenantPattern = `SELECT set_config\('app.current_tenant_id', \$1, true\
 func TestTenantDB_SetsTenantAsFirstStatementOfTransaction(t *testing.T) {
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 
 	tenantID := uuid.New().String()
 	mock.ExpectBegin()
@@ -49,7 +49,7 @@ func TestTenantDB_SetsTenantAsFirstStatementOfTransaction(t *testing.T) {
 func TestTenantDB_NoScopeFailsWithoutTouchingTheDatabase(t *testing.T) {
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	tdb := NewTenantDB(pool, nil)
 
 	_, err = tdb.ExecContext(context.Background(), "DELETE FROM machines")
@@ -75,7 +75,7 @@ func TestNewTenantScope_RejectsInvalidTenant(t *testing.T) {
 func TestRunInTenantTx_RollsBackOnError(t *testing.T) {
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	tenantID := uuid.New().String()
 
 	mock.ExpectBegin()
@@ -98,7 +98,7 @@ func TestRunInTenantTx_RollsBackOnError(t *testing.T) {
 func TestRunInSystemScope_SetsSystemScopeAndRequiresPurpose(t *testing.T) {
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 
 	assert.Error(t, RunInSystemScope(context.Background(), pool, " ", func(context.Context) error { return nil }))
 
@@ -124,7 +124,7 @@ func TestRunInSystemScope_SetsSystemScopeAndRequiresPurpose(t *testing.T) {
 func TestSavepoint_FailureKeepsOuterTransactionUsable(t *testing.T) {
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	tenantID := uuid.New().String()
 
 	mock.ExpectBegin()

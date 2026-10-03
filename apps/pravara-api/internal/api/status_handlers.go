@@ -146,16 +146,21 @@ func (h *StatusHandler) DetailedStatus(c *gin.Context) {
 
 	// Get additional tenant-specific stats
 	// Tenant data: counted inside the request's tenant transaction.
-	var machineCount, activeMachines int
-	h.tdb.QueryRowContext(c.Request.Context(),
+	var machineCount, activeMachines, pendingTasks int
+	err = h.tdb.QueryRowContext(c.Request.Context(),
 		`SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('running', 'online', 'idle'))
 		 FROM machines`,
 	).Scan(&machineCount, &activeMachines)
-
-	var pendingTasks int
-	h.tdb.QueryRowContext(c.Request.Context(),
-		`SELECT COUNT(*) FROM tasks WHERE status NOT IN ('completed', 'blocked')`,
-	).Scan(&pendingTasks)
+	if err == nil {
+		err = h.tdb.QueryRowContext(c.Request.Context(),
+			`SELECT COUNT(*) FROM tasks WHERE status NOT IN ('completed', 'blocked')`,
+		).Scan(&pendingTasks)
+	}
+	if err != nil {
+		h.log.WithError(err).Error("Failed to count tenant machines and tasks")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"components":      components,

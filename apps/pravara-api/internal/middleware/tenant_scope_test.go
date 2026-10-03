@@ -23,7 +23,7 @@ func scopedRouter(t *testing.T, tenantID string, handler gin.HandlerFunc) (*gin.
 	gin.SetMode(gin.TestMode)
 	pool, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	t.Cleanup(func() { pool.Close() })
+	t.Cleanup(func() { _ = pool.Close() })
 	database := &db.DB{DB: pool}
 	r := gin.New()
 	r.Use(func(c *gin.Context) { runInTenantScope(c, database, tenantID, newTestLogger()) })
