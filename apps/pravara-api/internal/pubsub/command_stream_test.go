@@ -13,7 +13,7 @@ import (
 func TestPublishCommandForDispatch_AppendsStreamEntry(t *testing.T) {
 	pub, mr := newTestPublisher(t)
 	defer mr.Close()
-	defer pub.Close()
+	defer func() { _ = pub.Close() }()
 
 	tenantID, commandID, machineID, taskID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	err := pub.PublishCommandForDispatch(context.Background(), tenantID, MachineCommandData{
@@ -41,7 +41,7 @@ func TestPublishCommandForDispatch_AppendsStreamEntry(t *testing.T) {
 func TestPublishCommandForDispatch_UsesConfiguredStreamAndCap(t *testing.T) {
 	pub, mr := newTestPublisher(t)
 	defer mr.Close()
-	defer pub.Close()
+	defer func() { _ = pub.Close() }()
 	pub.commandStream = "custom:commands"
 	pub.commandStreamMaxLen = 5
 
@@ -61,7 +61,7 @@ func TestPublishCommandForDispatch_UsesConfiguredStreamAndCap(t *testing.T) {
 
 func TestPublishCommandForDispatch_FailsVisiblyWhenRedisIsDown(t *testing.T) {
 	pub, mr := newTestPublisher(t)
-	defer pub.Close()
+	defer func() { _ = pub.Close() }()
 	mr.Close()
 
 	err := pub.PublishCommandForDispatch(context.Background(), uuid.New(), MachineCommandData{

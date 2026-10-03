@@ -32,7 +32,7 @@ func newStreamRig(t *testing.T) *streamRig {
 	log := logrus.New()
 	log.SetLevel(logrus.PanicLevel)
 	t.Cleanup(func() {
-		client.Close()
+		_ = client.Close()
 		mr.Close()
 	})
 	return &streamRig{mr: mr, client: client, ledger: newFakeDispatchLedger(), pub: &fakePublisher{}, log: log}

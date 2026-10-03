@@ -150,7 +150,7 @@ func (l *CommandLedger) uniqueMachine(ctx context.Context, query, arg string) (*
 	if err != nil {
 		return nil, fmt.Errorf("resolve ack machine: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var found []command.AckMachine
 	for rows.Next() {
@@ -266,7 +266,7 @@ func (l *CommandLedger) ListTenantIDs(ctx context.Context) ([]uuid.UUID, error) 
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var ids []uuid.UUID
 	for rows.Next() {
 		var id uuid.UUID
@@ -319,14 +319,16 @@ func (l *CommandLedger) ExpireOverdue(ctx context.Context, tenantID uuid.UUID, n
 			var taskID uuid.NullUUID
 			if err := rows.Scan(&r.e.CommandID, &r.e.MachineID, &taskID, &r.e.CommandType,
 				&r.e.PreviousStatus, &r.attempts, &r.reason); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return fmt.Errorf("expire overdue commands: %w", err)
 			}
 			r.e.TenantID = tenantID
 			r.e.TaskID = nullableUUID(taskID)
 			due = append(due, r)
 		}
-		rows.Close()
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("expire overdue commands: %w", err)
+		}
 		if err := rows.Err(); err != nil {
 			return fmt.Errorf("expire overdue commands: %w", err)
 		}

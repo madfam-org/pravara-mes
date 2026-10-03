@@ -1,158 +1,83 @@
-# Command Dispatch
+# Command channel
 
-Machine command dispatch and acknowledgment tracking.
+Machine command dispatch, acknowledgment handling and deadlines for the
+telemetry worker. The `task_commands` table (the command ledger) is the
+system of record for every command; Redis and MQTT are transport.
 
-## Overview
-
-This package provides:
-- **Dispatcher** - Publishes commands to MQTT topics
-- **Tracker** - Tracks command state in Redis
-- **ACK Handler** - Processes acknowledgments from machines
-
-## Architecture
+## Flow
 
 ```
-API (command request)
-    ↓
-Redis Pub/Sub
-    ↓
-Telemetry Worker
-    ↓
-Command Dispatcher → MQTT
-    ↓
-Machine
-    ↓
-ACK via MQTT → ACK Handler → Redis (update state)
-```
-
-## Command Dispatcher
-
-```go
-dispatcher := command.NewDispatcher(command.Config{
-    MQTTClient:  mqttClient,
-    RedisClient: redisClient,
-    Timeout:     30 * time.Second,
-}, log)
-```
-
-### Dispatch Command
-
-```go
-cmd := Command{
-    ID:         uuid.New(),
-    TenantID:   tenantID,
-    MachineID:  machineID,
-    Type:       "start_job",
-    Parameters: map[string]interface{}{
-        "task_id":   taskID,
-        "gcode_url": "https://...",
-    },
-    Timestamp: time.Now(),
-}
-
-if err := dispatcher.Dispatch(ctx, cmd); err != nil {
-    log.WithError(err).Error("Command dispatch failed")
-}
-```
-
-## Command Types
-
-| Command | Parameters | Description |
-|---------|------------|-------------|
-| `start_job` | task_id, gcode_url | Start manufacturing job |
-| `pause_job` | - | Pause current job |
-| `resume_job` | - | Resume paused job |
-| `stop_job` | - | Stop and cancel job |
-| `home` | - | Home machine axes |
-| `calibrate` | type | Run calibration |
-
-## Command Tracking
-
-Commands are tracked in Redis with TTL:
-
-```go
-// Key format
-cmd:{command_id}
-
-// Value
-{
-  "id": "uuid",
-  "tenant_id": "uuid",
-  "machine_id": "uuid",
-  "type": "start_job",
-  "status": "pending|received|completed|failed",
-  "dispatched_at": "2024-01-15T10:30:00Z",
-  "acked_at": "2024-01-15T10:30:05Z",
-  "error": "optional error message"
-}
-```
-
-### Command States
-
-```
-pending → received → completed
-                  ↘ failed
-          ↘ timeout
-```
-
-## ACK Handler
-
-Processes acknowledgments from machines:
-
-```go
-func (h *Handler) OnAck(client mqtt.Client, msg mqtt.Message) {
-    var ack AckPayload
-    if err := json.Unmarshal(msg.Payload(), &ack); err != nil {
-        return
-    }
-
-    // Update command state in Redis
-    if err := h.tracker.UpdateStatus(ctx, ack.CommandID, ack.Status, ack.Message); err != nil {
-        h.log.WithError(err).Warn("Failed to update command status")
-    }
-
-    // Publish event for API notification
-    h.publisher.PublishCommandAck(ctx, ack)
-}
-```
-
-### ACK Payload
-
-```json
-{
-  "command_id": "uuid",
-  "status": "received|completed|failed",
-  "message": "optional message or error",
-  "timestamp": "2024-01-15T10:30:05Z"
-}
-```
-
-## Timeout Handling
-
-Commands that don't receive ACK within timeout:
-
-```go
-func (t *Tracker) CheckTimeouts(ctx context.Context) error {
-    // Get pending commands older than timeout
-    expired, err := t.getExpired(ctx)
-    if err != nil {
-        return err
-    }
-
-    for _, cmd := range expired {
-        t.UpdateStatus(ctx, cmd.ID, "timeout", "No acknowledgment received")
-        t.publisher.PublishCommandTimeout(ctx, cmd)
-    }
-
-    return nil
-}
+pravara-api                         telemetry-worker                        machine
+-----------                         ----------------                        -------
+task_commands row (pending)
+XADD pravara:commands  ─────────▶  Dispatcher (XREADGROUP / XAUTOCLAIM)
+                                    ├─ ledger: still pending? same tenant/machine?
+                                    ├─ MQTT publish {mqtt_topic}/cmd, QoS 1 ───▶ executes
+                                    └─ ledger: sent + deadline, then XACK
+                                    AckHandler  ◀──────────── {mqtt_topic}/ack
+                                    ├─ resolve machine from the ack topic
+                                    ├─ command must belong to that machine
+                                    └─ ledger: acknowledged / completed / failed
+                                       (+ outbox events, order roll-up)
+                                    DeadlineSweeper (per tenant)
+                                    └─ pending/sent past deadline → timeout (+ outbox)
 ```
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `dispatcher.go` | Command dispatch to MQTT |
-| `tracker.go` | Redis command tracking |
-| `ack.go` | Acknowledgment processing |
-| `types.go` | Command and ACK types |
+| File | Responsibility |
+|------|----------------|
+| `dispatcher.go` | Stream consumer: consumer group, reclaim of idle entries, bounded retries, write-back |
+| `mqtt_publisher.go` | Paho-backed publisher (QoS 1, waits for PUBACK) |
+| `ack_handler.go` | Ack subscription, topic → machine binding, real-time ack event |
+| `deadline_sweeper.go` | Expires commands that were never sent or never acknowledged |
+| `ledger.go` | Ledger interfaces and statuses (implemented in `internal/db/command_ledger.go`) |
+| `completion.go` | `JobCompletion` and the `JobCompletionHook` extension point |
+| `types.go` | Command / ack payloads, stream entry fields, topic suffixes |
+
+## Stream entry (written by pravara-api)
+
+| Field | Content |
+|-------|---------|
+| `tenant_id` | issuing tenant UUID |
+| `command_id` | `task_commands.command_id` |
+| `payload` | JSON `MachineCommand` |
+
+The worker publishes to the machine's `mqtt_topic` as stored in the ledger,
+not the topic carried in the entry.
+
+## Delivery guarantees
+
+- **At least once.** An entry is acknowledged in the stream only after its
+  outcome is in the ledger. A worker that dies mid-entry leaves it pending;
+  another consumer reclaims it after `retry_idle_seconds`. Machines must treat
+  `command_id` as an idempotency key.
+- **No resend after an outcome.** A command that is no longer `pending` in the
+  ledger is never published again.
+- **Bounded retries.** Each failed MQTT publish increments `attempts` and
+  stores `error_message`; at `max_attempts` the command is `failed` and
+  `machine.command_failed` (plus `task.job_failed` for a task's `start_job`) is
+  written to the outbox.
+- **Deadlines.** A `sent` command without an ack by `deadline_at`
+  (`ack_timeout_seconds` after sending), or a `pending` command older than
+  `dispatch_timeout_seconds`, becomes `timeout` with the same outbox events.
+
+## Ack binding
+
+An ack is applied only if the command was issued to the machine whose topic
+the ack arrived on, within that machine's tenant. Other acks are dropped,
+logged and counted in `pravara_command_acks_total{disposition}`.
+
+## Job completion
+
+A `job_completed` ack for a task's `start_job`, in one transaction:
+completes the command, moves the task to `quality_check`, applies the order
+roll-up (order to `in_progress` when still pre-production) and writes
+`task.job_completed` (and `order.status_changed`) to the outbox. After commit
+the optional `JobCompletionHook` runs; it is where production genealogy and
+product-passport recording attach.
+
+## Ledger statuses
+
+`pending → sent → acknowledged → completed`, with `failed` and `timeout` as
+the other terminal states.

@@ -41,7 +41,7 @@ func openTestRedis(t *testing.T) *redis.Client {
 	require.NoError(t, err)
 	c := redis.NewClient(opts)
 	require.NoError(t, c.Ping(context.Background()).Err())
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 

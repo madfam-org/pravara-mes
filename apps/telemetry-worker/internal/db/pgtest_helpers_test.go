@@ -31,7 +31,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("postgres", url)
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	var schemaErr error
 	schemaOnce.Do(func() { schemaErr = ensureSchema(db) })
@@ -149,7 +149,7 @@ func (f *fixture) outboxEvents(t *testing.T) map[string][]map[string]interface{}
 	rows, err := f.db.QueryContext(context.Background(),
 		`SELECT event_type, payload FROM event_outbox WHERE tenant_id = $1 ORDER BY created_at`, f.tenantID)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[string][]map[string]interface{}{}
 	for rows.Next() {
 		var typ string

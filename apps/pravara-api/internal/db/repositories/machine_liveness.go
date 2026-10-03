@@ -25,7 +25,7 @@ func (r *MachineRepository) ListTenantIDs(ctx context.Context) ([]uuid.UUID, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tenants: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ids []uuid.UUID
 	for rows.Next() {

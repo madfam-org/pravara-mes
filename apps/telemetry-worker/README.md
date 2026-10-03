@@ -40,6 +40,20 @@ Environment variables:
 | `BATCH_SIZE` | Telemetry batch size | 100 |
 | `BATCH_TIMEOUT` | Batch flush timeout | 5s |
 
+Command channel (see [`internal/command/README.md`](internal/command/README.md)):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PRAVARA_COMMAND_ENABLED` | Consume and dispatch machine commands | `true` |
+| `PRAVARA_COMMAND_STREAM_KEY` | Redis stream the API appends commands to | `pravara:commands` |
+| `PRAVARA_COMMAND_CONSUMER_GROUP` | Stream consumer group shared by replicas | `telemetry-worker` |
+| `PRAVARA_COMMAND_CONSUMER_NAME` | Consumer name of this replica | host name |
+| `PRAVARA_COMMAND_MAX_ATTEMPTS` | MQTT publish attempts before a command fails | `3` |
+| `PRAVARA_COMMAND_RETRY_IDLE_SECONDS` | Idle time before an unacknowledged entry is reclaimed | `30` |
+| `PRAVARA_COMMAND_ACK_TIMEOUT_SECONDS` | Deadline for a machine to acknowledge a sent command | `120` |
+| `PRAVARA_COMMAND_DISPATCH_TIMEOUT_SECONDS` | Deadline for a queued command to be sent | `600` |
+| `PRAVARA_COMMAND_SWEEP_INTERVAL_SECONDS` | Deadline sweep interval | `15` |
+
 ## MQTT Topics
 
 ### Telemetry (Subscribe)
@@ -104,8 +118,12 @@ apps/telemetry-worker/
 ### Batched Writes
 Telemetry data is batched in memory and flushed to the database periodically or when the batch reaches the configured size.
 
-### Command Tracking
-Commands are tracked in Redis with TTL. The worker listens for acknowledgments and updates command status.
+### Command Channel
+Commands arrive on a Redis stream (consumer group, at-least-once) and every
+outcome is recorded in the `task_commands` ledger: sent, acknowledged,
+completed, failed (bounded retries) or timeout. Acks only apply to commands
+issued to the machine whose topic they arrive on. Command-channel topics
+(`…/cmd`, `…/ack`) are not ingested as telemetry and do not refresh liveness.
 
 ### Graceful Shutdown
 The worker handles SIGINT/SIGTERM for clean shutdown, flushing pending batches and closing connections.
@@ -115,6 +133,9 @@ The worker handles SIGINT/SIGTERM for clean shutdown, flushing pending batches a
 ```bash
 # Run tests
 go test ./...
+
+# Also run the PostgreSQL / Redis tests against throwaway instances
+PRAVARA_TEST_DATABASE_URL=postgres://... PRAVARA_TEST_REDIS_URL=redis://... go test ./...
 
 # Run with environment file
 source .env && go run ./cmd/worker
@@ -133,9 +154,12 @@ Prometheus metrics available at `/metrics`. Request-scoped metrics include a `te
 | `telemetry_messages_received_total` | Counter | Total messages received |
 | `telemetry_batches_written_total` | Counter | Total batches written to DB |
 | `telemetry_batch_write_duration_seconds` | Histogram | Batch write latency |
-| `commands_dispatched_total` | Counter | Total commands sent |
-| `commands_acknowledged_total` | Counter | Commands acknowledged |
-| `commands_timeout_total` | Counter | Commands that timed out |
+| `pravara_command_dispatch_total{outcome}` | Counter | Stream entries by outcome: published, retry, failed, duplicate, rejected |
+| `pravara_command_stream_reclaimed_total` | Counter | Entries reclaimed for redelivery |
+| `pravara_command_acks_total{disposition}` | Counter | Acks: applied, unknown_machine, unknown_command, machine_mismatch, already_final, invalid |
+| `pravara_command_timeouts_total{stage}` | Counter | Commands timed out while pending or sent |
+| `pravara_command_completion_hook_errors_total` | Counter | Job completion hook errors |
+| `pravara_telemetry_mqtt_control_topics_skipped_total{channel}` | Counter | `cmd`/`ack` messages excluded from telemetry |
 
 ## Health
 

@@ -328,7 +328,7 @@ func (r *MachineRepository) GetOfflineMachines(ctx context.Context, tenantID uui
 		if err != nil {
 			return fmt.Errorf("failed to query offline machines: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
 			machine, err := r.scanMachine(rows)

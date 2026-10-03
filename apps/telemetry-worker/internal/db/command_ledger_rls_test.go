@@ -39,7 +39,7 @@ func openAppRoleDB(t *testing.T, admin *sql.DB) *sql.DB {
 	db, err := sql.Open("postgres", u.String())
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	var bypass bool
 	require.NoError(t, db.QueryRow(`SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = current_user`).Scan(&bypass))

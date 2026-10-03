@@ -98,10 +98,10 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 func (r *TaskCommandRepository) UpdateStatus(ctx context.Context, commandID uuid.UUID, status, errorMsg string) error {
 	query := `
 		UPDATE task_commands
-		SET status = $2,
-		    error_message = NULLIF($3, ''),
-		    acked_at = CASE WHEN $2 = 'acknowledged' THEN NOW() ELSE acked_at END,
-		    completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+		SET status = $2::varchar,
+		    error_message = NULLIF($3::text, ''),
+		    acked_at = CASE WHEN $2::varchar = 'acknowledged' THEN NOW() ELSE acked_at END,
+		    completed_at = CASE WHEN $2::varchar IN ('completed', 'failed', 'timeout') THEN NOW() ELSE completed_at END
 		WHERE command_id = $1
 	`
 
