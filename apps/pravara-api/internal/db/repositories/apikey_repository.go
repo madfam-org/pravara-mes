@@ -29,11 +29,11 @@ type APIKey struct {
 
 // APIKeyRepository handles API key database operations.
 type APIKeyRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewAPIKeyRepository creates a new API key repository.
-func NewAPIKeyRepository(db *sql.DB) *APIKeyRepository {
+func NewAPIKeyRepository(db DBTX) *APIKeyRepository {
 	return &APIKeyRepository{db: db}
 }
 
@@ -96,7 +96,7 @@ func (r *APIKeyRepository) List(ctx context.Context) ([]APIKey, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, tenant_id, name, key_prefix, scopes, rate_limit,
 		        is_active, expires_at, last_used_at, created_by, created_at, updated_at
-		 FROM api_keys
+		 FROM api_keys WHERE `+tenantMatch+`
 		 ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -136,7 +136,7 @@ func (r *APIKeyRepository) List(ctx context.Context) ([]APIKey, error) {
 // Revoke deactivates an API key.
 func (r *APIKeyRepository) Revoke(ctx context.Context, id uuid.UUID) error {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE api_keys SET is_active = FALSE WHERE id = $1`,
+		`UPDATE api_keys SET is_active = FALSE WHERE id = $1 AND `+tenantMatch,
 		id,
 	)
 	if err != nil {
@@ -152,7 +152,7 @@ func (r *APIKeyRepository) Revoke(ctx context.Context, id uuid.UUID) error {
 // UpdateLastUsed updates the last_used_at timestamp for an API key.
 func (r *APIKeyRepository) UpdateLastUsed(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`,
+		`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1 AND `+tenantMatch,
 		id,
 	)
 	return err

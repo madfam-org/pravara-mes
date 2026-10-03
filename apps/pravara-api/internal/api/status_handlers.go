@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -8,17 +9,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // StatusHandler handles public and authenticated status endpoints.
 type StatusHandler struct {
-	db  *sql.DB
+	db  *sql.DB // health_snapshots only (global, no RLS)
+	tdb *db.TenantDB
 	log *logrus.Logger
 }
 
 // NewStatusHandler creates a new status handler.
 func NewStatusHandler(db *sql.DB, log *logrus.Logger) *StatusHandler {
 	return &StatusHandler{db: db, log: log}
+}
+
+// WithTenantDB sets the tenant-scoped handle used by the authenticated feeds
+// for tenant data (machines, tasks) and for the system health events.
+func (h *StatusHandler) WithTenantDB(tdb *db.TenantDB) *StatusHandler {
+	h.tdb = tdb
+	return h
 }
 
 // ComponentStatus represents the health status of a component.
@@ -134,16 +145,22 @@ func (h *StatusHandler) DetailedStatus(c *gin.Context) {
 	}
 
 	// Get additional tenant-specific stats
-	var machineCount, activeMachines int
-	h.db.QueryRowContext(c.Request.Context(),
+	// Tenant data: counted inside the request's tenant transaction.
+	var machineCount, activeMachines, pendingTasks int
+	err = h.tdb.QueryRowContext(c.Request.Context(),
 		`SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('running', 'online', 'idle'))
 		 FROM machines`,
 	).Scan(&machineCount, &activeMachines)
-
-	var pendingTasks int
-	h.db.QueryRowContext(c.Request.Context(),
-		`SELECT COUNT(*) FROM tasks WHERE status NOT IN ('completed', 'blocked')`,
-	).Scan(&pendingTasks)
+	if err == nil {
+		err = h.tdb.QueryRowContext(c.Request.Context(),
+			`SELECT COUNT(*) FROM tasks WHERE status NOT IN ('completed', 'blocked')`,
+		).Scan(&pendingTasks)
+	}
+	if err != nil {
+		h.log.WithError(err).Error("Failed to count tenant machines and tasks")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"components":      components,
@@ -159,34 +176,42 @@ func (h *StatusHandler) DetailedStatus(c *gin.Context) {
 func (h *StatusHandler) Incidents(c *gin.Context) {
 	limit := queryInt(c, "limit", 50)
 
-	rows, err := h.db.QueryContext(c.Request.Context(),
-		`SELECT event_type, payload, created_at
-		FROM event_outbox
-		WHERE event_type LIKE 'system.health.%'
-		ORDER BY created_at DESC
-		LIMIT $1`,
-		limit,
-	)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to get incidents")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
-		return
-	}
-	defer rows.Close()
-
 	type Incident struct {
 		Type       string          `json:"type"`
 		Details    json.RawMessage `json:"details"`
 		OccurredAt time.Time       `json:"occurred_at"`
 	}
 
+	// System health events are stored under the nil tenant. They are read in
+	// the read-only system scope, restricted to that tenant explicitly.
 	var incidents []Incident
-	for rows.Next() {
-		var i Incident
-		if err := rows.Scan(&i.Type, &i.Details, &i.OccurredAt); err != nil {
-			continue
+	err := db.RunInSystemScope(c.Request.Context(), h.tdb.Pool(), "status.incidents", func(ctx context.Context) error {
+		rows, err := h.tdb.QueryContext(ctx,
+			`SELECT event_type, payload, created_at
+			FROM event_outbox
+			WHERE tenant_id = '00000000-0000-0000-0000-000000000000'::uuid
+			  AND event_type LIKE 'system.health.%'
+			ORDER BY created_at DESC
+			LIMIT $1`,
+			limit,
+		)
+		if err != nil {
+			return err
 		}
-		incidents = append(incidents, i)
+		defer rows.Close()
+		for rows.Next() {
+			var i Incident
+			if err := rows.Scan(&i.Type, &i.Details, &i.OccurredAt); err != nil {
+				continue
+			}
+			incidents = append(incidents, i)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		h.log.WithError(err).Error("Failed to get incidents")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"incidents": incidents})

@@ -32,8 +32,11 @@ type TelemetryPayload struct {
 // TelemetryStore defines the interface for storing telemetry data.
 type TelemetryStore interface {
 	CreateBatch(ctx context.Context, records []types.Telemetry) error
-	GetMachineByCode(ctx context.Context, code string) (*types.Machine, error)
-	UpdateMachineHeartbeat(ctx context.Context, machineID uuid.UUID) error
+	// ResolveMachine returns the machine with code that belongs to the tenant
+	// named by the topic's tenant segment (tenant UUID or slug), or nil when
+	// the tenant or the (tenant, code) pair is unknown.
+	ResolveMachine(ctx context.Context, tenantSegment, code string) (*types.Machine, error)
+	UpdateMachineHeartbeat(ctx context.Context, tenantID, machineID uuid.UUID) error
 }
 
 // Handler manages MQTT connections and message processing.
@@ -50,6 +53,7 @@ type Handler struct {
 	stopChan    chan struct{}
 	workerWg    sync.WaitGroup
 	messageChan chan *TelemetryMessage
+	dropLog     *dropLogLimiter
 }
 
 // TelemetryMessage wraps a telemetry payload with topic metadata.
@@ -67,6 +71,7 @@ func NewHandler(cfg *config.Config, store TelemetryStore, log *logrus.Logger) *H
 		batch:       make([]types.Telemetry, 0, cfg.Worker.BatchSize),
 		stopChan:    make(chan struct{}),
 		messageChan: make(chan *TelemetryMessage, cfg.Worker.BatchSize*cfg.Worker.NumWorkers),
+		dropLog:     newDropLogLimiter(time.Minute),
 	}
 }
 
@@ -220,22 +225,28 @@ func (h *Handler) processMessage(ctx context.Context, msg *TelemetryMessage) {
 		metricType = parts[5]
 	}
 
-	// Look up machine by code
-	machine, err := h.store.GetMachineByCode(ctx, machineCode)
+	// Resolve the machine within the topic's tenant only. Until per-node
+	// credentials exist, the topic's tenant segment names the tenant; a code
+	// is only unique within a tenant.
+	machine, err := h.store.ResolveMachine(ctx, tenant, machineCode)
 	if err != nil {
-		h.log.WithError(err).WithField("machine_code", machineCode).Debug("Failed to lookup machine")
+		h.log.WithError(err).WithField("machine_code", machineCode).Warn("Failed to lookup machine")
 		return
 	}
 	if machine == nil {
-		h.log.WithFields(logrus.Fields{
-			"machine_code": machineCode,
-			"tenant":       tenant,
-		}).Debug("Machine not found")
+		observability.MQTTMessagesDropped.WithLabelValues("unknown_tenant_or_machine").Inc()
+		if ok, suppressed := h.dropLog.allow(tenant + "/" + machineCode); ok {
+			h.log.WithFields(logrus.Fields{
+				"machine_code": machineCode,
+				"tenant":       tenant,
+				"suppressed":   suppressed,
+			}).Warn("Dropped telemetry for unknown tenant/machine pair")
+		}
 		return
 	}
 
 	// Update machine heartbeat
-	if err := h.store.UpdateMachineHeartbeat(ctx, machine.ID); err != nil {
+	if err := h.store.UpdateMachineHeartbeat(ctx, machine.TenantID, machine.ID); err != nil {
 		h.log.WithError(err).Debug("Failed to update machine heartbeat")
 	}
 

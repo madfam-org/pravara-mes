@@ -44,17 +44,17 @@ type OEEFilter struct {
 
 // OEERepository handles OEE snapshot database operations.
 type OEERepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOEERepository creates a new OEE repository.
-func NewOEERepository(db *sql.DB) *OEERepository {
+func NewOEERepository(db DBTX) *OEERepository {
 	return &OEERepository{db: db}
 }
 
 // DB returns the underlying database connection for use by services
 // that need to perform cross-table queries.
-func (r *OEERepository) DB() *sql.DB {
+func (r *OEERepository) DB() DBTX {
 	return r.db
 }
 
@@ -69,9 +69,9 @@ func (r *OEERepository) List(ctx context.Context, filter OEEFilter) ([]OEESnapsh
 		       availability, performance, quality, oee,
 		       metadata, created_at, updated_at
 		FROM oee_snapshots
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM oee_snapshots WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM oee_snapshots WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -146,7 +146,7 @@ func (r *OEERepository) GetByID(ctx context.Context, id uuid.UUID) (*OEESnapshot
 		       availability, performance, quality, oee,
 		       metadata, created_at, updated_at
 		FROM oee_snapshots
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -230,7 +230,7 @@ func (r *OEERepository) GetFleetSummary(ctx context.Context, from, to time.Time)
 			MIN(created_at) as created_at,
 			MAX(updated_at) as updated_at
 		FROM oee_snapshots
-		WHERE snapshot_date >= $1 AND snapshot_date <= $2
+		WHERE snapshot_date >= $1 AND snapshot_date <= $2 AND ` + tenantMatch + `
 		GROUP BY tenant_id, machine_id
 		ORDER BY AVG(oee) DESC
 	`
@@ -285,7 +285,7 @@ func (r *OEERepository) ComputeForMachine(ctx context.Context, tenantID, machine
 		  AND metric_type = 'machine_status'
 		  AND timestamp >= $2
 		  AND timestamp < $3
-		  AND (value = 0 OR value = -1)
+		  AND (value = 0 OR value = -1) AND ` + tenantMatch + `
 	`
 	var downtimeEntries int
 	if err := r.db.QueryRowContext(ctx, downtimeQuery, machineID, dayStart, dayEnd).Scan(&downtimeEntries); err != nil {
@@ -299,7 +299,7 @@ func (r *OEERepository) ComputeForMachine(ctx context.Context, tenantID, machine
 		WHERE machine_id = $1
 		  AND metric_type = 'machine_status'
 		  AND timestamp >= $2
-		  AND timestamp < $3
+		  AND timestamp < $3 AND ` + tenantMatch + `
 	`
 	var totalStatusEntries int
 	if err := r.db.QueryRowContext(ctx, totalStatusQuery, machineID, dayStart, dayEnd).Scan(&totalStatusEntries); err != nil {
@@ -327,7 +327,7 @@ func (r *OEERepository) ComputeForMachine(ctx context.Context, tenantID, machine
 		WHERE machine_id = $1
 		  AND status = 'completed'
 		  AND completed_at >= $2
-		  AND completed_at < $3
+		  AND completed_at < $3 AND ` + tenantMatch + `
 	`
 	var estimatedSum, actualSum int
 	if err := r.db.QueryRowContext(ctx, perfQuery, machineID, dayStart, dayEnd).Scan(&estimatedSum, &actualSum); err != nil {
@@ -350,7 +350,7 @@ func (r *OEERepository) ComputeForMachine(ctx context.Context, tenantID, machine
 		WHERE machine_id = $1
 		  AND status = 'completed'
 		  AND completed_at >= $2
-		  AND completed_at < $3
+		  AND completed_at < $3 AND ` + tenantMatch + `
 	`
 	var tasksCompleted int
 	if err := r.db.QueryRowContext(ctx, completedQuery, machineID, dayStart, dayEnd).Scan(&tasksCompleted); err != nil {
@@ -363,7 +363,7 @@ func (r *OEERepository) ComputeForMachine(ctx context.Context, tenantID, machine
 		WHERE machine_id = $1
 		  AND status IN ('blocked', 'quality_check')
 		  AND updated_at >= $2
-		  AND updated_at < $3
+		  AND updated_at < $3 AND ` + tenantMatch + `
 	`
 	var tasksFailed int
 	if err := r.db.QueryRowContext(ctx, failedQuery, machineID, dayStart, dayEnd).Scan(&tasksFailed); err != nil {

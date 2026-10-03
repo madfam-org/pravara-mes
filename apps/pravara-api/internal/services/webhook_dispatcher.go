@@ -5,15 +5,18 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/observability"
 )
@@ -34,6 +37,34 @@ type WebhookDispatcher struct {
 	cfg         config.WebhooksConfig
 	httpClient  *http.Client
 	log         *logrus.Logger
+	scopes      *dbScopes
+}
+
+// dbScopes opens the tenant and system scopes the dispatcher's statements run
+// in. When nil (unit tests on a plain *sql.DB), fn runs directly.
+type dbScopes struct {
+	pool *sql.DB
+}
+
+func (s *dbScopes) tenant(ctx context.Context, tenantID uuid.UUID, fn func(ctx context.Context) error) error {
+	if s == nil {
+		return fn(ctx)
+	}
+	return db.RunInTenantTx(ctx, s.pool, tenantID.String(), fn)
+}
+
+func (s *dbScopes) system(ctx context.Context, purpose string, fn func(ctx context.Context) error) error {
+	if s == nil {
+		return fn(ctx)
+	}
+	return db.RunInSystemScope(ctx, s.pool, purpose, fn)
+}
+
+// UseTenantScopes makes the dispatcher discover work in the read-only system
+// scope and process every event and delivery in its own tenant transaction.
+// Required when the repositories are built on a db.TenantDB.
+func (d *WebhookDispatcher) UseTenantScopes(pool *sql.DB) {
+	d.scopes = &dbScopes{pool: pool}
 }
 
 // NewWebhookDispatcher creates a new webhook dispatcher.
@@ -85,21 +116,36 @@ func (d *WebhookDispatcher) Start(ctx context.Context) {
 }
 
 func (d *WebhookDispatcher) dispatchPendingEvents(ctx context.Context) {
-	events, err := d.outboxRepo.GetPendingEvents(ctx, 100)
+	var events []repositories.OutboxEvent
+	err := d.scopes.system(ctx, "webhooks.pending_events", func(ctx context.Context) error {
+		var err error
+		events, err = d.outboxRepo.GetPendingEvents(ctx, 100)
+		return err
+	})
 	if err != nil {
 		d.log.WithError(err).Error("Failed to get pending events for dispatch")
 		return
 	}
 
 	for _, event := range events {
-		// Find matching subscriptions for this event
+		d.dispatchEvent(ctx, event)
+	}
+}
+
+// dispatchEvent fans one event out to its tenant's subscriptions. Database
+// work runs in the event's tenant scope; HTTP calls run outside any
+// transaction.
+func (d *WebhookDispatcher) dispatchEvent(ctx context.Context, event repositories.OutboxEvent) {
+	type pending struct {
+		delivery *repositories.WebhookDelivery
+		sub      repositories.WebhookSubscription
+	}
+	var work []pending
+	err := d.scopes.tenant(ctx, event.TenantID, func(ctx context.Context) error {
 		subs, err := d.webhookRepo.GetActiveSubscriptionsForEvent(ctx, event.TenantID, event.EventType)
 		if err != nil {
-			d.log.WithError(err).WithField("event_id", event.ID).Error("Failed to get subscriptions for event")
-			continue
+			return fmt.Errorf("get subscriptions: %w", err)
 		}
-
-		// Create delivery records for each subscription
 		for _, sub := range subs {
 			delivery := &repositories.WebhookDelivery{
 				SubscriptionID: sub.ID,
@@ -110,49 +156,67 @@ func (d *WebhookDispatcher) dispatchPendingEvents(ctx context.Context) {
 				d.log.WithError(err).Error("Failed to create webhook delivery record")
 				continue
 			}
-
-			// Attempt delivery
-			d.attemptDelivery(ctx, delivery, &sub, event.Payload)
+			work = append(work, pending{delivery: delivery, sub: sub})
 		}
+		return nil
+	})
+	if err != nil {
+		d.log.WithError(err).WithField("event_id", event.ID).Error("Failed to prepare webhook deliveries")
+		return
+	}
 
-		// Mark event as delivered (subscriptions found and processed)
-		if err := d.outboxRepo.MarkDelivered(ctx, event.ID); err != nil {
-			d.log.WithError(err).WithField("event_id", event.ID).Error("Failed to mark event as delivered")
-		}
+	for _, w := range work {
+		d.attemptDelivery(ctx, event.TenantID, w.delivery, &w.sub, event.Payload)
+	}
+
+	// Mark event as delivered (subscriptions found and processed)
+	err = d.scopes.tenant(ctx, event.TenantID, func(ctx context.Context) error {
+		return d.outboxRepo.MarkDelivered(ctx, event.ID)
+	})
+	if err != nil {
+		d.log.WithError(err).WithField("event_id", event.ID).Error("Failed to mark event as delivered")
 	}
 }
 
 func (d *WebhookDispatcher) retryFailedDeliveries(ctx context.Context) {
-	deliveries, err := d.webhookRepo.GetPendingDeliveries(ctx, 50)
+	var deliveries []repositories.WebhookDelivery
+	err := d.scopes.system(ctx, "webhooks.pending_deliveries", func(ctx context.Context) error {
+		var err error
+		deliveries, err = d.webhookRepo.GetPendingDeliveries(ctx, 50)
+		return err
+	})
 	if err != nil {
 		d.log.WithError(err).Error("Failed to get pending deliveries for retry")
 		return
 	}
 
-	for _, delivery := range deliveries {
-		// Get subscription for this delivery
-		sub, err := d.webhookRepo.GetSubscriptionByID(ctx, delivery.SubscriptionID)
-		if err != nil || sub == nil || !sub.IsActive {
+	for i := range deliveries {
+		delivery := deliveries[i]
+		var sub *repositories.WebhookSubscription
+		var event *repositories.OutboxEvent
+		err := d.scopes.tenant(ctx, delivery.TenantID, func(ctx context.Context) error {
+			var err error
+			if sub, err = d.webhookRepo.GetSubscriptionByID(ctx, delivery.SubscriptionID); err != nil || sub == nil {
+				return err
+			}
+			event, err = d.outboxRepo.GetEventByID(ctx, delivery.EventID)
+			return err
+		})
+		if err != nil || sub == nil || !sub.IsActive || event == nil {
 			continue
 		}
 
-		// Get event payload
-		event, err := d.outboxRepo.GetEventByID(ctx, delivery.EventID)
-		if err != nil || event == nil {
-			continue
-		}
-
-		d.attemptDelivery(ctx, &delivery, sub, event.Payload)
+		d.attemptDelivery(ctx, delivery.TenantID, &delivery, sub, event.Payload)
 	}
 }
 
-func (d *WebhookDispatcher) attemptDelivery(ctx context.Context, delivery *repositories.WebhookDelivery, sub *repositories.WebhookSubscription, payload json.RawMessage) {
+func (d *WebhookDispatcher) attemptDelivery(ctx context.Context, tenantID uuid.UUID, delivery *repositories.WebhookDelivery, sub *repositories.WebhookSubscription, payload json.RawMessage) {
 	delivery.AttemptCount++
 
 	// Build request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sub.URL, bytes.NewReader(payload))
 	if err != nil {
-		d.markDeliveryFailed(ctx, delivery, fmt.Sprintf("failed to create request: %v", err))
+		d.markDeliveryFailed(ctx, tenantID, delivery, fmt.Sprintf("failed to create request: %v", err))
 		return
 	}
 
@@ -168,7 +232,7 @@ func (d *WebhookDispatcher) attemptDelivery(ctx context.Context, delivery *repos
 	// Execute request
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
-		d.markDeliveryFailed(ctx, delivery, fmt.Sprintf("request failed: %v", err))
+		d.markDeliveryFailed(ctx, tenantID, delivery, fmt.Sprintf("request failed: %v", err))
 		return
 	}
 	defer resp.Body.Close()
@@ -184,16 +248,16 @@ func (d *WebhookDispatcher) attemptDelivery(ctx context.Context, delivery *repos
 		observability.WebhookDeliveriesTotal.WithLabelValues("success").Inc()
 	} else {
 		errMsg := fmt.Sprintf("HTTP %d", httpStatus)
-		d.markDeliveryFailed(ctx, delivery, errMsg)
+		d.markDeliveryFailed(ctx, tenantID, delivery, errMsg)
 		return
 	}
 
-	if err := d.webhookRepo.UpdateDelivery(ctx, delivery); err != nil {
+	if err := d.updateDelivery(ctx, tenantID, delivery); err != nil {
 		d.log.WithError(err).Error("Failed to update delivery status")
 	}
 }
 
-func (d *WebhookDispatcher) markDeliveryFailed(ctx context.Context, delivery *repositories.WebhookDelivery, errMsg string) {
+func (d *WebhookDispatcher) markDeliveryFailed(ctx context.Context, tenantID uuid.UUID, delivery *repositories.WebhookDelivery, errMsg string) {
 	delivery.LastError = &errMsg
 
 	maxRetries := d.cfg.MaxRetries
@@ -216,9 +280,15 @@ func (d *WebhookDispatcher) markDeliveryFailed(ctx context.Context, delivery *re
 		observability.WebhookDeliveriesTotal.WithLabelValues("retry").Inc()
 	}
 
-	if err := d.webhookRepo.UpdateDelivery(ctx, delivery); err != nil {
+	if err := d.updateDelivery(ctx, tenantID, delivery); err != nil {
 		d.log.WithError(err).Error("Failed to update failed delivery")
 	}
+}
+
+func (d *WebhookDispatcher) updateDelivery(ctx context.Context, tenantID uuid.UUID, delivery *repositories.WebhookDelivery) error {
+	return d.scopes.tenant(ctx, tenantID, func(ctx context.Context) error {
+		return d.webhookRepo.UpdateDelivery(ctx, delivery)
+	})
 }
 
 func (d *WebhookDispatcher) purgeOldEvents(ctx context.Context) {
@@ -227,10 +297,26 @@ func (d *WebhookDispatcher) purgeOldEvents(ctx context.Context) {
 		retentionDays = 30
 	}
 
-	count, err := d.outboxRepo.PurgeOldEvents(ctx, retentionDays)
-	if err != nil {
-		d.log.WithError(err).Error("Failed to purge old outbox events")
+	var tenants []uuid.UUID
+	if err := d.scopes.system(ctx, "webhooks.purge_discovery", func(ctx context.Context) error {
+		var err error
+		tenants, err = d.outboxRepo.TenantsWithPurgeableEvents(ctx, retentionDays)
+		return err
+	}); err != nil {
+		d.log.WithError(err).Error("Failed to find tenants with purgeable outbox events")
 		return
+	}
+
+	var count int64
+	for _, tenantID := range tenants {
+		err := d.scopes.tenant(ctx, tenantID, func(ctx context.Context) error {
+			n, err := d.outboxRepo.PurgeOldEvents(ctx, retentionDays)
+			count += n
+			return err
+		})
+		if err != nil {
+			d.log.WithError(err).WithField("tenant_id", tenantID).Error("Failed to purge old outbox events")
+		}
 	}
 
 	if count > 0 {
