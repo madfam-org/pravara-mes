@@ -169,6 +169,53 @@ CREATE POLICY tenant_isolation ON gcode_simulations FOR ALL
         AND (task_id IS NULL OR EXISTS (SELECT 1 FROM tasks p WHERE p.id = gcode_simulations.task_id AND p.tenant_id = app_current_tenant_id()))
     );
 
+-- References must stay inside the tenant. Foreign-key checks ignore RLS, so
+-- without this a tenant could create its own rows pointing at another
+-- tenant's parent rows (and the parent's ON DELETE CASCADE would then reach
+-- across tenants). For every single-column foreign key from a tenant table
+-- to a tenant table, a RESTRICTIVE policy requires new and updated rows to
+-- reference a parent of the current tenant. Parents without their own
+-- tenant_id (order_items) are checked through their order. Reads are not
+-- affected (USING true).
+DO $$
+DECLARE
+    child regclass;
+    checks text;
+BEGIN
+    FOR child, checks IN
+        SELECT c.conrelid::regclass,
+               string_agg(
+                   CASE
+                       WHEN c.confrelid = 'order_items'::regclass THEN format(
+                           '(%1$I IS NULL OR EXISTS (SELECT 1 FROM order_items p JOIN orders o ON o.id = p.order_id '
+                           'WHERE p.id = %2$s.%1$I AND o.tenant_id = app_current_tenant_id()))',
+                           a.attname, c.conrelid::regclass)
+                       ELSE format(
+                           '(%1$I IS NULL OR EXISTS (SELECT 1 FROM %3$s p WHERE p.%4$I = %2$s.%1$I '
+                           'AND p.tenant_id = app_current_tenant_id()))',
+                           a.attname, c.conrelid::regclass, c.confrelid::regclass, pa.attname)
+                   END,
+                   ' AND ' ORDER BY a.attname)
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+        JOIN pg_attribute pa ON pa.attrelid = c.confrelid AND pa.attnum = c.confkey[1]
+        JOIN pg_class cc ON cc.oid = c.conrelid
+        WHERE c.contype = 'f'
+          AND c.connamespace = 'public'::regnamespace
+          AND array_length(c.conkey, 1) = 1
+          AND cc.relrowsecurity
+          AND NOT cc.relispartition
+          AND (c.confrelid = 'order_items'::regclass
+               OR EXISTS (SELECT 1 FROM pg_attribute t
+                          WHERE t.attrelid = c.confrelid AND t.attname = 'tenant_id' AND NOT t.attisdropped))
+        GROUP BY c.conrelid
+    LOOP
+        EXECUTE format(
+            'CREATE POLICY tenant_references ON %s AS RESTRICTIVE FOR ALL USING (true) WITH CHECK (%s)',
+            child, checks);
+    END LOOP;
+END $$;
+
 -- Read-only system scope for cross-tenant discovery.
 CREATE POLICY system_scope_read ON event_outbox FOR SELECT USING (app_system_scope());
 CREATE POLICY system_scope_read ON webhook_subscriptions FOR SELECT USING (app_system_scope());

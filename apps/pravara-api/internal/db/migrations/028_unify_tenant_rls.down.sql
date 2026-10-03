@@ -17,6 +17,12 @@ BEGIN
     LOOP
         EXECUTE format('DROP POLICY tenant_isolation ON %I', t);
     END LOOP;
+    FOR t IN
+        SELECT tablename FROM pg_policies
+        WHERE schemaname = 'public' AND policyname = 'tenant_references'
+    LOOP
+        EXECUTE format('DROP POLICY tenant_references ON %I', t);
+    END LOOP;
 
     -- Tables that had no RLS before 028.
     FOREACH t IN ARRAY ARRAY[
