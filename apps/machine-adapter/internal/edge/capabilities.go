@@ -2,7 +2,6 @@ package edge
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/registry"
 	"github.com/madfam-org/pravara-mes/packages/sparkplug"
@@ -146,14 +145,4 @@ func toInt64(v interface{}) (int64, bool) {
 		}
 	}
 	return 0, false
-}
-
-// sortedCapabilityKeys returns the keys in a stable order for births.
-func sortedCapabilityKeys(caps map[sparkplug.CapabilityKey]any) []sparkplug.CapabilityKey {
-	keys := make([]sparkplug.CapabilityKey, 0, len(caps))
-	for k := range caps {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-	return keys
 }

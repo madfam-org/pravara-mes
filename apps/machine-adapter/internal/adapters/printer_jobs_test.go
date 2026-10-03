@@ -51,7 +51,7 @@ func TestMoonrakerMaterialFallsBackToFileMetadata(t *testing.T) {
 	if err := a.Connect(host, port, ""); err != nil {
 		t.Fatal(err)
 	}
-	defer a.Disconnect()
+	defer func() { _ = a.Disconnect() }()
 	ctx := context.Background()
 
 	snap, err := a.Snapshot(ctx)
@@ -116,14 +116,14 @@ func TestBambuTLSPin(t *testing.T) {
 	a.MQTTPort = mqttPort
 	a.TLSPinSHA256 = "00" + sim.CertSHA256()[2:]
 	if err := a.Connect(sim.Host(), "code", "SER1"); err == nil {
-		a.Disconnect()
+		_ = a.Disconnect()
 		t.Fatal("connected despite a wrong certificate pin")
 	}
 	b := NewBambuAdapter(registry.BambuA1Definition(), quietLog())
 	b.MQTTPort = mqttPort
 	b.TLSPinSHA256 = sim.CertSHA256()
 	if err := b.Connect(sim.Host(), "wrong", "SER1"); err == nil {
-		b.Disconnect()
+		_ = b.Disconnect()
 		t.Fatal("connected with a wrong access code")
 	}
 	c := NewBambuAdapter(registry.BambuA1Definition(), quietLog())
@@ -132,5 +132,5 @@ func TestBambuTLSPin(t *testing.T) {
 	if err := c.Connect(sim.Host(), "code", "SER1"); err != nil {
 		t.Fatalf("pinned connect: %v", err)
 	}
-	c.Disconnect()
+	_ = c.Disconnect()
 }

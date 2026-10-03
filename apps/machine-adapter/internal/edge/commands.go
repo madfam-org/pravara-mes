@@ -155,7 +155,7 @@ func (n *Node) startJob(d *device, cmd sparkplug.DeviceCommand) error {
 		}
 		return err
 	}
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	name := artifactFileName(jobIDFor(cmd), cmd.ArtifactSHA256, cmd.ArtifactMediaType)
 	f, err := os.Open(path)
@@ -163,7 +163,7 @@ func (n *Node) startJob(d *device, cmd sparkplug.DeviceCommand) error {
 		return fmt.Errorf("open artifact: %w", err)
 	}
 	err = runner.UploadFile(ctx, name, f, size)
-	f.Close()
+	_ = f.Close()
 	if err != nil {
 		return fmt.Errorf("upload: %w", err)
 	}

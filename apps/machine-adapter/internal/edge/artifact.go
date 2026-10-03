@@ -86,9 +86,9 @@ func (f *ArtifactFetcher) Fetch(ctx context.Context, rawURL, wantSHA256 string) 
 	}
 	keep := false
 	defer func() {
-		tmp.Close()
+		_ = tmp.Close()
 		if !keep {
-			os.Remove(tmp.Name())
+			_ = os.Remove(tmp.Name())
 		}
 	}()
 

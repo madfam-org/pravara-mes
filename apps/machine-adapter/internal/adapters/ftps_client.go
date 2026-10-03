@@ -30,7 +30,7 @@ func FTPSUpload(ctx context.Context, addr, user, password string, tlsCfg *tls.Co
 	if err != nil {
 		return fmt.Errorf("ftps: connect: %w", err)
 	}
-	defer raw.Close()
+	defer func() { _ = raw.Close() }()
 	if dl, ok := ctx.Deadline(); ok {
 		_ = raw.SetDeadline(dl)
 	}
@@ -72,7 +72,7 @@ func FTPSUpload(ctx context.Context, addr, user, password string, tlsCfg *tls.Co
 		return fmt.Errorf("ftps: data connect: %w", err)
 	}
 	if err := ftpCmd(conn, 150, "STOR "+name); err != nil {
-		dataRaw.Close()
+		_ = dataRaw.Close()
 		return err
 	}
 	data := tls.Client(dataRaw, cfg)
@@ -80,7 +80,7 @@ func FTPSUpload(ctx context.Context, addr, user, password string, tlsCfg *tls.Co
 		_ = data.SetDeadline(dl)
 	}
 	if _, err := io.Copy(data, r); err != nil {
-		data.Close()
+		_ = data.Close()
 		return fmt.Errorf("ftps: transfer: %w", err)
 	}
 	if err := data.Close(); err != nil {

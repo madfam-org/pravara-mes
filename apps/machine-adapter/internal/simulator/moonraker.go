@@ -187,7 +187,7 @@ func (m *Moonraker) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(f)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -280,7 +280,7 @@ func (m *Moonraker) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		var msg struct {
 			Method string `json:"method"`

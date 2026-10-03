@@ -97,13 +97,13 @@ func TestArtifactFetcher(t *testing.T) {
 	if string(got) != string(body) {
 		t.Fatal("content")
 	}
-	os.Remove(path)
+	_ = os.Remove(path)
 
 	path, _, err = f.Fetch(ctx, srv.URL+"/ok", strings.ToUpper(digest(body)))
 	if err != nil {
 		t.Fatalf("upper-case digest: %v", err)
 	}
-	os.Remove(path)
+	_ = os.Remove(path)
 	if _, _, err := f.Fetch(ctx, srv.URL+"/ok", digest([]byte("other"))); !errors.Is(err, ErrDigestMismatch) {
 		t.Fatalf("mismatch err = %v", err)
 	}

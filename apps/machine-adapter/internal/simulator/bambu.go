@@ -317,7 +317,7 @@ func (s *ftpsServer) serve() {
 }
 
 func (s *ftpsServer) session(c net.Conn) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	w := func(line string) { _, _ = io.WriteString(c, line+"\r\n") }
 	w("220 simulator ready")
 	var buf bytes.Buffer
@@ -338,7 +338,7 @@ func (s *ftpsServer) session(c net.Conn) {
 	var pasv net.Listener
 	defer func() {
 		if pasv != nil {
-			pasv.Close()
+			_ = pasv.Close()
 		}
 	}()
 	for {
@@ -385,8 +385,8 @@ func (s *ftpsServer) session(c net.Conn) {
 				continue
 			}
 			data, err := io.ReadAll(dc)
-			dc.Close()
-			pasv.Close()
+			_ = dc.Close()
+			_ = pasv.Close()
 			pasv = nil
 			if err != nil {
 				w("451 transfer aborted")
