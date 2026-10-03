@@ -110,8 +110,10 @@ func TestArtifactFetcher(t *testing.T) {
 	if _, _, err := f.Fetch(ctx, srv.URL+"/big", digest(body)); err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("size limit err = %v", err)
 	}
-	if _, _, err := f.Fetch(ctx, srv.URL+"/redirect", digest(body)); err == nil {
+	if _, _, err := f.Fetch(ctx, srv.URL+"/redirect?token=signed-secret", digest(body)); err == nil {
 		t.Fatal("redirect to http followed")
+	} else if strings.Contains(err.Error(), "signed-secret") || strings.Contains(err.Error(), srv.URL) {
+		t.Fatalf("error leaks the artifact URL: %v", err)
 	}
 	if _, _, err := f.Fetch(ctx, strings.Replace(srv.URL, "https", "http", 1)+"/ok", digest(body)); err == nil {
 		t.Fatal("http URL accepted")

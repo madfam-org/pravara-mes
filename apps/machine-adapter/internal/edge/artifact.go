@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -65,6 +66,11 @@ func (f *ArtifactFetcher) Fetch(ctx context.Context, rawURL, wantSHA256 string) 
 	}
 	resp, err := f.Client.Do(req)
 	if err != nil {
+		// Report the cause without the URL: artifact URLs are signed.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
 		return "", 0, fmt.Errorf("artifact download: %w", err)
 	}
 	defer resp.Body.Close()
