@@ -290,6 +290,16 @@ func InTx(ctx context.Context, q Querier, fn func(q Querier) error) error {
 	}
 }
 
+// Savepoint runs fn inside a savepoint when q is a TenantDB (so a failure in
+// fn leaves the surrounding transaction usable) and runs fn directly on q
+// otherwise.
+func Savepoint(ctx context.Context, q Querier, fn func(q Querier) error) error {
+	if t, ok := q.(*TenantDB); ok {
+		return t.inSavepoint(ctx, fn)
+	}
+	return fn(q)
+}
+
 func (t *TenantDB) inSavepoint(ctx context.Context, fn func(q Querier) error) error {
 	s := scopeFrom(ctx)
 	if s == nil {

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // OutboxEvent represents an event stored in the outbox.
@@ -52,12 +54,17 @@ func (r *OutboxRepository) InsertEvent(ctx context.Context, tenantID uuid.UUID, 
 		Payload:          payload,
 	}
 
-	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING created_at`,
-		event.ID, event.TenantID, event.EventType, event.ChannelNamespace, event.Payload,
-	).Scan(&event.CreatedAt)
+	// Outbox persistence is best-effort for publishers: inside a request
+	// transaction it runs in a savepoint, so a failed insert does not abort
+	// the caller's own writes.
+	err := db.Savepoint(ctx, r.db, func(q DBTX) error {
+		return q.QueryRowContext(ctx,
+			`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
+			 VALUES ($1, $2, $3, $4, $5)
+			 RETURNING created_at`,
+			event.ID, event.TenantID, event.EventType, event.ChannelNamespace, event.Payload,
+		).Scan(&event.CreatedAt)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert outbox event: %w", err)
 	}
