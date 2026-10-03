@@ -13,6 +13,9 @@ owner through `infra/db/migrate.sh`.
 - Every tenant table has a `tenant_isolation` policy (migration 028) that
   reads the transaction-local setting `app.current_tenant_id`, with both
   `USING` and `WITH CHECK`. An unset setting matches no rows.
+- A restrictive `tenant_references` policy (also 028) requires every
+  foreign key from a tenant table to point at a parent row of the same
+  tenant, because foreign-key checks themselves ignore row-level security.
 - The application sets that value with
   `SELECT set_config('app.current_tenant_id', $1, true)` as the first
   statement of each transaction (`apps/pravara-api/internal/db/tenant_scope.go`,
@@ -76,6 +79,19 @@ Verify from the application's connection:
 SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
 -- expect: f | f
 ```
+
+## Testing isolation locally
+
+The isolation suites run against a throwaway database migrated through 029,
+connected as `pravara_app`:
+
+```sh
+export PRAVARA_ISOLATION_DB_URL='postgres://pravara_app@127.0.0.1:<port>/<db>?sslmode=disable'
+(cd apps/pravara-api && go test -race -run TestTenantIsolation ./internal/api/)
+(cd apps/telemetry-worker && go test -race -run TestIngest_TenantFromTopic ./internal/mqtt/)
+```
+
+They are skipped when the variable is unset and in `-short` mode.
 
 ## Rolling back
 
