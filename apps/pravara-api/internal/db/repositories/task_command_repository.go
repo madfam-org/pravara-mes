@@ -16,13 +16,15 @@ import (
 // sending job control instructions (start, pause, stop) with parameters.
 // Each command is tracked through its lifecycle: pending → sent → acknowledged → completed/failed.
 type TaskCommand struct {
-	ID           uuid.UUID
-	TenantID     uuid.UUID
+	ID       uuid.UUID
+	TenantID uuid.UUID
+	// TaskID is uuid.Nil for a command issued directly against a machine
+	// (stored as NULL).
 	TaskID       uuid.UUID
 	MachineID    uuid.UUID
 	CommandID    uuid.UUID
 	CommandType  string
-	Status       string // pending, sent, acknowledged, failed, completed
+	Status       string // pending, sent, acknowledged, failed, completed, timeout
 	Parameters   map[string]interface{}
 	IssuedBy     *uuid.UUID
 	IssuedAt     time.Time
@@ -72,7 +74,7 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 	}
 
 	err = r.db.QueryRowContext(ctx, query,
-		cmd.ID, cmd.TenantID, cmd.TaskID, cmd.MachineID, cmd.CommandID,
+		cmd.ID, cmd.TenantID, nullUUID(&cmd.TaskID), cmd.MachineID, cmd.CommandID,
 		cmd.CommandType, cmd.Status, paramsJSON, nullUUID(cmd.IssuedBy), cmd.IssuedAt,
 	).Scan(&cmd.CreatedAt, &cmd.UpdatedAt)
 

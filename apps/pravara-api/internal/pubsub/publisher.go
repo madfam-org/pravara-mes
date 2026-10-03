@@ -37,6 +37,10 @@ type Publisher struct {
 	outbox OutboxSink
 	mu     sync.RWMutex
 	closed bool
+
+	// Durable machine command stream (see PublishCommandForDispatch).
+	commandStream       string
+	commandStreamMaxLen int64
 }
 
 // EnableOutbox attaches a durable event sink. Safe to call once during
@@ -51,7 +55,25 @@ func (p *Publisher) EnableOutbox(sink OutboxSink) {
 // PublisherConfig contains configuration for the Publisher.
 type PublisherConfig struct {
 	RedisURL string
+	// CommandStreamKey is the Redis stream machine commands are appended to
+	// (default DefaultCommandStreamKey).
+	CommandStreamKey string
+	// CommandStreamMaxLen caps the command stream (approximate trimming;
+	// default DefaultCommandStreamMaxLen).
+	CommandStreamMaxLen int64
 }
+
+// Command stream defaults and entry fields. The telemetry worker consumes
+// this stream with a consumer group; keep the field names in step with
+// apps/telemetry-worker/internal/command/types.go.
+const (
+	DefaultCommandStreamKey    = "pravara:commands"
+	DefaultCommandStreamMaxLen = int64(100000)
+
+	commandStreamFieldTenantID  = "tenant_id"
+	commandStreamFieldCommandID = "command_id"
+	commandStreamFieldPayload   = "payload"
+)
 
 // NewPublisher creates a new Publisher connected to Redis.
 func NewPublisher(cfg PublisherConfig, log *logrus.Logger) (*Publisher, error) {
@@ -73,8 +95,10 @@ func NewPublisher(cfg PublisherConfig, log *logrus.Logger) (*Publisher, error) {
 	log.Info("Redis publisher connected")
 
 	return &Publisher{
-		client: client,
-		log:    log,
+		client:              client,
+		log:                 log,
+		commandStream:       cfg.CommandStreamKey,
+		commandStreamMaxLen: cfg.CommandStreamMaxLen,
 	}, nil
 }
 
@@ -347,20 +371,19 @@ func (p *Publisher) PublishInventoryEvent(ctx context.Context, tenantID uuid.UUI
 	return p.Publish(ctx, NamespaceInventory, tenantID, event)
 }
 
-// PublishCommandForDispatch publishes a machine command to the worker dispatch channel.
-// This is separate from Centrifugo - it goes to telemetry-worker for MQTT dispatch.
+// PublishCommandForDispatch appends a machine command to the durable command
+// stream consumed by the telemetry worker (separate from Centrifugo). The
+// entry survives a worker restart; the worker records every outcome in the
+// task_commands ledger, so the command must already have a ledger row.
 func (p *Publisher) PublishCommandForDispatch(ctx context.Context, tenantID uuid.UUID, data MachineCommandData) error {
 	p.mu.RLock()
 	if p.closed {
 		p.mu.RUnlock()
 		return fmt.Errorf("publisher is closed")
 	}
+	stream, maxLen := p.commandStreamSettings()
 	p.mu.RUnlock()
 
-	// Build the dispatch channel name
-	channel := fmt.Sprintf("pravara.commands.%s", tenantID.String())
-
-	// Create the command payload for the worker
 	cmdPayload := map[string]interface{}{
 		"command_id": data.CommandID.String(),
 		"machine_id": data.MachineID.String(),
@@ -370,7 +393,6 @@ func (p *Publisher) PublishCommandForDispatch(ctx context.Context, tenantID uuid
 		"issued_by":  data.IssuedBy.String(),
 		"issued_at":  data.IssuedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
-
 	if data.TaskID != nil {
 		cmdPayload["task_id"] = data.TaskID.String()
 	}
@@ -378,31 +400,63 @@ func (p *Publisher) PublishCommandForDispatch(ctx context.Context, tenantID uuid
 		cmdPayload["order_id"] = data.OrderID.String()
 	}
 
-	// Serialize the command
 	cmdData, err := json.Marshal(cmdPayload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal command: %w", err)
 	}
 
-	// Publish directly to the command channel (not through Centrifugo)
-	if err := p.client.Publish(ctx, channel, cmdData).Err(); err != nil {
+	entryID, err := p.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: stream,
+		MaxLen: maxLen,
+		Approx: true,
+		Values: map[string]interface{}{
+			commandStreamFieldTenantID:  tenantID.String(),
+			commandStreamFieldCommandID: data.CommandID.String(),
+			commandStreamFieldPayload:   string(cmdData),
+		},
+	}).Result()
+	if err != nil {
 		p.log.WithError(err).WithFields(logrus.Fields{
-			"channel":    channel,
+			"stream":     stream,
 			"command_id": data.CommandID,
 			"machine_id": data.MachineID,
 			"command":    data.Command,
-		}).Error("Failed to publish command to dispatch channel")
-		return fmt.Errorf("failed to publish command: %w", err)
+		}).Error("Failed to append command to dispatch stream")
+		return fmt.Errorf("failed to enqueue command: %w", err)
 	}
 
 	p.log.WithFields(logrus.Fields{
-		"channel":    channel,
+		"stream":     stream,
+		"entry_id":   entryID,
 		"command_id": data.CommandID,
 		"machine_id": data.MachineID,
 		"command":    data.Command,
-	}).Debug("Command published to dispatch channel")
+	}).Debug("Command appended to dispatch stream")
 
 	return nil
+}
+
+func (p *Publisher) commandStreamSettings() (string, int64) {
+	stream, maxLen := p.commandStream, p.commandStreamMaxLen
+	if stream == "" {
+		stream = DefaultCommandStreamKey
+	}
+	if maxLen <= 0 {
+		maxLen = DefaultCommandStreamMaxLen
+	}
+	return stream, maxLen
+}
+
+// NotifyRealtime pushes an event to Centrifugo only. Use it for events whose
+// outbox row was already written transactionally with the state change.
+func (p *Publisher) NotifyRealtime(ctx context.Context, namespace ChannelNamespace, tenantID uuid.UUID, event *Event) error {
+	p.mu.RLock()
+	if p.closed {
+		p.mu.RUnlock()
+		return fmt.Errorf("publisher is closed")
+	}
+	p.mu.RUnlock()
+	return p.publishToChannel(ctx, buildChannel(namespace, tenantID, nil), event)
 }
 
 // HealthCheck performs a health check on the Redis connection.

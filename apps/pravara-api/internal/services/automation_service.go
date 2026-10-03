@@ -224,7 +224,9 @@ func (s *AutomationService) dispatchStartJobCommand(ctx context.Context, task *t
 			// Continue - Centrifugo publish is not critical
 		}
 
-		// Publish to command dispatch channel for telemetry-worker
+		// Append to the durable command stream consumed by telemetry-worker.
+		// The command stays pending; the worker records sent / failed /
+		// timeout in the ledger once it has published (or given up).
 		if err := s.publisher.PublishCommandForDispatch(ctx, task.TenantID, commandData); err != nil {
 			s.log.WithError(err).WithFields(logrus.Fields{
 				"task_id":    task.ID,
@@ -233,14 +235,11 @@ func (s *AutomationService) dispatchStartJobCommand(ctx context.Context, task *t
 			}).Error("Failed to dispatch automation command")
 
 			// Update command status to failed
-			s.taskCmdRepo.UpdateStatus(ctx, commandID, "failed", "Failed to dispatch: "+err.Error())
+			if uerr := s.taskCmdRepo.UpdateStatus(ctx, commandID, "failed", "Failed to enqueue: "+err.Error()); uerr != nil {
+				s.log.WithError(uerr).Error("Failed to record command enqueue failure")
+			}
 
 			return fmt.Errorf("failed to dispatch command: %w", err)
-		}
-
-		// Update command status to sent
-		if err := s.taskCmdRepo.UpdateStatus(ctx, commandID, "sent", ""); err != nil {
-			s.log.WithError(err).Warn("Failed to update command status to sent")
 		}
 	}
 
@@ -248,7 +247,7 @@ func (s *AutomationService) dispatchStartJobCommand(ctx context.Context, task *t
 		"task_id":    task.ID,
 		"machine_id": machine.ID,
 		"command_id": commandID,
-	}).Info("Automation command dispatched: start_job")
+	}).Info("Automation command queued: start_job")
 
 	return nil
 }

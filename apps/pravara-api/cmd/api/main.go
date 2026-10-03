@@ -122,7 +122,9 @@ func main() {
 	if cfg.Redis.URL != "" {
 		var err error
 		publisher, err = pubsub.NewPublisher(pubsub.PublisherConfig{
-			RedisURL: cfg.Redis.URL,
+			RedisURL:            cfg.Redis.URL,
+			CommandStreamKey:    cfg.Commands.StreamKey,
+			CommandStreamMaxLen: cfg.Commands.StreamMaxLen,
 		}, log)
 		if err != nil {
 			log.WithError(err).Warn("Failed to connect to Redis for real-time events, continuing without publisher")
