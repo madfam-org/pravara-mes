@@ -108,6 +108,7 @@ func handleAPIKeyAuth(c *gin.Context, rawKey string, apikeyRepo *repositories.AP
 	c.Set(string(ContextKeyUserID), "apikey:"+key.ID.String())
 	c.Set(string(ContextKeyScopes), key.Scopes)
 	c.Set(string(ContextKeyAuthMethod), "apikey")
+	setAPIKeyCaller(c, key.ID, key.Scopes)
 
 	// Update last used (fire and forget)
 	go func() {
@@ -170,6 +171,7 @@ func handleJWTAuth(c *gin.Context, verifier *auth.OIDCVerifier, database *db.DB,
 	c.Set(string(ContextKeyTenantID), claims.TenantID)
 	c.Set(string(ContextKeyUserID), claims.Subject)
 	c.Set(string(ContextKeyAuthMethod), "jwt")
+	setJWTCaller(c, claims)
 
 	c.Next()
 

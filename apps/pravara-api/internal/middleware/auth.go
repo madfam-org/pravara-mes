@@ -72,6 +72,7 @@ func AuthMiddleware(verifier *auth.OIDCVerifier, database *db.DB, log *logrus.Lo
 		c.Set(string(ContextKeyClaims), claims)
 		c.Set(string(ContextKeyTenantID), claims.TenantID)
 		c.Set(string(ContextKeyUserID), claims.Subject)
+		setJWTCaller(c, claims)
 
 		c.Next()
 
