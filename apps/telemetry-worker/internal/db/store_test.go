@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/tenantctx"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -22,74 +24,50 @@ func setupTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 	return db, mock
 }
 
-func TestStore_CreateBatch_Success(t *testing.T) {
+// expectTenantTx expects the start of a tenant-scoped transaction.
+func expectTenantTx(mock sqlmock.Sqlmock, tenantID uuid.UUID) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT set_config\('app.current_tenant_id', \$1, true\)`).
+		WithArgs(tenantID.String()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+var machineCols = []string{
+	"id", "tenant_id", "name", "code", "type", "description", "status",
+	"mqtt_topic", "location", "specifications", "metadata",
+	"last_heartbeat", "created_at", "updated_at",
+}
+
+func TestStore_CreateBatch_OneTransactionPerTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
-
-	tenantID := uuid.New()
-	machineID := uuid.New()
-	timestamp := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-
+	tenantA, tenantB := uuid.New(), uuid.New()
+	ts := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	records := []types.Telemetry{
-		{
-			ID:         uuid.New(),
-			TenantID:   tenantID,
-			MachineID:  machineID,
-			Timestamp:  timestamp,
-			MetricType: "temperature",
-			Value:      45.2,
-			Unit:       "celsius",
-			Metadata:   map[string]interface{}{"sensor": "S001"},
-		},
-		{
-			ID:         uuid.New(),
-			TenantID:   tenantID,
-			MachineID:  machineID,
-			Timestamp:  timestamp.Add(1 * time.Minute),
-			MetricType: "power",
-			Value:      1500.0,
-			Unit:       "watts",
-			Metadata:   map[string]interface{}{"phase": "A"},
-		},
+		{ID: uuid.New(), TenantID: tenantA, MachineID: uuid.New(), Timestamp: ts, MetricType: "temperature", Value: 45.2, Unit: "celsius", Metadata: map[string]interface{}{"sensor": "S001"}},
+		{ID: uuid.New(), TenantID: tenantB, MachineID: uuid.New(), Timestamp: ts, MetricType: "power", Value: 1500, Unit: "watts"},
+		{ID: uuid.New(), TenantID: tenantA, MachineID: uuid.New(), Timestamp: ts, MetricType: "power", Value: 10, Unit: "watts"},
 	}
 
-	// Expect transaction begin
-	mock.ExpectBegin()
-
-	// Expect prepare statement
-	mock.ExpectPrepare("INSERT INTO telemetry")
-
-	// Expect first record insert
-	metadata1, _ := json.Marshal(records[0].Metadata)
-	mock.ExpectExec("INSERT INTO telemetry").
-		WithArgs(
-			records[0].ID, records[0].TenantID, records[0].MachineID,
-			records[0].Timestamp, records[0].MetricType, records[0].Value,
-			records[0].Unit, metadata1,
-		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	// Expect second record insert
-	metadata2, _ := json.Marshal(records[1].Metadata)
-	mock.ExpectExec("INSERT INTO telemetry").
-		WithArgs(
-			records[1].ID, records[1].TenantID, records[1].MachineID,
-			records[1].Timestamp, records[1].MetricType, records[1].Value,
-			records[1].Unit, metadata2,
-		).
-		WillReturnResult(sqlmock.NewResult(2, 1))
-
-	// Expect transaction commit
+	expectInsert := func(r types.Telemetry) {
+		meta, _ := json.Marshal(r.Metadata)
+		mock.ExpectExec(`INSERT INTO telemetry (.+) ON CONFLICT \(id\) DO NOTHING`).
+			WithArgs(r.ID, r.TenantID, r.MachineID, r.Timestamp, r.MetricType, r.Value, r.Unit, meta).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+	}
+	expectTenantTx(mock, tenantA)
+	expectInsert(records[0])
+	expectInsert(records[2])
+	mock.ExpectCommit()
+	expectTenantTx(mock, tenantB)
+	expectInsert(records[1])
 	mock.ExpectCommit()
 
-	ctx := context.Background()
-	err := store.CreateBatch(ctx, records)
-	if err != nil {
+	if err := store.CreateBatch(context.Background(), records); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
@@ -98,314 +76,246 @@ func TestStore_CreateBatch_Success(t *testing.T) {
 func TestStore_CreateBatch_Empty(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
-
-	ctx := context.Background()
-
-	// Empty slice should not trigger any database operations
-	err := store.CreateBatch(ctx, []types.Telemetry{})
-	if err != nil {
+	if err := store.CreateBatch(context.Background(), []types.Telemetry{}); err != nil {
 		t.Errorf("expected no error for empty batch, got: %v", err)
 	}
-
-	// Nil slice should not trigger any database operations
-	err = store.CreateBatch(ctx, nil)
-	if err != nil {
+	if err := store.CreateBatch(context.Background(), nil); err != nil {
 		t.Errorf("expected no error for nil batch, got: %v", err)
 	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_GetMachineByCode_Found(t *testing.T) {
+func TestStore_CreateBatch_RollsBackOnError(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
-
-	machineID := uuid.New()
 	tenantID := uuid.New()
+	records := []types.Telemetry{{ID: uuid.New(), TenantID: tenantID, MachineID: uuid.New(), Timestamp: time.Now(), MetricType: "temperature", Value: 1}}
+
+	expectTenantTx(mock, tenantID)
+	mock.ExpectExec("INSERT INTO telemetry").WillReturnError(errors.New("insert failed"))
+	mock.ExpectRollback()
+
+	if err := store.CreateBatch(context.Background(), records); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestStore_CreateBatch_RejectsNilTenant(t *testing.T) {
+	db, mock := setupTestDB(t)
+	defer db.Close()
+	store := newStoreWithDB(db)
+
+	records := []types.Telemetry{{ID: uuid.New(), MachineID: uuid.New(), Timestamp: time.Now(), MetricType: "x"}}
+	if err := store.CreateBatch(context.Background(), records); !errors.Is(err, ErrNoTenant) {
+		t.Fatalf("expected ErrNoTenant, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unexpected database calls: %v", err)
+	}
+}
+
+func TestStore_ResolveMachine_BySlugAndCode(t *testing.T) {
+	db, mock := setupTestDB(t)
+	defer db.Close()
+	store := newStoreWithDB(db)
+
+	tenantID, machineID := uuid.New(), uuid.New()
 	code := "CNC-01"
 	lastHeartbeat := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	updatedAt := time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	specs, _ := json.Marshal(map[string]interface{}{"spindle_speed": 12000})
+	meta, _ := json.Marshal(map[string]interface{}{"location": "floor-1"})
 
-	specifications := map[string]interface{}{"spindle_speed": 12000}
-	metadata := map[string]interface{}{"location": "floor-1"}
-	specificationsJSON, _ := json.Marshal(specifications)
-	metadataJSON, _ := json.Marshal(metadata)
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("acme").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(tenantID))
+	expectTenantTx(mock, tenantID)
+	mock.ExpectQuery(`FROM machines WHERE tenant_id = \$1 AND code = \$2`).WithArgs(tenantID, code).
+		WillReturnRows(sqlmock.NewRows(machineCols).AddRow(
+			machineID, tenantID, "CNC Machine 01", code, "CNC", "Main CNC machine", "online",
+			"acme/site/area/line/CNC-01", "Floor 1", specs, meta, lastHeartbeat, created, created))
+	mock.ExpectCommit()
 
-	rows := sqlmock.NewRows([]string{
-		"id", "tenant_id", "name", "code", "type", "description", "status",
-		"mqtt_topic", "location", "specifications", "metadata",
-		"last_heartbeat", "created_at", "updated_at",
-	}).AddRow(
-		machineID, tenantID, "CNC Machine 01", code, "CNC",
-		"Main CNC machine", "online", "factory/cnc-01", "Floor 1",
-		specificationsJSON, metadataJSON, lastHeartbeat, createdAt, updatedAt,
-	)
-
-	mock.ExpectQuery("SELECT (.+) FROM machines WHERE code").
-		WithArgs(code).
-		WillReturnRows(rows)
-
-	ctx := context.Background()
-	machine, err := store.GetMachineByCode(ctx, code)
+	machine, err := store.ResolveMachine(context.Background(), "acme", code)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-
-	if machine == nil {
-		t.Fatal("expected machine, got nil")
-	}
-
-	if machine.ID != machineID {
-		t.Errorf("ID: got %v, want %v", machine.ID, machineID)
-	}
-	if machine.Code != code {
-		t.Errorf("Code: got %q, want %q", machine.Code, code)
-	}
-	if machine.Name != "CNC Machine 01" {
-		t.Errorf("Name: got %q, want %q", machine.Name, "CNC Machine 01")
-	}
-	if machine.Status != "online" {
-		t.Errorf("Status: got %q, want %q", machine.Status, "online")
+	if machine == nil || machine.ID != machineID || machine.TenantID != tenantID {
+		t.Fatalf("unexpected machine: %+v", machine)
 	}
 	if machine.LastHeartbeat == nil || !machine.LastHeartbeat.Equal(lastHeartbeat) {
 		t.Errorf("LastHeartbeat: got %v, want %v", machine.LastHeartbeat, lastHeartbeat)
 	}
 
+	// The tenant is cached: a second lookup goes straight to the machine query.
+	expectTenantTx(mock, tenantID)
+	mock.ExpectQuery(`FROM machines WHERE tenant_id = \$1 AND code = \$2`).WithArgs(tenantID, "OTHER").
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectCommit()
+	machine, err = store.ResolveMachine(context.Background(), "acme", "OTHER")
+	if err != nil || machine != nil {
+		t.Fatalf("expected nil machine for unknown code, got %+v, %v", machine, err)
+	}
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_GetMachineByCode_NotFound(t *testing.T) {
+func TestStore_ResolveMachine_ByTenantUUID(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
+	tenantID := uuid.New()
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE id = \$1`).WithArgs(tenantID).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(tenantID))
+	expectTenantTx(mock, tenantID)
+	mock.ExpectQuery(`FROM machines WHERE tenant_id = \$1 AND code = \$2`).WithArgs(tenantID, "M1").
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectCommit()
 
-	code := "NONEXISTENT"
+	if _, err := store.ResolveMachine(context.Background(), tenantID.String(), "M1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
 
-	mock.ExpectQuery("SELECT (.+) FROM machines WHERE code").
-		WithArgs(code).
+func TestStore_ResolveMachine_UnknownTenantIsDroppedAndCached(t *testing.T) {
+	db, mock := setupTestDB(t)
+	defer db.Close()
+	store := newStoreWithDB(db)
+
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("nobody").
 		WillReturnError(sql.ErrNoRows)
 
-	ctx := context.Background()
-	machine, err := store.GetMachineByCode(ctx, code)
-	if err != nil {
-		t.Fatalf("expected no error for not found, got: %v", err)
+	for i := 0; i < 3; i++ {
+		machine, err := store.ResolveMachine(context.Background(), "nobody", "M1")
+		if err != nil || machine != nil {
+			t.Fatalf("expected nil, nil for unknown tenant; got %+v, %v", machine, err)
+		}
 	}
-
-	if machine != nil {
-		t.Errorf("expected nil machine, got: %v", machine)
-	}
-
+	// Only one tenants lookup and no machine query: the miss is cached.
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_GetMachineByID_Found(t *testing.T) {
+func TestStore_ResolveMachine_NullableFields(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
+	tenantID, machineID := uuid.New(), uuid.New()
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("acme").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(tenantID))
+	expectTenantTx(mock, tenantID)
+	mock.ExpectQuery(`FROM machines WHERE tenant_id`).
+		WillReturnRows(sqlmock.NewRows(machineCols).AddRow(
+			machineID, tenantID, "Simple Machine", "SIMPLE", "Generic",
+			sql.NullString{}, "idle", sql.NullString{}, sql.NullString{},
+			[]byte(nil), []byte(nil), sql.NullTime{}, created, created))
+	mock.ExpectCommit()
 
-	machineID := uuid.New()
-	tenantID := uuid.New()
-	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	updatedAt := time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC)
-
-	rows := sqlmock.NewRows([]string{
-		"id", "tenant_id", "name", "code", "type", "description", "status",
-		"mqtt_topic", "location", "specifications", "metadata",
-		"last_heartbeat", "created_at", "updated_at",
-	}).AddRow(
-		machineID, tenantID, "Machine 01", "M-01", "CNC",
-		sql.NullString{}, "offline", sql.NullString{}, sql.NullString{},
-		[]byte("{}"), []byte("{}"), sql.NullTime{}, createdAt, updatedAt,
-	)
-
-	mock.ExpectQuery("SELECT (.+) FROM machines WHERE id").
-		WithArgs(machineID).
-		WillReturnRows(rows)
-
-	ctx := context.Background()
-	machine, err := store.GetMachineByID(ctx, machineID)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
+	machine, err := store.ResolveMachine(context.Background(), "acme", "SIMPLE")
+	if err != nil || machine == nil {
+		t.Fatalf("expected machine, got %+v, %v", machine, err)
 	}
-
-	if machine == nil {
-		t.Fatal("expected machine, got nil")
+	if machine.Description != "" || machine.MQTTTopic != "" || machine.Location != "" || machine.LastHeartbeat != nil {
+		t.Errorf("expected empty nullable fields, got %+v", machine)
 	}
-
-	if machine.ID != machineID {
-		t.Errorf("ID: got %v, want %v", machine.ID, machineID)
-	}
-	if machine.Status != "offline" {
-		t.Errorf("Status: got %q, want %q", machine.Status, "offline")
-	}
-	if machine.LastHeartbeat != nil {
-		t.Errorf("expected nil LastHeartbeat, got %v", machine.LastHeartbeat)
-	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_UpdateMachineHeartbeat_Success(t *testing.T) {
+func TestStore_UpdateMachineHeartbeat_TenantScoped(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
-
-	machineID := uuid.New()
-
-	mock.ExpectExec("UPDATE machines SET last_heartbeat").
-		WithArgs(machineID, sqlmock.AnyArg()).
+	tenantID, machineID := uuid.New(), uuid.New()
+	expectTenantTx(mock, tenantID)
+	mock.ExpectExec(`UPDATE machines SET last_heartbeat = \$3, status = 'online' WHERE id = \$1 AND tenant_id = \$2`).
+		WithArgs(machineID, tenantID, sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
-	ctx := context.Background()
-	err := store.UpdateMachineHeartbeat(ctx, machineID)
-	if err != nil {
+	if err := store.UpdateMachineHeartbeat(context.Background(), tenantID, machineID); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_CreateBatch_TransactionRollback(t *testing.T) {
+func TestStore_AckPath_UsesTopicTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
+	tenantID, commandID := uuid.New(), uuid.New()
+	ctx := tenantctx.WithTopicSegment(context.Background(), "acme")
 
-	records := []types.Telemetry{
-		{
-			ID:         uuid.New(),
-			TenantID:   uuid.New(),
-			MachineID:  uuid.New(),
-			Timestamp:  time.Now(),
-			MetricType: "temperature",
-			Value:      45.2,
-			Unit:       "celsius",
-		},
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("acme").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(tenantID))
+	expectTenantTx(mock, tenantID)
+	mock.ExpectExec(`UPDATE task_commands (.+) WHERE command_id = \$1 AND tenant_id = \$4`).
+		WithArgs(commandID, "acknowledged", "", tenantID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := store.UpdateCommandStatus(ctx, commandID, "acknowledged", ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// Expect transaction begin
-	mock.ExpectBegin()
-
-	// Expect prepare to fail
-	mock.ExpectPrepare("INSERT INTO telemetry").
-		WillReturnError(sql.ErrConnDone)
-
-	// Expect rollback
-	mock.ExpectRollback()
-
-	ctx := context.Background()
-	err := store.CreateBatch(ctx, records)
-	if err == nil {
-		t.Error("expected error, got nil")
-	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_GetMachineByCode_NullableFields(t *testing.T) {
+func TestStore_AckPath_WithoutTopicTenantFails(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer db.Close()
+	store := newStoreWithDB(db)
 
-	store := &Store{db: db}
-
-	machineID := uuid.New()
-	tenantID := uuid.New()
-	code := "SIMPLE-MACHINE"
-	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	updatedAt := time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC)
-
-	// Machine with all nullable fields as NULL
-	rows := sqlmock.NewRows([]string{
-		"id", "tenant_id", "name", "code", "type", "description", "status",
-		"mqtt_topic", "location", "specifications", "metadata",
-		"last_heartbeat", "created_at", "updated_at",
-	}).AddRow(
-		machineID, tenantID, "Simple Machine", code, "Generic",
-		sql.NullString{Valid: false}, "idle",
-		sql.NullString{Valid: false}, sql.NullString{Valid: false},
-		[]byte(nil), []byte(nil), sql.NullTime{Valid: false}, createdAt, updatedAt,
-	)
-
-	mock.ExpectQuery("SELECT (.+) FROM machines WHERE code").
-		WithArgs(code).
-		WillReturnRows(rows)
-
-	ctx := context.Background()
-	machine, err := store.GetMachineByCode(ctx, code)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
+	err := store.UpdateCommandStatus(context.Background(), uuid.New(), "acknowledged", "")
+	if !errors.Is(err, ErrNoTenant) {
+		t.Fatalf("expected ErrNoTenant, got %v", err)
 	}
-
-	if machine == nil {
-		t.Fatal("expected machine, got nil")
+	info, err := store.GetMachineInfoByCode(context.Background(), "M1")
+	if err != nil || info != nil {
+		t.Fatalf("expected nil, nil without a tenant; got %+v, %v", info, err)
 	}
-
-	if machine.Description != "" {
-		t.Errorf("Description: expected empty, got %q", machine.Description)
-	}
-	if machine.MQTTTopic != "" {
-		t.Errorf("MQTTTopic: expected empty, got %q", machine.MQTTTopic)
-	}
-	if machine.Location != "" {
-		t.Errorf("Location: expected empty, got %q", machine.Location)
-	}
-	if machine.LastHeartbeat != nil {
-		t.Errorf("LastHeartbeat: expected nil, got %v", machine.LastHeartbeat)
-	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unfulfilled expectations: %v", err)
+		t.Errorf("unexpected database calls: %v", err)
 	}
 }
 
 func TestStore_Stats(t *testing.T) {
 	db, _ := setupTestDB(t)
 	defer db.Close()
-
-	store := &Store{db: db}
-
-	stats := store.Stats()
-
-	// Verify we get stats structure
-	if stats.MaxOpenConnections != 0 {
-		// Stats should have some fields available
-		t.Logf("Stats: %+v", stats)
-	}
+	store := newStoreWithDB(db)
+	_ = store.Stats()
 }
 
 func TestStore_Close(t *testing.T) {
 	db, mock := setupTestDB(t)
-
-	store := &Store{db: db}
-
-	// Expect close call
+	store := newStoreWithDB(db)
 	mock.ExpectClose()
-
-	err := store.Close()
-	if err != nil {
+	if err := store.Close(); err != nil {
 		t.Errorf("expected no error on close, got: %v", err)
 	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}

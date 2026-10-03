@@ -385,3 +385,26 @@ func TestWorkerConfig_RetrySettings(t *testing.T) {
 		})
 	}
 }
+
+func TestDropLogLimiter_RateLimitsPerKey(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	l := newDropLogLimiter(time.Minute)
+	l.now = func() time.Time { return now }
+
+	if ok, _ := l.allow("acme/M1"); !ok {
+		t.Fatal("first drop must be logged")
+	}
+	for i := 0; i < 5; i++ {
+		if ok, _ := l.allow("acme/M1"); ok {
+			t.Fatal("repeated drop within the interval must be suppressed")
+		}
+	}
+	if ok, _ := l.allow("other/M1"); !ok {
+		t.Fatal("a different key must be logged")
+	}
+	now = now.Add(61 * time.Second)
+	ok, suppressed := l.allow("acme/M1")
+	if !ok || suppressed != 5 {
+		t.Fatalf("expected log with 5 suppressed, got %v, %d", ok, suppressed)
+	}
+}
