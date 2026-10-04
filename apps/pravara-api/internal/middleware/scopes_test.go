@@ -9,213 +9,97 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRequireScope_JWTAuthMethod(t *testing.T) {
-	// Setup
+func scopeRouter(caller *Caller, handlers ...gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Set(string(ContextKeyAuthMethod), "jwt")
+		if caller != nil {
+			c.Set(string(ContextKeyCaller), *caller)
+		}
 		c.Next()
 	})
-	router.Use(RequireScope("feeds:read"))
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-	})
-
-	// Test: JWT users always pass scope checks
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "access granted")
+	ok := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "access granted"}) }
+	router.GET("/scoped", append(handlers, ok)...)
+	router.GET("/unlisted", append(handlers, ok)...)
+	router.POST("/scoped", append(handlers, ok)...)
+	return router
 }
 
-func TestRequireScope_APIKeyWithMatchingScope(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set(string(ContextKeyAuthMethod), "apikey")
-		c.Set(string(ContextKeyScopes), []string{"feeds:read", "events:write"})
-		c.Next()
-	})
-	router.Use(RequireScope("feeds:read"))
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-	})
-
-	// Test
+func doGet(router *gin.Engine, path string) int {
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest(http.MethodGet, path, nil)
 	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "access granted")
+	return w.Code
 }
 
-func TestRequireScope_APIKeyWithWildcardScope(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set(string(ContextKeyAuthMethod), "apikey")
-		c.Set(string(ContextKeyScopes), []string{"*"})
-		c.Next()
-	})
-	router.Use(RequireScope("orders:delete"))
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-	})
-
-	// Test
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "access granted")
-}
-
-func TestRequireScope_APIKeyWithoutMatchingScope(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set(string(ContextKeyAuthMethod), "apikey")
-		c.Set(string(ContextKeyScopes), []string{"feeds:read", "events:read"})
-		c.Next()
-	})
-	router.Use(RequireScope("orders:write"))
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-	})
-
-	// Test
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "Missing required scope: orders:write")
-}
-
-func TestRequireScope_NoAuthMethodSet(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-
-	router := gin.New()
-	// No auth middleware sets ContextKeyAuthMethod or ContextKeyScopes
-	router.Use(RequireScope("feeds:read"))
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-	})
-
-	// Test
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "Insufficient permissions")
-}
-
-func TestRequireScope_TableDriven(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	tests := []struct {
-		name           string
-		authMethod     string
-		scopes         []string
-		setAuthMethod  bool
-		setScopes      bool
-		requiredScope  string
-		expectedStatus int
+func TestRequireScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		caller *Caller
+		want   int
 	}{
-		{
-			name:           "JWT bypasses scope check",
-			authMethod:     "jwt",
-			setAuthMethod:  true,
-			setScopes:      false,
-			requiredScope:  "admin:everything",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "API key exact scope match",
-			authMethod:     "apikey",
-			scopes:         []string{"feeds:read"},
-			setAuthMethod:  true,
-			setScopes:      true,
-			requiredScope:  "feeds:read",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "API key wildcard scope",
-			authMethod:     "apikey",
-			scopes:         []string{"*"},
-			setAuthMethod:  true,
-			setScopes:      true,
-			requiredScope:  "anything:here",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "API key missing scope",
-			authMethod:     "apikey",
-			scopes:         []string{"feeds:read"},
-			setAuthMethod:  true,
-			setScopes:      true,
-			requiredScope:  "orders:write",
-			expectedStatus: http.StatusForbidden,
-		},
-		{
-			name:           "No auth method set",
-			setAuthMethod:  false,
-			setScopes:      false,
-			requiredScope:  "feeds:read",
-			expectedStatus: http.StatusForbidden,
-		},
-		{
-			name:           "API key empty scopes list",
-			authMethod:     "apikey",
-			scopes:         []string{},
-			setAuthMethod:  true,
-			setScopes:      true,
-			requiredScope:  "feeds:read",
-			expectedStatus: http.StatusForbidden,
-		},
+		{"user passes (roles govern)", &Caller{Kind: CallerUser, ID: "u"}, http.StatusOK},
+		{"service account with scope", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeRead}}, http.StatusOK},
+		{"service account without scope", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeJobs}}, http.StatusForbidden},
+		{"service account wildcard is not honoured", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeWildcard}}, http.StatusForbidden},
+		{"api key with scope", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeRead}}, http.StatusOK},
+		{"api key wildcard", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeWildcard}}, http.StatusOK},
+		{"api key without scope", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeJobs}}, http.StatusForbidden},
+		{"no caller", nil, http.StatusUnauthorized},
+		{"unknown caller kind", &Caller{Kind: "other", Scopes: []string{ScopeRead}}, http.StatusForbidden},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router := gin.New()
-			router.Use(func(c *gin.Context) {
-				if tt.setAuthMethod {
-					c.Set(string(ContextKeyAuthMethod), tt.authMethod)
-				}
-				if tt.setScopes {
-					c.Set(string(ContextKeyScopes), tt.scopes)
-				}
-				c.Next()
-			})
-			router.Use(RequireScope(tt.requiredScope))
-			router.GET("/test", func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"message": "access granted"})
-			})
-
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/test", nil)
-			router.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, doGet(scopeRouter(tc.caller, RequireScope(ScopeRead)), "/scoped"))
 		})
+	}
+}
+
+func TestEnforceRouteScopes(t *testing.T) {
+	policy := RouteScopes{
+		RouteKey(http.MethodGet, "/scoped"): Require(ScopeRead, ScopeNodes).WithLegacy(LegacyScopeReadEvents),
+	}
+	cases := []struct {
+		name   string
+		caller *Caller
+		path   string
+		want   int
+	}{
+		{"user on listed route", &Caller{Kind: CallerUser, ID: "u"}, "/scoped", http.StatusOK},
+		{"user on unlisted route", &Caller{Kind: CallerUser, ID: "u"}, "/unlisted", http.StatusOK},
+		{"machine with any-of scope", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeNodes}}, "/scoped", http.StatusOK},
+		{"machine missing scope", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeJobs}}, "/scoped", http.StatusForbidden},
+		{"machine with legacy name is not honoured", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{LegacyScopeReadEvents}}, "/scoped", http.StatusForbidden},
+		{"machine on unlisted route", &Caller{Kind: CallerServiceAccount, ID: "c", Scopes: MachineScopes}, "/unlisted", http.StatusForbidden},
+		{"api key legacy scope", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{LegacyScopeReadEvents}}, "/scoped", http.StatusOK},
+		{"api key missing scope", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{LegacyScopeReadFeeds}}, "/scoped", http.StatusForbidden},
+		{"api key narrow scope on unlisted route", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeRead}}, "/unlisted", http.StatusForbidden},
+		{"api key wildcard on unlisted route", &Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeWildcard}}, "/unlisted", http.StatusOK},
+		{"no caller fails closed", nil, "/scoped", http.StatusUnauthorized},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := scopeRouter(tc.caller, EnforceRouteScopes(policy, newTestLogger()))
+			assert.Equal(t, tc.want, doGet(router, tc.path))
+		})
+	}
+}
+
+func TestEnforceRouteScopes_MethodIsPartOfTheKey(t *testing.T) {
+	policy := RouteScopes{RouteKey(http.MethodGet, "/scoped"): Require(ScopeRead)}
+	router := scopeRouter(&Caller{Kind: CallerServiceAccount, ID: "c", Scopes: []string{ScopeRead}}, EnforceRouteScopes(policy, nil))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/scoped", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "missing_scope")
+}
+
+func TestIsValidAPIKeyScope(t *testing.T) {
+	for _, s := range APIKeyScopes {
+		assert.True(t, IsValidAPIKeyScope(s), s)
+	}
+	for _, s := range []string{"", "pravara-mes:admin", "write:orders", "pravara-mes:*"} {
+		assert.False(t, IsValidAPIKeyScope(s), s)
 	}
 }

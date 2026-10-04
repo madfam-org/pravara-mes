@@ -88,7 +88,17 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	// Set defaults
 	scopes := req.Scopes
 	if scopes == nil {
-		scopes = []string{"read:events", "read:feeds"}
+		scopes = []string{middleware.LegacyScopeReadEvents, middleware.LegacyScopeReadFeeds}
+	}
+	for _, scope := range scopes {
+		if !middleware.IsValidAPIKeyScope(scope) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":          "invalid_scope",
+				"message":        "Unknown scope: " + scope,
+				"allowed_scopes": middleware.APIKeyScopes,
+			})
+			return
+		}
 	}
 	rateLimit := 1000
 	if req.RateLimit != nil {

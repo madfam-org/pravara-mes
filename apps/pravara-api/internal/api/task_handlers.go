@@ -266,8 +266,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 
 	// Publish task.created through the outbox-backed publisher.
 	if h.publisher != nil {
-		userID, _ := middleware.GetUserID(c)
-		userUUID, _ := uuid.Parse(userID)
+		userUUID := middleware.ActorUUID(c)
 		metadata := map[string]any{}
 		if task.OrderID != nil {
 			metadata["order_id"] = task.OrderID.String()
@@ -403,8 +402,7 @@ func (h *TaskHandler) Update(c *gin.Context) {
 	if task.Status != oldStatus {
 		// Publish task.updated so the status transition is durable/visible.
 		if h.publisher != nil {
-			userID, _ := middleware.GetUserID(c)
-			userUUID, _ := uuid.Parse(userID)
+			userUUID := middleware.ActorUUID(c)
 			if err := h.publisher.PublishEntityUpdated(c.Request.Context(), pubsub.NamespaceTasks, task.TenantID, pubsub.EventTaskUpdated, pubsub.EntityUpdatedData{
 				EntityID:      task.ID,
 				EntityType:    "task",
@@ -522,9 +520,9 @@ func (h *TaskHandler) Move(c *gin.Context) {
 
 	// Trigger automation if status changed
 	if oldStatus != newStatus && h.automation != nil {
-		// Get user ID for automation tracking
-		userID, _ := middleware.GetUserID(c)
-		userUUID, _ := uuid.Parse(userID)
+		// Get user ID for automation tracking (issued_by references users;
+		// machine callers are recorded as NULL there).
+		userUUID := middleware.ActorUserUUID(c)
 
 		// Update task status for automation
 		task.Status = newStatus
@@ -549,8 +547,7 @@ func (h *TaskHandler) Move(c *gin.Context) {
 
 	// Publish task move event for real-time updates
 	if h.publisher != nil {
-		userID, _ := middleware.GetUserID(c)
-		userUUID, _ := uuid.Parse(userID)
+		userUUID := middleware.ActorUUID(c)
 		h.publisher.PublishTaskMove(c.Request.Context(), task.TenantID, pubsub.TaskMoveData{
 			TaskID:      task.ID,
 			TaskTitle:   task.Title,
