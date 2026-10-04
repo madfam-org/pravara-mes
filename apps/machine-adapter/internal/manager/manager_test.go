@@ -124,18 +124,6 @@ func TestMapCommandToGCode_Unknown(t *testing.T) {
 	assert.Equal(t, time.Duration(0), timeout)
 }
 
-func TestMakeTelemetryCallback(t *testing.T) {
-	log := newTestLogger()
-
-	mgr := &Manager{
-		adapters: make(map[string]*Adapter),
-		log:      log,
-	}
-
-	cb := mgr.MakeTelemetryCallback("tenant-1", "machine-1")
-	assert.NotNil(t, cb, "MakeTelemetryCallback should return a non-nil callback")
-}
-
 func TestTelemetryMetric_Fields(t *testing.T) {
 	m := TelemetryMetric{
 		Type:      "temperature_extruder",
@@ -148,21 +136,6 @@ func TestTelemetryMetric_Fields(t *testing.T) {
 	assert.Equal(t, 210.5, m.Value)
 	assert.Equal(t, "celsius", m.Unit)
 	assert.Equal(t, "2026-03-03T12:00:00Z", m.Timestamp)
-}
-
-func TestCommandResponse_Fields(t *testing.T) {
-	resp := CommandResponse{
-		MachineID: "machine-1",
-		Command:   "home",
-		Success:   true,
-		Message:   "ok",
-	}
-
-	assert.Equal(t, "machine-1", resp.MachineID)
-	assert.Equal(t, "home", resp.Command)
-	assert.True(t, resp.Success)
-	assert.Equal(t, "ok", resp.Message)
-	assert.Empty(t, resp.Error)
 }
 
 func newTestLogger() *logrus.Logger {

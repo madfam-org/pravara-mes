@@ -1,0 +1,23 @@
+[Unit]
+Description=Pravara edge node (Sparkplug B) for the site's printers
+After=network-online.target pravara-edge-cloudflared.service
+Wants=network-online.target pravara-edge-cloudflared.service
+
+[Service]
+User=pravara-edge
+Group=pravara-edge
+ExecStart=/usr/local/bin/pravara-edge -config /etc/pravara-edge/config.yaml
+Restart=always
+RestartSec=5
+StateDirectory=pravara-edge
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/pravara-edge
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
