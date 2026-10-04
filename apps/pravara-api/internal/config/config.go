@@ -26,6 +26,10 @@ type Config struct {
 	Orders     OrdersConfig     `mapstructure:"orders"`
 	Commands   CommandsConfig   `mapstructure:"commands"`
 	Liveness   LivenessConfig   `mapstructure:"liveness"`
+	// --- fabrication dispatch (MES-1 §5-§7), see dispatch.go ---
+	Dispatch       DispatchConfig       `mapstructure:"dispatch"`
+	MachineClients MachineClientsConfig `mapstructure:"machine_clients"`
+	// --- end fabrication dispatch ---
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -145,6 +149,7 @@ func Load() (*Config, error) {
 	// Set defaults
 	setDefaults(v)
 	setCommandChannelDefaults(v)
+	setDispatchDefaults(v) // fabrication dispatch
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -154,6 +159,7 @@ func Load() (*Config, error) {
 	// Map environment variables to config keys
 	bindEnvVars(v)
 	bindCommandChannelEnv(v)
+	bindDispatchEnv(v) // fabrication dispatch
 
 	// Optionally read from config file
 	v.SetConfigName("config")
