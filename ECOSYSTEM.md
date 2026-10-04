@@ -61,6 +61,8 @@ PravaraMES is the Manufacturing Execution System that owns fabrication-node rout
 - `NODE_CONN_* — per-fab-node credentials`
 - `ORDERS_AUTO_DECOMPOSE / ORDERS_AUTO_ASSIGN — order→task decomposition and capability-based machine assignment (both default true)`
 - `WEBHOOKS_DISPATCH_INTERVAL / WEBHOOKS_MAX_RETRIES / WEBHOOKS_RETENTION_DAYS — outbound webhook dispatcher`
+- `COMMAND_STREAM_KEY / COMMAND_STREAM_MAX_LEN — durable machine command stream consumed by telemetry-worker (default pravara:commands, 100000)`
+- `LIVENESS_SWEEP_ENABLED / LIVENESS_HEARTBEAT_TIMEOUT_SECONDS / LIVENESS_SWEEP_INTERVAL_SECONDS — marks machines offline on heartbeat timeout (default true, 300, 60)`
 
 ---
 

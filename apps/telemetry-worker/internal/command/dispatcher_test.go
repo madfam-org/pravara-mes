@@ -129,21 +129,12 @@ func TestMachineCommand_ToMQTTPayload(t *testing.T) {
 	}
 }
 
-func TestCommandChannelPattern(t *testing.T) {
-	tenantID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
-	expected := "pravara.commands.550e8400-e29b-41d4-a716-446655440000"
-
-	result := CommandChannelPattern(tenantID)
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+func TestStreamContractConstants(t *testing.T) {
+	if DefaultStreamKey != "pravara:commands" {
+		t.Errorf("DefaultStreamKey = %q", DefaultStreamKey)
 	}
-}
-
-func TestCommandChannelWildcard(t *testing.T) {
-	expected := "pravara.commands.*"
-	result := CommandChannelWildcard()
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	if StreamFieldTenantID != "tenant_id" || StreamFieldCommandID != "command_id" || StreamFieldPayload != "payload" {
+		t.Error("stream field names changed; pravara-api must change in step")
 	}
 }
 

@@ -82,16 +82,19 @@ type CommandAckData struct {
 	AckedAt   time.Time `json:"acked_at"`
 }
 
-// CommandChannelPattern returns the Redis channel pattern for command dispatch.
-// Commands are published to "pravara.commands.{tenant_id}".
-func CommandChannelPattern(tenantID uuid.UUID) string {
-	return "pravara.commands." + tenantID.String()
-}
-
-// CommandChannelWildcard returns the wildcard pattern for subscribing to all command channels.
-func CommandChannelWildcard() string {
-	return "pravara.commands.*"
-}
+// Command stream contract shared with pravara-api (pubsub.PublishCommandForDispatch).
+// Each stream entry carries the tenant and command id as plain fields and the
+// full command as a JSON document in the payload field.
+const (
+	// DefaultStreamKey is the default Redis stream for machine commands.
+	DefaultStreamKey = "pravara:commands"
+	// StreamFieldTenantID holds the issuing tenant's UUID.
+	StreamFieldTenantID = "tenant_id"
+	// StreamFieldCommandID holds the command UUID (task_commands.command_id).
+	StreamFieldCommandID = "command_id"
+	// StreamFieldPayload holds the JSON-encoded MachineCommand.
+	StreamFieldPayload = "payload"
+)
 
 // ToMQTTPayload converts a MachineCommand to the MQTT payload format.
 func (c *MachineCommand) ToMQTTPayload() MQTTCommandPayload {

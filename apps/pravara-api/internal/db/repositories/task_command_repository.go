@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // TaskCommand represents a command dispatched from a task to a machine.
@@ -16,13 +18,15 @@ import (
 // sending job control instructions (start, pause, stop) with parameters.
 // Each command is tracked through its lifecycle: pending → sent → acknowledged → completed/failed.
 type TaskCommand struct {
-	ID           uuid.UUID
-	TenantID     uuid.UUID
+	ID       uuid.UUID
+	TenantID uuid.UUID
+	// TaskID is uuid.Nil for a command issued directly against a machine
+	// (stored as NULL).
 	TaskID       uuid.UUID
 	MachineID    uuid.UUID
 	CommandID    uuid.UUID
 	CommandType  string
-	Status       string // pending, sent, acknowledged, failed, completed
+	Status       string // pending, sent, acknowledged, failed, completed, timeout
 	Parameters   map[string]interface{}
 	IssuedBy     *uuid.UUID
 	IssuedAt     time.Time
@@ -72,7 +76,7 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 	}
 
 	err = r.db.QueryRowContext(ctx, query,
-		cmd.ID, cmd.TenantID, cmd.TaskID, cmd.MachineID, cmd.CommandID,
+		cmd.ID, cmd.TenantID, nullUUID(&cmd.TaskID), cmd.MachineID, cmd.CommandID,
 		cmd.CommandType, cmd.Status, paramsJSON, nullUUID(cmd.IssuedBy), cmd.IssuedAt,
 	).Scan(&cmd.CreatedAt, &cmd.UpdatedAt)
 
@@ -96,10 +100,10 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 func (r *TaskCommandRepository) UpdateStatus(ctx context.Context, commandID uuid.UUID, status, errorMsg string) error {
 	query := `
 		UPDATE task_commands
-		SET status = $2,
-		    error_message = NULLIF($3, ''),
-		    acked_at = CASE WHEN $2 = 'acknowledged' THEN NOW() ELSE acked_at END,
-		    completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+		SET status = $2::varchar,
+		    error_message = NULLIF($3::text, ''),
+		    acked_at = CASE WHEN $2::varchar = 'acknowledged' THEN NOW() ELSE acked_at END,
+		    completed_at = CASE WHEN $2::varchar IN ('completed', 'failed', 'timeout') THEN NOW() ELSE completed_at END
 		WHERE command_id = $1 AND ` + tenantMatch + `
 	`
 
@@ -316,4 +320,24 @@ func (r *TaskCommandRepository) scanTaskCommand(rows *sql.Rows) (*TaskCommand, e
 	}
 
 	return &cmd, nil
+}
+
+// CreateDurable writes cmd in its own committed tenant transaction, not in
+// the caller's request transaction. A command row must be committed before
+// the command is appended to the dispatch stream: the worker only dispatches
+// commands it can load from the ledger, and the request transaction commits
+// only when the response is written.
+func (r *TaskCommandRepository) CreateDurable(ctx context.Context, cmd *TaskCommand) error {
+	return db.RunInOwnTenantTx(ctx, r.db, cmd.TenantID.String(), func(ctx context.Context) error {
+		return r.Create(ctx, cmd)
+	})
+}
+
+// UpdateStatusDurable updates a command's status in its own committed tenant
+// transaction, so a failure write-back survives the request's rollback (the
+// request then answers with an error status).
+func (r *TaskCommandRepository) UpdateStatusDurable(ctx context.Context, tenantID, commandID uuid.UUID, status, errorMsg string) error {
+	return db.RunInOwnTenantTx(ctx, r.db, tenantID.String(), func(ctx context.Context) error {
+		return r.UpdateStatus(ctx, commandID, status, errorMsg)
+	})
 }

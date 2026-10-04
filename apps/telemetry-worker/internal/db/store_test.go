@@ -11,7 +11,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 
-	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/tenantctx"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -260,43 +259,51 @@ func TestStore_UpdateMachineHeartbeat_TenantScoped(t *testing.T) {
 	}
 }
 
-func TestStore_AckPath_UsesTopicTenant(t *testing.T) {
+// The ack path resolves the tenant from the topic's first level and looks
+// the machine up only inside that tenant's transaction.
+func TestLedger_ResolveAckMachine_UsesTopicTenant(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	store := newStoreWithDB(db)
+	ledger := NewCommandLedger(newStoreWithDB(db))
 
-	tenantID, commandID := uuid.New(), uuid.New()
-	ctx := tenantctx.WithTopicSegment(context.Background(), "acme")
+	tenantID, machineID := uuid.New(), uuid.New()
+	topic := "acme/site/area/line/M1"
 
 	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("acme").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(tenantID))
 	expectTenantTx(mock, tenantID)
-	mock.ExpectExec(`UPDATE task_commands (.+) WHERE command_id = \$1 AND tenant_id = \$4`).
-		WithArgs(commandID, "acknowledged", "", tenantID).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`FROM machines WHERE tenant_id = \$1 AND mqtt_topic = \$2`).
+		WithArgs(tenantID, topic).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id", "code", "name"}).
+			AddRow(machineID, tenantID, "M1", "Machine 1"))
 	mock.ExpectCommit()
 
-	if err := store.UpdateCommandStatus(ctx, commandID, "acknowledged", ""); err != nil {
+	m, err := ledger.ResolveAckMachine(context.Background(), topic, "M1")
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if m == nil || m.ID != machineID || m.TenantID != tenantID {
+		t.Fatalf("expected machine %s of tenant %s, got %+v", machineID, tenantID, m)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-func TestStore_AckPath_WithoutTopicTenantFails(t *testing.T) {
+func TestLedger_ResolveAckMachine_UnknownTenantTouchesNoMachine(t *testing.T) {
 	db, mock := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	store := newStoreWithDB(db)
+	ledger := NewCommandLedger(newStoreWithDB(db))
 
-	err := store.UpdateCommandStatus(context.Background(), uuid.New(), "acknowledged", "")
-	if !errors.Is(err, ErrNoTenant) {
-		t.Fatalf("expected ErrNoTenant, got %v", err)
+	mock.ExpectQuery(`SELECT id FROM tenants WHERE slug = \$1`).WithArgs("nobody").
+		WillReturnError(sql.ErrNoRows)
+
+	m, err := ledger.ResolveAckMachine(context.Background(), "nobody/site/area/line/M1", "M1")
+	if err != nil || m != nil {
+		t.Fatalf("expected nil, nil for an unknown tenant; got %+v, %v", m, err)
 	}
-	info, err := store.GetMachineInfoByCode(context.Background(), "M1")
-	if err != nil || info != nil {
-		t.Fatalf("expected nil, nil without a tenant; got %+v, %v", info, err)
-	}
+	// No transaction and no machines query: an unknown tenant never reaches
+	// tenant data.
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unexpected database calls: %v", err)
 	}

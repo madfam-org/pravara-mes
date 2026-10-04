@@ -173,6 +173,20 @@ func RunInTenantTx(ctx context.Context, pool *sql.DB, tenantID string, fn func(c
 	return runScope(sctx, s, fn)
 }
 
+// RunInOwnTenantTx runs fn in a separate transaction for tenantID that
+// commits when fn returns nil, independently of any scope already carried by
+// ctx (the new scope shadows it). Use it for writes that must be durable
+// before a side effect outside the database, such as appending a machine
+// command to the dispatch stream, and that must survive a rollback of the
+// surrounding request. When q is not a TenantDB (unit tests on a *sql.DB) fn
+// runs directly on ctx.
+func RunInOwnTenantTx(ctx context.Context, q Querier, tenantID string, fn func(ctx context.Context) error) error {
+	if t, ok := q.(*TenantDB); ok {
+		return RunInTenantTx(ctx, t.pool, tenantID, fn)
+	}
+	return fn(ctx)
+}
+
 // RunInSystemScope runs fn in a READ ONLY transaction that may read the
 // cross-tenant discovery policies of migration 028 (outbox and webhook
 // queues, API-key lookup by hash). purpose names the caller for logs and

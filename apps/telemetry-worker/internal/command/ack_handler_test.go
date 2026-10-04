@@ -23,37 +23,6 @@ func (m *MockAckPublisher) PublishCommandAck(ctx context.Context, tenantID, mach
 	return args.Error(0)
 }
 
-// MockAckStore is a mock implementation of AckStore.
-type MockAckStore struct {
-	mock.Mock
-}
-
-func (m *MockAckStore) GetMachineByCode(ctx context.Context, code string) (*MachineInfo, error) {
-	args := m.Called(ctx, code)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*MachineInfo), args.Error(1)
-}
-
-func (m *MockAckStore) UpdateCommandStatus(ctx context.Context, commandID uuid.UUID, status string, message string) error {
-	args := m.Called(ctx, commandID, status, message)
-	return args.Error(0)
-}
-
-func (m *MockAckStore) GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error) {
-	args := m.Called(ctx, commandID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*TaskCommandInfo), args.Error(1)
-}
-
-func (m *MockAckStore) UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error {
-	args := m.Called(ctx, taskID, newStatus, completedAt)
-	return args.Error(0)
-}
-
 func TestBuildAckTopic(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -126,6 +95,11 @@ func TestExtractMachineCode(t *testing.T) {
 			topic:    "a/b/c/d/machine/ack",
 			expected: "machine",
 		},
+		{
+			name:     "not an ack topic",
+			topic:    "a/b/c/d/machine/temperature",
+			expected: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -148,19 +122,6 @@ func TestAckHandler_NewAckHandler(t *testing.T) {
 	assert.NotNil(t, handler)
 	assert.NotNil(t, handler.log)
 	assert.Equal(t, "madfam/+/+/+/+/+", handler.topicRoot)
-}
-
-func TestAckHandler_SetStore(t *testing.T) {
-	log := logrus.New()
-	mockPublisher := new(MockAckPublisher)
-	mockClient := &MockMQTTClient{}
-	mockStore := new(MockAckStore)
-
-	handler := NewAckHandler(mockClient, mockPublisher, log, "madfam/+/+/+/+/+")
-	handler.SetStore(mockStore)
-
-	// Verify store was set (indirectly through behavior)
-	assert.NotNil(t, handler)
 }
 
 func TestAckHandler_Stop(t *testing.T) {
