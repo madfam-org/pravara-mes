@@ -106,6 +106,14 @@ jobs:
           args: --timeout=5m --issues-exit-code=0
           working-directory: packages/sdk-go
 
+      - name: Run golangci-lint (sparkplug)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.1
+          # Advisory like the other modules (see above).
+          args: --timeout=5m --issues-exit-code=0
+          working-directory: packages/sparkplug
+
   # ===========================================================================
   # Go Testing with Database
   # ===========================================================================
@@ -162,7 +170,7 @@ jobs:
           # go.work uses per-module `use (...)` layout, so `./...` from repo
           # root doesn't resolve. Iterate each workspace module explicitly.
           set -e
-          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go packages/sparkplug; do
             echo "=== go test $mod ==="
             (cd "$mod" && go test ./... -v -race -cover -coverprofile=coverage.out)
           done
