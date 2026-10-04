@@ -58,27 +58,14 @@ func AuthMiddleware(verifier *auth.OIDCVerifier, database *db.DB, log *logrus.Lo
 			return
 		}
 
-		// Set tenant ID in database session for RLS
-		if err := database.SetTenantID(claims.TenantID); err != nil {
-			log.WithError(err).Error("Failed to set tenant ID in database")
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"error":   "internal_error",
-				"message": "Failed to establish tenant context",
-			})
-			return
-		}
-
 		// Store claims in context
 		c.Set(string(ContextKeyClaims), claims)
 		c.Set(string(ContextKeyTenantID), claims.TenantID)
 		c.Set(string(ContextKeyUserID), claims.Subject)
 
-		c.Next()
-
-		// Clean up tenant context after request
-		if err := database.ClearTenantID(); err != nil {
-			log.WithError(err).Warn("Failed to clear tenant ID from database")
-		}
+		// Every statement of this request runs in one transaction bound to
+		// the token's tenant (set_config(..., true) inside the transaction).
+		runInTenantScope(c, database, claims.TenantID, log)
 	}
 }
 

@@ -155,11 +155,14 @@ func main() {
 		}
 	}
 
+	// Repositories run every statement inside a tenant-scoped transaction.
+	tdb := database.Tenant(log)
+
 	// Initialize new repositories for external data consumer features
-	outboxRepo := repositories.NewOutboxRepository(database.DB)
-	webhookRepo := repositories.NewWebhookRepository(database.DB)
-	apikeyRepo := repositories.NewAPIKeyRepository(database.DB)
-	feedRepo := repositories.NewFeedRepository(database.DB)
+	outboxRepo := repositories.NewOutboxRepository(tdb)
+	webhookRepo := repositories.NewWebhookRepository(tdb)
+	apikeyRepo := repositories.NewAPIKeyRepository(tdb)
+	feedRepo := repositories.NewFeedRepository(tdb)
 
 	// Attach outbox persistence to the publisher. Every business event that
 	// handlers and services publish (task/order/machine lifecycle, commands,
@@ -212,6 +215,7 @@ func main() {
 
 	// Background: webhook dispatcher
 	webhookDispatcher := services.NewWebhookDispatcher(outboxRepo, webhookRepo, cfg.Webhooks, log)
+	webhookDispatcher.UseTenantScopes(database.DB)
 	go webhookDispatcher.Start(ctx)
 
 	// Background: health recorder

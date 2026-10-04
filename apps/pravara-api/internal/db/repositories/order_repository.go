@@ -16,11 +16,11 @@ import (
 
 // OrderRepository handles order database operations.
 type OrderRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOrderRepository creates a new order repository.
-func NewOrderRepository(db *sql.DB) *OrderRepository {
+func NewOrderRepository(db DBTX) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 
@@ -46,9 +46,9 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 		       status, priority, due_date, total_amount, currency,
 		       shipping_address, metadata, created_at, updated_at
 		FROM orders
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM orders WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM orders WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -160,7 +160,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 		       status, priority, due_date, total_amount, currency,
 		       shipping_address, metadata, created_at, updated_at
 		FROM orders
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	var order types.Order
@@ -262,7 +262,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 			currency = $8,
 			shipping_address = $9,
 			metadata = $10
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -294,7 +294,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 // This is more efficient than a full Update when only the status changes.
 // Returns an error if the order is not found.
 func (r *OrderRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status types.OrderStatus) error {
-	query := `UPDATE orders SET status = $2 WHERE id = $1`
+	query := `UPDATE orders SET status = $2 WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id, status)
 	if err != nil {
@@ -325,7 +325,7 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 		       status, priority, due_date, total_amount, currency,
 		       shipping_address, metadata, created_at, updated_at
 		FROM orders
-		WHERE external_id = $1
+		WHERE external_id = $1 AND ` + tenantMatch + `
 	`
 
 	var order types.Order
@@ -396,7 +396,7 @@ func marshalNullableJSON(m map[string]any) []byte {
 func (r *OrderRepository) MarkInProgressIfStarted(ctx context.Context, orderID uuid.UUID) (types.OrderStatus, bool, error) {
 	query := `
 		WITH prev AS (
-			SELECT id, status FROM orders WHERE id = $1 FOR UPDATE
+			SELECT id, status FROM orders WHERE id = $1 AND ` + tenantMatch + ` FOR UPDATE
 		)
 		UPDATE orders o
 		SET status = 'in_progress'
@@ -426,7 +426,7 @@ func (r *OrderRepository) MarkInProgressIfStarted(ctx context.Context, orderID u
 func (r *OrderRepository) CompleteIfAllTasksDone(ctx context.Context, orderID uuid.UUID) (types.OrderStatus, bool, error) {
 	query := `
 		WITH prev AS (
-			SELECT id, status FROM orders WHERE id = $1 FOR UPDATE
+			SELECT id, status FROM orders WHERE id = $1 AND ` + tenantMatch + ` FOR UPDATE
 		)
 		UPDATE orders o
 		SET status = 'completed'

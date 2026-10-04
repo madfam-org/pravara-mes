@@ -7,6 +7,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 )
@@ -36,17 +37,11 @@ func NewConnection(cfg config.DatabaseConfig) (*DB, error) {
 	return &DB{db}, nil
 }
 
-// SetTenantID sets the current tenant ID for Row-Level Security.
-// This should be called at the beginning of each request.
-func (db *DB) SetTenantID(tenantID string) error {
-	_, err := db.Exec(fmt.Sprintf("SET app.current_tenant_id = '%s'", tenantID))
-	return err
-}
-
-// ClearTenantID clears the current tenant ID setting.
-func (db *DB) ClearTenantID() error {
-	_, err := db.Exec("RESET app.current_tenant_id")
-	return err
+// Tenant returns a handle that runs every statement inside the tenant or
+// system scope carried by the statement's context (see tenant_scope.go).
+// Repositories are built on it; a statement without a scope fails.
+func (db *DB) Tenant(log *logrus.Logger) *TenantDB {
+	return NewTenantDB(db.DB, log)
 }
 
 // Health checks database connectivity.

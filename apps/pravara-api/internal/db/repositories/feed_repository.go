@@ -68,11 +68,11 @@ type SocialHighlight struct {
 
 // FeedRepository handles optimized feed aggregate queries.
 type FeedRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewFeedRepository creates a new feed repository.
-func NewFeedRepository(db *sql.DB) *FeedRepository {
+func NewFeedRepository(db DBTX) *FeedRepository {
 	return &FeedRepository{db: db}
 }
 
@@ -86,7 +86,7 @@ func NewFeedRepository(db *sql.DB) *FeedRepository {
 func (r *FeedRepository) GetCRMOrders(ctx context.Context, limit, offset int) ([]CRMOrder, int, error) {
 	var total int
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM orders WHERE status NOT IN ('cancelled', 'shipped')`,
+		`SELECT COUNT(*) FROM orders WHERE status NOT IN ('cancelled', 'shipped') AND `+tenantMatch,
 	).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count CRM orders: %w", err)
@@ -112,7 +112,7 @@ func (r *FeedRepository) GetCRMOrders(ctx context.Context, limit, offset int) ([
 			FROM tasks
 			GROUP BY order_id
 		) t ON t.order_id = o.id
-		WHERE o.status NOT IN ('cancelled', 'shipped')
+		WHERE o.status NOT IN ('cancelled', 'shipped') AND `+tenantMatchOn("o")+`
 		ORDER BY o.priority DESC, o.due_date ASC NULLS LAST
 		LIMIT $1 OFFSET $2`,
 		limit, offset,
@@ -181,7 +181,7 @@ func (r *FeedRepository) GetCRMOrderStatus(ctx context.Context, orderID uuid.UUI
 			FROM tasks
 			GROUP BY order_id
 		) t ON t.order_id = o.id
-		WHERE o.id = $1`,
+		WHERE o.id = $1 AND `+tenantMatchOn("o"),
 		orderID,
 	).Scan(&s.ID, &s.Status, &s.TotalTasks, &s.CompletedTasks, &s.ProgressPercent, &s.LastUpdatedAt)
 	if err == sql.ErrNoRows {
@@ -201,7 +201,7 @@ func (r *FeedRepository) GetSocialMilestones(ctx context.Context, limit int) ([]
 		WHERE event_type IN (
 			'task.completed', 'order.status_changed',
 			'genealogy.sealed', 'product.imported_from_yantra4d'
-		)
+		) AND `+tenantMatch+`
 		ORDER BY created_at DESC
 		LIMIT $1`,
 		limit,
@@ -237,7 +237,7 @@ func (r *FeedRepository) GetSocialStats(ctx context.Context) (*SocialStats, erro
 
 	// Machines currently running
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM machines WHERE status = 'running'`,
+		`SELECT COUNT(*) FROM machines WHERE status = 'running' AND `+tenantMatch,
 	).Scan(&stats.MachinesRunning)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count running machines: %w", err)
@@ -249,7 +249,7 @@ func (r *FeedRepository) GetSocialStats(ctx context.Context) (*SocialStats, erro
 			COUNT(*) FILTER (WHERE updated_at >= CURRENT_DATE),
 			COUNT(*) FILTER (WHERE updated_at >= date_trunc('week', CURRENT_DATE)),
 			COUNT(*) FILTER (WHERE updated_at >= date_trunc('month', CURRENT_DATE))
-		FROM orders WHERE status IN ('shipped', 'completed')`,
+		FROM orders WHERE status IN ('shipped', 'completed') AND `+tenantMatch,
 	).Scan(&stats.OrdersCompletedDay, &stats.OrdersCompletedWeek, &stats.OrdersCompletedMonth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count completed orders: %w", err)
@@ -259,7 +259,7 @@ func (r *FeedRepository) GetSocialStats(ctx context.Context) (*SocialStats, erro
 	var avgOEE sql.NullFloat64
 	err = r.db.QueryRowContext(ctx,
 		`SELECT AVG(oee) FROM oee_snapshots
-		 WHERE snapshot_date = CURRENT_DATE`,
+		 WHERE snapshot_date = CURRENT_DATE AND `+tenantMatch,
 	).Scan(&avgOEE)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to get average OEE: %w", err)
@@ -279,7 +279,7 @@ func (r *FeedRepository) GetSocialHighlights(ctx context.Context, limit int) ([]
 		WHERE event_type IN (
 			'analytics.oee_updated', 'order.status_changed',
 			'genealogy.sealed', 'task.completed'
-		)
+		) AND `+tenantMatch+`
 		ORDER BY created_at DESC
 		LIMIT $1`,
 		limit,

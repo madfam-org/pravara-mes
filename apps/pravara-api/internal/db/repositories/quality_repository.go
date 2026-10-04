@@ -16,11 +16,11 @@ import (
 
 // QualityCertificateRepository handles quality certificate database operations.
 type QualityCertificateRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewQualityCertificateRepository creates a new quality certificate repository.
-func NewQualityCertificateRepository(db *sql.DB) *QualityCertificateRepository {
+func NewQualityCertificateRepository(db DBTX) *QualityCertificateRepository {
 	return &QualityCertificateRepository{db: db}
 }
 
@@ -50,9 +50,9 @@ func (r *QualityCertificateRepository) List(ctx context.Context, filter QualityC
 		       issued_by, approved_by, approved_at, document_url,
 		       metadata, created_at, updated_at
 		FROM quality_certificates
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM quality_certificates WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM quality_certificates WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -162,7 +162,7 @@ func (r *QualityCertificateRepository) GetByID(ctx context.Context, id uuid.UUID
 		       issued_by, approved_by, approved_at, document_url,
 		       metadata, created_at, updated_at
 		FROM quality_certificates
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -229,7 +229,7 @@ func (r *QualityCertificateRepository) Update(ctx context.Context, cert *types.Q
 			approved_at = $9,
 			document_url = $10,
 			metadata = $11
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -255,7 +255,7 @@ func (r *QualityCertificateRepository) Update(ctx context.Context, cert *types.Q
 // This is a hard delete - the certificate record is not recoverable.
 // Returns an error if the certificate is not found.
 func (r *QualityCertificateRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM quality_certificates WHERE id = $1`
+	query := `DELETE FROM quality_certificates WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -340,11 +340,11 @@ func scanQualityCertificate(scanner interface {
 
 // InspectionRepository handles inspection database operations.
 type InspectionRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewInspectionRepository creates a new inspection repository.
-func NewInspectionRepository(db *sql.DB) *InspectionRepository {
+func NewInspectionRepository(db DBTX) *InspectionRepository {
 	return &InspectionRepository{db: db}
 }
 
@@ -372,9 +372,9 @@ func (r *InspectionRepository) List(ctx context.Context, filter InspectionFilter
 		       notes, checklist, certificate_id, metadata,
 		       created_at, updated_at
 		FROM inspections
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM inspections WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM inspections WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -476,7 +476,7 @@ func (r *InspectionRepository) GetByID(ctx context.Context, id uuid.UUID) (*type
 		       notes, checklist, certificate_id, metadata,
 		       created_at, updated_at
 		FROM inspections
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -542,7 +542,7 @@ func (r *InspectionRepository) Update(ctx context.Context, inspection *types.Ins
 			checklist = $7,
 			certificate_id = $8,
 			metadata = $9
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -569,7 +569,7 @@ func (r *InspectionRepository) Update(ctx context.Context, inspection *types.Ins
 // This is a hard delete - the inspection record is not recoverable.
 // Returns an error if the inspection is not found.
 func (r *InspectionRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM inspections WHERE id = $1`
+	query := `DELETE FROM inspections WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -646,11 +646,11 @@ func scanInspection(scanner interface {
 
 // BatchLotRepository handles batch lot database operations.
 type BatchLotRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewBatchLotRepository creates a new batch lot repository.
-func NewBatchLotRepository(db *sql.DB) *BatchLotRepository {
+func NewBatchLotRepository(db DBTX) *BatchLotRepository {
 	return &BatchLotRepository{db: db}
 }
 
@@ -676,9 +676,9 @@ func (r *BatchLotRepository) List(ctx context.Context, filter BatchLotFilter) ([
 		       supplier_name, supplier_lot_number, purchase_order,
 		       status, order_id, metadata, created_at, updated_at
 		FROM batch_lots
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM batch_lots WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM batch_lots WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -764,7 +764,7 @@ func (r *BatchLotRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.
 		       supplier_name, supplier_lot_number, purchase_order,
 		       status, order_id, metadata, created_at, updated_at
 		FROM batch_lots
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -827,7 +827,7 @@ func (r *BatchLotRepository) Update(ctx context.Context, lot *types.BatchLot) er
 			purchase_order = $11,
 			status = $12,
 			metadata = $13
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -852,7 +852,7 @@ func (r *BatchLotRepository) Update(ctx context.Context, lot *types.BatchLot) er
 
 // Delete removes a batch lot.
 func (r *BatchLotRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM batch_lots WHERE id = $1`
+	query := `DELETE FROM batch_lots WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {

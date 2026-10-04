@@ -58,7 +58,7 @@ func handleGetActiveLayout(database *db.DB, log *logrus.Logger) gin.HandlerFunc 
 			UpdatedAt        string          `json:"updated_at"`
 		}
 
-		err := database.DB.QueryRow(query, tenantID).Scan(
+		err := database.Tenant(log).QueryRowContext(c.Request.Context(), query, tenantID).Scan(
 			&layout.ID, &layout.TenantID, &layout.Name, &layout.Description,
 			&layout.FloorPlan, &layout.MachinePositions, &layout.CameraPresets,
 			&layout.LightingConfig, &layout.GridSettings, &layout.Zones,

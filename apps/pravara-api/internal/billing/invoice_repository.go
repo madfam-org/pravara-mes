@@ -7,15 +7,21 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
+
+// Querier is the statement handle the repository uses (a *db.TenantDB in
+// production, a *sql.DB in unit tests).
+type Querier = db.Querier
 
 // InvoiceRepository provides CRUD operations for invoices.
 type InvoiceRepository struct {
-	db *sql.DB
+	db Querier
 }
 
 // NewInvoiceRepository creates a new InvoiceRepository.
-func NewInvoiceRepository(db *sql.DB) *InvoiceRepository {
+func NewInvoiceRepository(db Querier) *InvoiceRepository {
 	return &InvoiceRepository{db: db}
 }
 
