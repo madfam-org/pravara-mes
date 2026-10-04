@@ -14,6 +14,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [README «Related repositories / contracts»](../README.md#related-repositories--contracts) | Cross-repo contracts, linked to the other side's doc |
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
 | [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
+| [operations/fabrication-dispatch.md](./operations/fabrication-dispatch.md) | Matchmaking, dispatch (render → slice → start_job) and the passport updater |
 | [deploy/edge/README.md](../deploy/edge/README.md) | Site box kit: machine adapter as the Sparkplug B edge node |
 | [packages/sparkplug/README.md](../packages/sparkplug/README.md) | Sparkplug B namespace, metrics, commands and ACL (MES-1) |
 
@@ -37,6 +38,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Webhooks (inbound) | `/v1/webhooks/{cotiza,dhanam,forgesight,tezca}` | Signed inbound events; the Cotiza contract has drifted (see README «Related repositories / contracts») |
 | Webhook subscriptions | `/v1/webhooks/subscriptions` | Outbound webhooks, signed `X-Pravara-Signature` |
 | Yantra4D Import | `/v1/import/yantra4d` | Hyperobject import from Yantra4D |
+| Fabrication dispatch | `/v1/match`, `/v1/dispatches` | Machine matchmaking (dry run) and dispatch with passport recording |
 
 ## Application READMEs
 
