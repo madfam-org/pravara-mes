@@ -24,6 +24,8 @@ type Config struct {
 	SSE        SSEConfig        `mapstructure:"sse"`
 	CORS       CORSConfig       `mapstructure:"cors"`
 	Orders     OrdersConfig     `mapstructure:"orders"`
+	Commands   CommandsConfig   `mapstructure:"commands"`
+	Liveness   LivenessConfig   `mapstructure:"liveness"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -142,6 +144,7 @@ func Load() (*Config, error) {
 
 	// Set defaults
 	setDefaults(v)
+	setCommandChannelDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -150,6 +153,7 @@ func Load() (*Config, error) {
 
 	// Map environment variables to config keys
 	bindEnvVars(v)
+	bindCommandChannelEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")

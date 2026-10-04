@@ -44,6 +44,24 @@ func inTenantTx(ctx context.Context, db *sql.DB, tenantID uuid.UUID, fn func(tx 
 	return tx.Commit()
 }
 
+// TenantScope runs work inside one tenant's database context. The command
+// ledger writes only through this interface; the production implementation
+// is TxTenantScope, which is inTenantTx.
+type TenantScope interface {
+	WithTenant(ctx context.Context, tenantID uuid.UUID, fn func(tx *sql.Tx) error) error
+}
+
+// TxTenantScope is the TenantScope over inTenantTx: one transaction per call,
+// tenant set with set_config(..., true) as its first statement.
+type TxTenantScope struct {
+	DB *sql.DB
+}
+
+// WithTenant implements TenantScope.
+func (s TxTenantScope) WithTenant(ctx context.Context, tenantID uuid.UUID, fn func(tx *sql.Tx) error) error {
+	return inTenantTx(ctx, s.DB, tenantID, fn)
+}
+
 // tenantResolver maps a topic tenant segment (tenant UUID or slug) to a
 // tenant id, caching hits and misses briefly so unknown segments cannot turn
 // every message into a database lookup.

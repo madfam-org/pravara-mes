@@ -671,11 +671,14 @@ func TestMachineRepository_GetOfflineMachines(t *testing.T) {
 			nil, time.Now(), time.Now(),
 		)
 
-	mock.ExpectQuery("SELECT id, tenant_id.*FROM machines.*WHERE status = 'online'").
-		WithArgs(sqlmock.AnyArg()).
+	// The tenant transaction is opened by the caller (db.RunInTenantTx);
+	// the query binds the tenant explicitly and also carries tenantMatch.
+	tenantID := uuid.New()
+	mock.ExpectQuery("SELECT id, tenant_id.*FROM machines.*WHERE tenant_id = \\$1.*status = 'online'.*app.current_tenant_id").
+		WithArgs(tenantID, sqlmock.AnyArg()).
 		WillReturnRows(rows)
 
-	machines, err := repo.GetOfflineMachines(context.Background(), threshold)
+	machines, err := repo.GetOfflineMachines(context.Background(), tenantID, threshold)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

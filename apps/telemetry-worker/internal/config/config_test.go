@@ -166,3 +166,38 @@ func clearEnvVars() {
 		os.Unsetenv(env)
 	}
 }
+
+func TestConfig_Load_CommandStreamDefaults(t *testing.T) {
+	clearEnvVars()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	c := cfg.Command
+	if c.StreamKey != "pravara:commands" || c.ConsumerGroup != "telemetry-worker" {
+		t.Errorf("stream defaults: got key=%q group=%q", c.StreamKey, c.ConsumerGroup)
+	}
+	if c.ConsumerName == "" {
+		t.Error("consumer name must default to the host name")
+	}
+	if c.MaxAttempts != 3 || c.RetryIdle().Seconds() != 30 || c.AckTimeout().Seconds() != 120 ||
+		c.DispatchTimeout().Seconds() != 600 || c.SweepInterval().Seconds() != 15 {
+		t.Errorf("unexpected command timing defaults: %+v", c)
+	}
+}
+
+func TestConfig_Load_CommandStreamFromEnv(t *testing.T) {
+	clearEnvVars()
+	t.Setenv("PRAVARA_COMMAND_ACK_TIMEOUT_SECONDS", "45")
+	t.Setenv("PRAVARA_COMMAND_MAX_ATTEMPTS", "5")
+	t.Setenv("PRAVARA_COMMAND_STREAM_KEY", "staging:commands")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	if cfg.Command.AckTimeoutSeconds != 45 || cfg.Command.MaxAttempts != 5 || cfg.Command.StreamKey != "staging:commands" {
+		t.Errorf("env overrides not applied: %+v", cfg.Command)
+	}
+}

@@ -13,47 +13,22 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/tenantctx"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/observability"
 )
 
 // AckHandler handles command acknowledgments from machines via MQTT.
+//
+// An ack is bound to the machine its topic belongs to: it only changes a
+// command that was issued to that machine, inside that machine's tenant.
 type AckHandler struct {
 	mqttClient mqtt.Client
 	publisher  AckPublisher
-	store      AckStore
+	ledger     AckLedger
+	hook       JobCompletionHook
 	log        *logrus.Logger
 	topicRoot  string
 	mu         sync.RWMutex
 	closed     bool
-}
-
-// AckStore defines the interface for looking up command and machine information.
-type AckStore interface {
-	// GetMachineByCode retrieves machine info by its code.
-	GetMachineByCode(ctx context.Context, code string) (*MachineInfo, error)
-	// UpdateCommandStatus updates the status of a command.
-	UpdateCommandStatus(ctx context.Context, commandID uuid.UUID, status string, message string) error
-	// GetTaskCommandByCommandID retrieves task command info by command ID.
-	GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error)
-	// UpdateTaskStatusOnJobComplete updates task status when a job completes.
-	UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error
-}
-
-// TaskCommandInfo contains task command information for job completion handling.
-type TaskCommandInfo struct {
-	ID          uuid.UUID
-	TaskID      uuid.UUID
-	TenantID    uuid.UUID
-	MachineID   uuid.UUID
-	CommandType string
-}
-
-// MachineInfo contains the information needed to process acks.
-type MachineInfo struct {
-	ID       uuid.UUID
-	TenantID uuid.UUID
-	Code     string
-	Name     string
 }
 
 // NewAckHandler creates a new acknowledgment handler.
@@ -66,11 +41,19 @@ func NewAckHandler(mqttClient mqtt.Client, publisher AckPublisher, log *logrus.L
 	}
 }
 
-// SetStore sets the store for machine lookups.
-func (h *AckHandler) SetStore(store AckStore) {
+// SetLedger sets the command ledger used to apply acks.
+func (h *AckHandler) SetLedger(ledger AckLedger) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.store = store
+	h.ledger = ledger
+}
+
+// SetCompletionHook registers the hook called after each committed job
+// completion (production genealogy / product passport recording).
+func (h *AckHandler) SetCompletionHook(hook JobCompletionHook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.hook = hook
 }
 
 // Start subscribes to ack topics and begins processing.
@@ -82,10 +65,7 @@ func (h *AckHandler) Start(ctx context.Context) error {
 	}
 	h.mu.Unlock()
 
-	// Subscribe to ack topics using wildcard
 	// Format: {tenant}/{site}/{area}/{line}/{machine}/ack
-	// The topic root is typically: madfam/+/+/+/+/+ (for telemetry)
-	// We want: {tenant}/+/+/+/+/ack
 	ackTopic := buildAckTopic(h.topicRoot)
 
 	token := h.mqttClient.Subscribe(ackTopic, 1, h.handleAckMessage)
@@ -102,19 +82,12 @@ func (h *AckHandler) Start(ctx context.Context) error {
 
 // buildAckTopic constructs the ack topic pattern from the telemetry topic root.
 func buildAckTopic(topicRoot string) string {
-	// Remove trailing wildcards and rebuild for acks
-	// Input: "madfam/+/+/+/+/+" or "madfam/#"
-	// Output: "madfam/+/+/+/+/ack"
+	// Input: "madfam/+/+/+/+/+" or "madfam/#"; output: "madfam/+/+/+/+/ack"
 	if topicRoot == "" {
 		return "+/+/+/+/+/ack"
 	}
 
 	parts := strings.Split(topicRoot, "/")
-	if len(parts) == 0 {
-		return "+/+/+/+/+/ack"
-	}
-
-	// Take the first part (org/tenant) and build ack pattern
 	tenant := parts[0]
 	if tenant == "" || tenant == "+" || tenant == "#" {
 		tenant = "+"
@@ -123,159 +96,145 @@ func buildAckTopic(topicRoot string) string {
 	return fmt.Sprintf("%s/+/+/+/+/ack", tenant)
 }
 
-// handleAckMessage processes an acknowledgment message from a machine.
-func (h *AckHandler) handleAckMessage(client mqtt.Client, msg mqtt.Message) {
+// handleAckMessage is the paho callback for ack topics.
+func (h *AckHandler) handleAckMessage(_ mqtt.Client, msg mqtt.Message) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	h.ProcessAck(ctx, msg.Topic(), msg.Payload())
+}
+
+// ProcessAck applies one ack message received on topic. It returns the
+// disposition for observability and tests.
+func (h *AckHandler) ProcessAck(ctx context.Context, topic string, payload []byte) AckDisposition {
 	h.mu.RLock()
 	if h.closed {
 		h.mu.RUnlock()
-		return
+		return ""
 	}
-	store := h.store
+	ledger := h.ledger
 	publisher := h.publisher
+	hook := h.hook
 	h.mu.RUnlock()
 
-	log := h.log.WithField("topic", msg.Topic())
+	log := h.log.WithField("topic", topic)
 
-	// Parse the ack payload
 	var ack CommandAck
-	if err := json.Unmarshal(msg.Payload(), &ack); err != nil {
+	if err := json.Unmarshal(payload, &ack); err != nil {
 		log.WithError(err).Debug("Failed to parse ack payload")
-		return
+		observability.CommandAcks.WithLabelValues("invalid").Inc()
+		return "invalid"
 	}
-
-	// Set timestamp if not provided
 	if ack.Timestamp.IsZero() {
 		ack.Timestamp = time.Now().UTC()
 	}
 
-	// Parse command ID
 	commandID, err := uuid.Parse(ack.CommandID)
 	if err != nil {
-		log.WithError(err).WithField("command_id", ack.CommandID).Debug("Invalid command ID in ack")
-		return
+		log.WithField("command_id", ack.CommandID).Debug("Invalid command ID in ack")
+		observability.CommandAcks.WithLabelValues("invalid").Inc()
+		return "invalid"
+	}
+
+	topicBase, machineCode := splitAckTopic(topic)
+	if machineCode == "" {
+		log.Debug("Could not extract machine code from ack topic")
+		observability.CommandAcks.WithLabelValues("invalid").Inc()
+		return "invalid"
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"command_id": commandID,
-		"success":    ack.Success,
+		"command_id":   commandID,
+		"machine_code": machineCode,
+		"success":      ack.Success,
 	})
 
-	// Extract machine code from topic
-	// Format: {tenant}/{site}/{area}/{line}/{machine}/ack
-	machineCode := extractMachineCode(msg.Topic())
-	if machineCode == "" {
-		log.Debug("Could not extract machine code from topic")
-		return
+	if ledger == nil {
+		log.Warn("Ack received but no command ledger is configured")
+		return ""
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	// The store scopes every statement to the topic's tenant segment.
-	ctx = tenantctx.WithTopicSegment(ctx, tenantctx.SegmentOf(msg.Topic()))
+	machine, err := ledger.ResolveAckMachine(ctx, topicBase, machineCode)
+	if err != nil {
+		log.WithError(err).Warn("Failed to resolve ack machine")
+		return ""
+	}
+	if machine == nil {
+		log.Warn("Ack from an unknown machine topic dropped")
+		observability.CommandAcks.WithLabelValues("unknown_machine").Inc()
+		return "unknown_machine"
+	}
 
-	// Look up machine to get tenant ID
-	var tenantID, machineID uuid.UUID
-	if store != nil {
-		machine, err := store.GetMachineByCode(ctx, machineCode)
-		if err != nil {
-			log.WithError(err).WithField("machine_code", machineCode).Warn("Failed to lookup machine")
-			return
-		}
-		if machine != nil {
-			tenantID = machine.TenantID
-			machineID = machine.ID
+	outcome, err := ledger.ApplyAck(ctx, AckApplication{
+		CommandID:    commandID,
+		Machine:      *machine,
+		Success:      ack.Success,
+		JobCompleted: ack.JobCompleted,
+		Message:      ack.Message,
+		AckedAt:      ack.Timestamp,
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to apply command ack")
+		return ""
+	}
+
+	observability.CommandAcks.WithLabelValues(string(outcome.Disposition)).Inc()
+
+	switch outcome.Disposition {
+	case AckApplied:
+	case AckMachineMismatch:
+		log.WithField("machine_id", machine.ID).Warn("Ack dropped: command was issued to a different machine")
+		return outcome.Disposition
+	case AckUnknownCommand:
+		log.WithField("machine_id", machine.ID).Warn("Ack dropped: no such command for this machine's tenant")
+		return outcome.Disposition
+	default:
+		log.WithField("disposition", outcome.Disposition).Info("Ack ignored")
+		return outcome.Disposition
+	}
+
+	if outcome.Completion != nil && hook != nil {
+		if err := hook.OnJobCompleted(ctx, *outcome.Completion); err != nil {
+			observability.CommandCompletionHookErrors.Inc()
+			log.WithError(err).Error("Job completion hook failed")
 		}
 	}
 
-	// Update command status if we have a store
-	if store != nil {
-		status := "acknowledged"
-		if !ack.Success {
-			status = "failed"
-		}
-		// Mark as completed if job_completed is true
-		if ack.JobCompleted && ack.Success {
-			status = "completed"
-		}
-		if err := store.UpdateCommandStatus(ctx, commandID, status, ack.Message); err != nil {
-			log.WithError(err).Warn("Failed to update command status")
-			// Continue to publish ack event anyway
-		}
-
-		// Handle job completion - update task status
-		if ack.JobCompleted && ack.Success {
-			h.handleJobCompletion(ctx, store, commandID, ack.Timestamp, log)
-		}
-	}
-
-	// Publish ack event to Centrifugo for real-time UI updates
-	if publisher != nil && tenantID != uuid.Nil {
+	// Real-time UI notification (best-effort; the ledger is the record).
+	if publisher != nil {
 		ackData := CommandAckData{
 			CommandID: commandID,
-			MachineID: machineID,
+			MachineID: machine.ID,
 			Success:   ack.Success,
 			Message:   ack.Message,
 			AckedAt:   ack.Timestamp,
 		}
-
-		if err := publisher.PublishCommandAck(ctx, tenantID, machineID, ackData); err != nil {
+		if err := publisher.PublishCommandAck(ctx, machine.TenantID, machine.ID, ackData); err != nil {
 			log.WithError(err).Warn("Failed to publish command ack event")
-			return
 		}
 	}
 
 	log.WithFields(logrus.Fields{
-		"machine_code":  machineCode,
+		"status":        outcome.Status,
 		"job_completed": ack.JobCompleted,
 	}).Info("Command acknowledgment processed")
+	return outcome.Disposition
+}
+
+// splitAckTopic returns the machine's base topic and machine code from an
+// ack topic of the form {tenant}/{site}/{area}/{line}/{machine}/ack.
+func splitAckTopic(topic string) (base, code string) {
+	base = strings.TrimSuffix(topic, AckTopicSuffix)
+	parts := strings.Split(topic, "/")
+	if len(parts) < 6 || base == topic {
+		return "", ""
+	}
+	return base, parts[4]
 }
 
 // extractMachineCode extracts the machine code from an ack topic.
-// Expected format: {tenant}/{site}/{area}/{line}/{machine}/ack
 func extractMachineCode(topic string) string {
-	parts := strings.Split(topic, "/")
-	if len(parts) < 6 {
-		return ""
-	}
-	// Machine code is at index 4 (5th element)
-	return parts[4]
-}
-
-// handleJobCompletion handles task status updates when a job completes successfully.
-func (h *AckHandler) handleJobCompletion(ctx context.Context, store AckStore, commandID uuid.UUID, completedAt time.Time, log *logrus.Entry) {
-	// Look up the task command to find the associated task
-	taskCmd, err := store.GetTaskCommandByCommandID(ctx, commandID)
-	if err != nil {
-		log.WithError(err).Warn("Failed to get task command for job completion")
-		return
-	}
-
-	if taskCmd == nil {
-		// No task associated with this command - that's OK, not all commands are task-driven
-		log.Debug("No task command found for this command - skipping task update")
-		return
-	}
-
-	// Only process start_job completions for task status updates
-	if taskCmd.CommandType != string(CommandStartJob) {
-		log.Debug("Command is not start_job - skipping task status update")
-		return
-	}
-
-	// Move task to quality_check status
-	newStatus := "quality_check"
-	if err := store.UpdateTaskStatusOnJobComplete(ctx, taskCmd.TaskID, newStatus, completedAt); err != nil {
-		log.WithError(err).WithFields(logrus.Fields{
-			"task_id":    taskCmd.TaskID,
-			"new_status": newStatus,
-		}).Error("Failed to update task status on job completion")
-		return
-	}
-
-	log.WithFields(logrus.Fields{
-		"task_id":    taskCmd.TaskID,
-		"new_status": newStatus,
-	}).Info("Task status updated on job completion")
+	_, code := splitAckTopic(topic)
+	return code
 }
 
 // Stop gracefully shuts down the ack handler.

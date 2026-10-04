@@ -133,45 +133,59 @@ func main() {
 		log.WithError(err).Fatal("Failed to start handler")
 	}
 
-	// Initialize and start command dispatcher if enabled
+	// Initialize and start the command channel if enabled: durable stream
+	// dispatch, machine-bound ack handling and the ack deadline sweep, all
+	// recorded in the task_commands ledger.
 	var dispatcher *command.Dispatcher
 	var ackHandler *command.AckHandler
+	var deadlineSweeper *command.DeadlineSweeper
 	if cfg.Command.Enabled && publisher != nil {
+		ledger := db.NewCommandLedger(store)
+
 		dispatcher = command.NewDispatcher(
 			publisher.GetRedisClient(),
-			handler.GetMQTTClient(),
+			command.NewPahoPublisher(handler.GetMQTTClient()),
+			ledger,
+			command.DispatcherConfig{
+				StreamKey:   cfg.Command.StreamKey,
+				Group:       cfg.Command.ConsumerGroup,
+				Consumer:    cfg.Command.ConsumerName,
+				MaxAttempts: cfg.Command.MaxAttempts,
+				RetryIdle:   cfg.Command.RetryIdle(),
+				AckTimeout:  cfg.Command.AckTimeout(),
+			},
 			log,
 		)
-
 		if err := dispatcher.Start(ctx); err != nil {
 			log.WithError(err).Error("Failed to start command dispatcher")
-			// Continue without command dispatch - not fatal
+			dispatcher = nil
 		} else {
 			log.Info("Command dispatcher started")
 		}
 
-		// Initialize and start ack handler for command acknowledgments
 		ackHandler = command.NewAckHandler(
 			handler.GetMQTTClient(),
 			publisher,
 			log,
 			cfg.MQTT.TopicRoot,
 		)
-
-		// Set the store for machine lookups and task updates
-		ackStoreAdapter := db.NewAckStoreAdapter(store)
-		ackHandler.SetStore(ackStoreAdapter)
-
+		ackHandler.SetLedger(ledger)
 		if err := ackHandler.Start(ctx); err != nil {
 			log.WithError(err).Error("Failed to start ack handler")
-			// Continue without ack handling - not fatal
 		} else {
 			log.Info("Command ack handler started")
 		}
+
+		deadlineSweeper = command.NewDeadlineSweeper(ledger, cfg.Command.SweepInterval(), cfg.Command.DispatchTimeout(), log)
+		deadlineSweeper.Start(ctx)
+		log.WithFields(map[string]interface{}{
+			"ack_timeout":      cfg.Command.AckTimeout().String(),
+			"dispatch_timeout": cfg.Command.DispatchTimeout().String(),
+		}).Info("Command deadline sweeper started")
 	} else if !cfg.Command.Enabled {
 		log.Info("Command dispatch disabled by configuration")
 	} else {
-		log.Warn("Command dispatch disabled - Redis publisher not available")
+		log.Error("Command dispatch disabled - Redis publisher not available")
 	}
 
 	log.Info("Telemetry worker is running")
@@ -185,6 +199,10 @@ func main() {
 
 	// Cancel context to stop workers
 	cancel()
+
+	if deadlineSweeper != nil {
+		deadlineSweeper.Stop()
+	}
 
 	// Stop ack handler first
 	if ackHandler != nil {

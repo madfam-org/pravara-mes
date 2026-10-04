@@ -122,7 +122,9 @@ func main() {
 	if cfg.Redis.URL != "" {
 		var err error
 		publisher, err = pubsub.NewPublisher(pubsub.PublisherConfig{
-			RedisURL: cfg.Redis.URL,
+			RedisURL:            cfg.Redis.URL,
+			CommandStreamKey:    cfg.Commands.StreamKey,
+			CommandStreamMaxLen: cfg.Commands.StreamMaxLen,
 		}, log)
 		if err != nil {
 			log.WithError(err).Warn("Failed to connect to Redis for real-time events, continuing without publisher")
@@ -225,6 +227,24 @@ func main() {
 	} else {
 		healthRecorder := services.NewHealthRecorder(database.DB, nil, cfg.Centrifugo, log)
 		go healthRecorder.Start(ctx)
+	}
+
+	// Background: liveness sweep marks machines offline when their
+	// heartbeat goes stale (per tenant, with an outbox event per change).
+	if cfg.Liveness.Enabled {
+		var notifier services.RealtimeNotifier
+		if publisher != nil {
+			notifier = publisher
+		}
+		offlineSweeper := services.NewOfflineSweeper(
+			repositories.NewMachineRepository(tdb),
+			notifier,
+			time.Duration(cfg.Liveness.HeartbeatTimeoutSeconds)*time.Second,
+			time.Duration(cfg.Liveness.SweepIntervalSeconds)*time.Second,
+			log,
+		)
+		offlineSweeper.UseTenantScopes(database.DB)
+		offlineSweeper.Start(ctx)
 	}
 
 	// Create HTTP server

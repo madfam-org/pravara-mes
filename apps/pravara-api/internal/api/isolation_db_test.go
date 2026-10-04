@@ -101,7 +101,9 @@ func TestTenantIsolation_APIKeyPath(t *testing.T) {
 	aMachine := r.aMachine()
 	bMachine := r.createID(r.B, "/v1/machines", map[string]any{"name": "B printer", "code": "B-1", "type": "3d_printer"})
 
-	res := r.do(r.B, http.MethodPost, "/v1/api-keys", map[string]any{"name": "B key"})
+	// The key needs a machine read scope: the route scope matrix refuses
+	// /v1/machines to the default read:events/read:feeds key.
+	res := r.do(r.B, http.MethodPost, "/v1/api-keys", map[string]any{"name": "B key", "scopes": []string{"pravara-mes:read"}})
 	require.Equal(t, http.StatusCreated, res.Code, string(res.Body))
 	var created struct {
 		ID  string `json:"id"`
