@@ -142,6 +142,9 @@ func TestTelemetryIngest_SkipsCommandChannelOverRealBroker(t *testing.T) {
 	}
 	publish("org/site/area/line/m1/cmd", `{"command_id":"`+uuid.NewString()+`","command":"start_job"}`)
 	publish("org/site/area/line/m1/ack", `{"command_id":"`+uuid.NewString()+`","success":true}`)
+	// Sparkplug topics share the wildcard; they belong to the primary host.
+	publish("spBv1.0/org/DDATA/site/m1", `{"metric_type":"temperature","value":1,"unit":"C"}`)
+	publish("spBv1.0/org/DDATA/site/m1/extra", `{"metric_type":"temperature","value":2,"unit":"C"}`)
 	publish("org/site/area/line/m1/temperature", `{"metric_type":"temperature","value":210.5,"unit":"C"}`)
 
 	require.Eventually(t, func() bool {

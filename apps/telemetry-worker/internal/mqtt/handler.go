@@ -155,6 +155,14 @@ func (h *Handler) messageHandler(client mqtt.Client, msg mqtt.Message) {
 	topicRoot := h.cfg.MQTT.TopicRoot
 	observability.MQTTMessagesReceived.WithLabelValues(topicRoot, tenant).Inc()
 
+	// Sparkplug B topics (spBv1.0/...) match the legacy telemetry wildcard
+	// but belong to the primary host (packages/sparkplug/host); they are
+	// never ingested as legacy telemetry.
+	if strings.HasPrefix(topic, sparkplugNamespace+"/") {
+		observability.MQTTControlTopicsSkipped.WithLabelValues("sparkplug").Inc()
+		return
+	}
+
 	// The command channel ({machine_topic}/cmd and {machine_topic}/ack)
 	// shares the telemetry wildcard. Those messages are not telemetry and
 	// must not refresh a machine's heartbeat or online status.
@@ -174,6 +182,9 @@ func (h *Handler) messageHandler(client mqtt.Client, msg mqtt.Message) {
 		Payload: payload,
 	}
 }
+
+// sparkplugNamespace is the Sparkplug B topic namespace (sparkplug.Namespace).
+const sparkplugNamespace = "spBv1.0"
 
 // controlChannel returns "cmd" or "ack" when topic is a machine command
 // channel topic ({tenant}/{site}/{area}/{line}/{machine}/cmd|ack), else "".
