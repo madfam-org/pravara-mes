@@ -126,7 +126,7 @@ func buildRecord(d *repositories.DispatchJob, code string, ev *repositories.Comp
 		GcodeSHA256: slice.GcodeSHA256, MachineID: d.MachineID.String(), MachineCode: code,
 		MaterialClass: sel.MaterialClass, MaterialSlot: sel.MaterialSlot, MaterialLot: sel.MaterialLot,
 		PrinterReportedAt: timeField(ev.Data, "printer_reported_at", "job_reported_at", "reported_at"),
-		BrokerReceivedAt:  timeField(ev.Data, "broker_received_at", "received_at"),
+		BrokerReceivedAt:  timeField(ev.Data, "host_received_at", "broker_received_at", "received_at"),
 		ServerRecordedAt:  ev.CreatedAt.UTC(),
 	}
 	if !bundle.Complete {

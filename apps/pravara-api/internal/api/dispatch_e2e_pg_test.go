@@ -20,10 +20,11 @@ import (
 
 const boxSpecs = `{"bounding_box_mm": {"x": 80, "y": 60, "z": 40}}`
 
-// completeJob does what the telemetry worker's ack path does when the device
-// reports Job/Status = complete for the command (#51 completeTaskJob): the
-// ledger row is completed and task.job_completed is written to the outbox, in
-// one tenant transaction, as pravara_app.
+// completeJob does what the telemetry worker does when the device reports
+// Job/Status = complete for the job of the command (P5-HOST sparkplug store
+// on top of #51's completion path), in one tenant transaction as
+// pravara_app: the ledger row is completed, task.job_completed is written,
+// and machine.job_completed carries the printer and host timestamps.
 func (r *dispatchRig) completeJob(t *testing.T, commandID, machineID, taskID uuid.UUID) {
 	t.Helper()
 	q := db.NewTenantDB(r.app, nil)
@@ -32,14 +33,26 @@ func (r *dispatchRig) completeJob(t *testing.T, commandID, machineID, taskID uui
 			WHERE command_id = $1 AND machine_id = $2`, commandID, machineID); err != nil {
 			return err
 		}
-		payload, _ := json.Marshal(map[string]any{"id": uuid.NewString(), "type": "task.job_completed",
-			"tenant_id": r.tenantID, "timestamp": time.Now().UTC(),
-			"data": map[string]any{"task_id": taskID, "command_id": commandID, "machine_id": machineID,
-				"command_type": "start_job", "status": "completed", "timestamp": time.Now().UTC(),
-				"printer_reported_at": "2026-10-04T10:00:00.250Z", "broker_received_at": "2026-10-04T10:00:00.400Z"}})
-		_, err := q.ExecContext(ctx, `INSERT INTO event_outbox (tenant_id, event_type, channel_namespace, payload)
-			VALUES ($1, 'task.job_completed', 'tasks', $2)`, r.tenantID, payload)
-		return err
+		now := time.Now().UTC()
+		for _, ev := range []struct {
+			typ, ns string
+			data    map[string]any
+		}{
+			{"task.job_completed", "tasks", map[string]any{"task_id": taskID, "command_id": commandID,
+				"machine_id": machineID, "command_type": "start_job", "status": "completed", "timestamp": now}},
+			{"machine.job_completed", "machines", map[string]any{"machine_id": machineID, "machine_code": "voron-01",
+				"edge_node_id": "site-lab", "command_id": commandID, "job_id": taskID.String(), "job_status": "complete",
+				"task_id": taskID, "printer_reported_at": "2026-10-04T10:00:00.25Z",
+				"host_received_at": "2026-10-04T10:00:00.4Z", "recorded_at": now, "bdseq": 3, "seq": 41}},
+		} {
+			payload, _ := json.Marshal(map[string]any{"id": uuid.NewString(), "type": ev.typ, "tenant_id": r.tenantID,
+				"timestamp": now, "data": ev.data})
+			if _, err := q.ExecContext(ctx, `INSERT INTO event_outbox (tenant_id, event_type, channel_namespace, payload)
+				VALUES ($1, $2, $3, $4)`, r.tenantID, ev.typ, ev.ns, payload); err != nil {
+				return err
+			}
+		}
+		return nil
 	}))
 }
 
@@ -110,14 +123,16 @@ func TestDispatchEndToEnd(t *testing.T) {
 	d = r.runUntil(t, created.ID, repositories.DispatchCommandEnqueued)
 	require.NotNil(t, d.CommandID)
 
-	// The ledger row committed before the stream append, without the signed URL.
+	// The ledger row committed before the stream append. It carries the
+	// artifact parameters: the Sparkplug host re-sends unacknowledged DCMDs
+	// from the ledger after a DBIRTH.
 	var ledgerStatus, ledgerParams string
 	var ledgerMachine uuid.UUID
 	require.NoError(t, r.admin.QueryRow(`SELECT status, machine_id, parameters::text FROM task_commands WHERE command_id = $1`,
 		*d.CommandID).Scan(&ledgerStatus, &ledgerMachine, &ledgerParams))
 	assert.Equal(t, "pending", ledgerStatus)
 	assert.Equal(t, voron, ledgerMachine)
-	assert.NotContains(t, ledgerParams, "artifact_url")
+	assert.Contains(t, ledgerParams, "artifact_url")
 	assert.Contains(t, ledgerParams, "artifact_sha256")
 
 	entries, err := r.redis.Stream("pravara:commands")

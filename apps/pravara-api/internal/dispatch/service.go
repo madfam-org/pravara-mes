@@ -39,10 +39,12 @@ import (
 )
 
 // CompletionEventTypes are the outbox event types that signal a completed
-// job. task.job_completed is written in the same transaction that marks the
-// start_job ledger row completed (telemetry-worker ack path, #51); the
-// Sparkplug host reports Job/Status = complete through that path.
-var CompletionEventTypes = []string{"task.job_completed"}
+// job, in order of preference. machine.job_completed is written by the
+// Sparkplug primary host when a device reports Job/Status = complete for a
+// job bound to its start_job command and device; it carries the printer and
+// host timestamps. task.job_completed is written in the same transaction by
+// the ledger's completion path (#51) and is the fallback.
+var CompletionEventTypes = []string{"machine.job_completed", "task.job_completed"}
 
 // Renderer is the yantra4d surface dispatch uses.
 type Renderer interface {

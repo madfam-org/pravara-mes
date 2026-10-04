@@ -439,15 +439,9 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 	}
 	now := s.now()
 	if cmd == nil {
-		ledgerParams := map[string]interface{}{}
-		for k, v := range params {
-			if k != "artifact_url" { // signed URL: a capability, kept out of the ledger
-				ledgerParams[k] = v
-			}
-		}
 		cmd = &repositories.TaskCommand{TenantID: d.TenantID, TaskID: d.TaskID, MachineID: *d.MachineID,
 			CommandID: *d.CommandID, CommandType: string(pubsub.CommandStartJob), Status: "pending",
-			Parameters: ledgerParams, IssuedAt: now} // the actor is on the dispatch record
+			Parameters: params, IssuedAt: now} // the actor is on the dispatch record
 		if err := s.Ledger.CreateDurable(ctx, cmd); err != nil {
 			return retryable("ledger_write_failed", "%v", err)
 		}

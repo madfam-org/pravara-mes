@@ -195,15 +195,16 @@ type CompletionEvent struct {
 	Data      map[string]any
 }
 
-// FindCompletionEvent returns the first outbox event of one of types whose
-// data.command_id is commandID (nil when none yet).
+// FindCompletionEvent returns the outbox event of one of types whose
+// data.command_id is commandID, preferring earlier entries of types (nil
+// when none yet).
 func (s *DispatchSources) FindCompletionEvent(ctx context.Context, types []string, commandID uuid.UUID) (*CompletionEvent, error) {
 	var ev CompletionEvent
 	var payload []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, event_type, created_at, payload FROM event_outbox
 		WHERE event_type = ANY($1) AND payload -> 'data' ->> 'command_id' = $2
-		ORDER BY created_at LIMIT 1`, pq.Array(types), commandID.String()).Scan(&ev.EventID, &ev.Type, &ev.CreatedAt, &payload)
+		ORDER BY array_position($1::text[], event_type::text), created_at LIMIT 1`, pq.Array(types), commandID.String()).Scan(&ev.EventID, &ev.Type, &ev.CreatedAt, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
