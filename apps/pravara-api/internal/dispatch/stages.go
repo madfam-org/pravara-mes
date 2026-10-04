@@ -445,7 +445,7 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 		}
 		cmd = &repositories.TaskCommand{TenantID: d.TenantID, TaskID: d.TaskID, MachineID: *d.MachineID,
 			CommandID: *d.CommandID, CommandType: string(pubsub.CommandStartJob), Status: "pending",
-			Parameters: ledgerParams, IssuedBy: d.RequestedBy, IssuedAt: now}
+			Parameters: ledgerParams, IssuedAt: now} // the actor is on the dispatch record
 		if err := s.Ledger.CreateDurable(ctx, cmd); err != nil {
 			return retryable("ledger_write_failed", "%v", err)
 		}

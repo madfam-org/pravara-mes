@@ -41,7 +41,9 @@ CREATE TABLE dispatch_jobs (
     error_code TEXT,
     error_message TEXT,
     error_retryable BOOLEAN,
-    requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Who asked: the person's id and the actor id (middleware.ActorUUID).
+    -- No users(id) reference: Janua subjects need not have a users row.
+    requested_by UUID,
     requested_by_actor UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
