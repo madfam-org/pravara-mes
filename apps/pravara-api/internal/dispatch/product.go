@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -190,12 +189,4 @@ func fromRemote(code string, err error) *stepError {
 		return retryable(code, "%s", msg)
 	}
 	return terminal(code, "%s", msg)
-}
-
-func asStep(err error) *stepError {
-	var se *stepError
-	if errors.As(err, &se) {
-		return se
-	}
-	return retryable("internal", "%v", fmt.Sprint(err))
 }

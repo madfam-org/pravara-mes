@@ -102,11 +102,11 @@ func TestDispatchEndToEnd(t *testing.T) {
 	// 3. match + reservation → render → slice → start_job.
 	d := r.runUntil(t, created.ID, repositories.DispatchReserved)
 	assert.Equal(t, voron, *d.MachineID)
-	d = r.runUntil(t, created.ID, repositories.DispatchRendered)
+	r.runUntil(t, created.ID, repositories.DispatchRendered)
 	assert.Len(t, r.yantra.Requests, 1)
 	assert.Equal(t, "3mf", r.yantra.Requests[0]["export_format"])
 	assert.Equal(t, float64(40), r.yantra.Requests[0]["parameters"].(map[string]any)["size"])
-	d = r.runUntil(t, created.ID, repositories.DispatchSliced)
+	r.runUntil(t, created.ID, repositories.DispatchSliced)
 	require.Len(t, r.fabprep.Jobs, 1)
 	for _, job := range r.fabprep.Jobs {
 		assert.Equal(t, "klipper-corexy-350-0.4@1", job.Body["printer_profile"])
@@ -163,7 +163,7 @@ func TestDispatchEndToEnd(t *testing.T) {
 	r.completeJob(t, *d.CommandID, voron, task)
 	_, err = r.admin.Exec(`UPDATE dispatch_jobs SET next_attempt_at = NOW() WHERE id = $1`, created.ID)
 	require.NoError(t, err)
-	d = r.runUntil(t, created.ID, repositories.DispatchCompleted)
+	r.runUntil(t, created.ID, repositories.DispatchCompleted)
 	var reserved int
 	require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM machine_reservations WHERE dispatch_id = $1 AND status = 'active'`, created.ID).Scan(&reserved))
 	assert.Zero(t, reserved, "reservation released on completion")
