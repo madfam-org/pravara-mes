@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // OutboxEvent represents an event stored in the outbox.
@@ -34,11 +36,11 @@ type OutboxEventFilter struct {
 
 // OutboxRepository handles event outbox database operations.
 type OutboxRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewOutboxRepository creates a new outbox repository.
-func NewOutboxRepository(db *sql.DB) *OutboxRepository {
+func NewOutboxRepository(db DBTX) *OutboxRepository {
 	return &OutboxRepository{db: db}
 }
 
@@ -52,12 +54,17 @@ func (r *OutboxRepository) InsertEvent(ctx context.Context, tenantID uuid.UUID, 
 		Payload:          payload,
 	}
 
-	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING created_at`,
-		event.ID, event.TenantID, event.EventType, event.ChannelNamespace, event.Payload,
-	).Scan(&event.CreatedAt)
+	// Outbox persistence is best-effort for publishers: inside a request
+	// transaction it runs in a savepoint, so a failed insert does not abort
+	// the caller's own writes.
+	err := db.Savepoint(ctx, r.db, func(q DBTX) error {
+		return q.QueryRowContext(ctx,
+			`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
+			 VALUES ($1, $2, $3, $4, $5)
+			 RETURNING created_at`,
+			event.ID, event.TenantID, event.EventType, event.ChannelNamespace, event.Payload,
+		).Scan(&event.CreatedAt)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert outbox event: %w", err)
 	}
@@ -65,7 +72,8 @@ func (r *OutboxRepository) InsertEvent(ctx context.Context, tenantID uuid.UUID, 
 	return event, nil
 }
 
-// GetPendingEvents retrieves undelivered events. This bypasses RLS (called by system dispatcher).
+// GetPendingEvents retrieves undelivered events across tenants. Production
+// callers run it in the read-only system scope (migration 028).
 func (r *OutboxRepository) GetPendingEvents(ctx context.Context, limit int) ([]OutboxEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
@@ -86,7 +94,7 @@ func (r *OutboxRepository) GetPendingEvents(ctx context.Context, limit int) ([]O
 // MarkDelivered marks an event as delivered.
 func (r *OutboxRepository) MarkDelivered(ctx context.Context, eventID uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE event_outbox SET delivered = TRUE WHERE id = $1`,
+		`UPDATE event_outbox SET delivered = TRUE WHERE id = $1 AND `+tenantMatch,
 		eventID,
 	)
 	return err
@@ -95,8 +103,8 @@ func (r *OutboxRepository) MarkDelivered(ctx context.Context, eventID uuid.UUID)
 // ListEvents retrieves events with filtering (tenant-scoped via RLS).
 func (r *OutboxRepository) ListEvents(ctx context.Context, filter OutboxEventFilter) ([]OutboxEvent, int, error) {
 	query := `SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
-		 FROM event_outbox WHERE 1=1`
-	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE 1=1`
+		 FROM event_outbox WHERE 1=1 AND ` + tenantMatch
+	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE 1=1 AND ` + tenantMatch
 	args := []interface{}{}
 	argIdx := 1
 
@@ -173,7 +181,7 @@ func (r *OutboxRepository) GetEventByID(ctx context.Context, id uuid.UUID) (*Out
 	var event OutboxEvent
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
-		 FROM event_outbox WHERE id = $1`,
+		 FROM event_outbox WHERE id = $1 AND `+tenantMatch,
 		id,
 	).Scan(&event.ID, &event.TenantID, &event.EventType, &event.ChannelNamespace,
 		&event.Payload, &event.Delivered, &event.CreatedAt)
@@ -190,7 +198,7 @@ func (r *OutboxRepository) GetEventByID(ctx context.Context, id uuid.UUID) (*Out
 func (r *OutboxRepository) GetEventTypes(ctx context.Context) ([]EventTypeCount, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT event_type, COUNT(*) as count
-		 FROM event_outbox
+		 FROM event_outbox WHERE `+tenantMatch+`
 		 GROUP BY event_type
 		 ORDER BY count DESC`,
 	)
@@ -210,10 +218,34 @@ func (r *OutboxRepository) GetEventTypes(ctx context.Context) ([]EventTypeCount,
 	return result, rows.Err()
 }
 
+// TenantsWithPurgeableEvents lists tenants that own delivered events older
+// than olderThanDays, across tenants. Production callers run it in the
+// read-only system scope and then purge per tenant.
+func (r *OutboxRepository) TenantsWithPurgeableEvents(ctx context.Context, olderThanDays int) ([]uuid.UUID, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT tenant_id FROM event_outbox
+		 WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE`,
+		olderThanDays,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tenants with purgeable events: %w", err)
+	}
+	defer rows.Close()
+	var tenants []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan tenant id: %w", err)
+		}
+		tenants = append(tenants, id)
+	}
+	return tenants, rows.Err()
+}
+
 // PurgeOldEvents deletes events older than the specified number of days.
 func (r *OutboxRepository) PurgeOldEvents(ctx context.Context, olderThanDays int) (int64, error) {
 	result, err := r.db.ExecContext(ctx,
-		`DELETE FROM event_outbox WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE`,
+		`DELETE FROM event_outbox WHERE created_at < NOW() - INTERVAL '1 day' * $1 AND delivered = TRUE AND `+tenantMatch,
 		olderThanDays,
 	)
 	if err != nil {
@@ -227,9 +259,9 @@ func (r *OutboxRepository) GetEventsByEntityFromPayload(ctx context.Context, ent
 	idStr := entityID.String()
 	query := `SELECT id, tenant_id, event_type, channel_namespace, payload, delivered, created_at
 		 FROM event_outbox
-		 WHERE payload::text LIKE '%' || $1 || '%'
+		 WHERE payload::text LIKE '%' || $1 || '%' AND ` + tenantMatch + `
 		 ORDER BY created_at DESC`
-	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE payload::text LIKE '%' || $1 || '%'`
+	countQuery := `SELECT COUNT(*) FROM event_outbox WHERE payload::text LIKE '%' || $1 || '%' AND ` + tenantMatch
 
 	var total int
 	if err := r.db.QueryRowContext(ctx, countQuery, idStr).Scan(&total); err != nil {

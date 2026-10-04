@@ -83,16 +83,16 @@ type WorkOrderFilter struct {
 
 // MaintenanceRepository handles maintenance schedule and work order database operations.
 type MaintenanceRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewMaintenanceRepository creates a new maintenance repository.
-func NewMaintenanceRepository(db *sql.DB) *MaintenanceRepository {
+func NewMaintenanceRepository(db DBTX) *MaintenanceRepository {
 	return &MaintenanceRepository{db: db}
 }
 
 // DB returns the underlying database connection.
-func (r *MaintenanceRepository) DB() *sql.DB {
+func (r *MaintenanceRepository) DB() DBTX {
 	return r.db
 }
 
@@ -109,9 +109,9 @@ func (r *MaintenanceRepository) ListSchedules(ctx context.Context, filter Schedu
 		       last_done_at, next_due_at, assigned_to, is_active,
 		       metadata, created_at, updated_at
 		FROM maintenance_schedules
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM maintenance_schedules WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM maintenance_schedules WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -186,7 +186,7 @@ func (r *MaintenanceRepository) GetScheduleByID(ctx context.Context, id uuid.UUI
 		       last_done_at, next_due_at, assigned_to, is_active,
 		       metadata, created_at, updated_at
 		FROM maintenance_schedules
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -259,7 +259,7 @@ func (r *MaintenanceRepository) UpdateSchedule(ctx context.Context, schedule *Ma
 			assigned_to = $17,
 			is_active = $18,
 			metadata = $19
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -286,7 +286,7 @@ func (r *MaintenanceRepository) UpdateSchedule(ctx context.Context, schedule *Ma
 
 // DeleteSchedule permanently removes a maintenance schedule.
 func (r *MaintenanceRepository) DeleteSchedule(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM maintenance_schedules WHERE id = $1`
+	query := `DELETE FROM maintenance_schedules WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -312,9 +312,9 @@ func (r *MaintenanceRepository) ListWorkOrders(ctx context.Context, filter WorkO
 		       checklist, scheduled_at, started_at, completed_at, due_at,
 		       notes, parts_used, metadata, created_at, updated_at
 		FROM maintenance_work_orders
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM maintenance_work_orders WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM maintenance_work_orders WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -394,7 +394,7 @@ func (r *MaintenanceRepository) GetWorkOrderByID(ctx context.Context, id uuid.UU
 		       checklist, scheduled_at, started_at, completed_at, due_at,
 		       notes, parts_used, metadata, created_at, updated_at
 		FROM maintenance_work_orders
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -458,7 +458,7 @@ func (r *MaintenanceRepository) UpdateWorkOrder(ctx context.Context, wo *Mainten
 			notes = $12,
 			parts_used = $13,
 			metadata = $14
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -486,7 +486,7 @@ func (r *MaintenanceRepository) CompleteWorkOrder(ctx context.Context, id uuid.U
 	query := `
 		UPDATE maintenance_work_orders
 		SET status = 'completed', completed_at = NOW(), notes = $2
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -504,7 +504,7 @@ func (r *MaintenanceRepository) CompleteWorkOrder(ctx context.Context, id uuid.U
 
 // GetOverdueCount returns the number of work orders with status 'overdue'.
 func (r *MaintenanceRepository) GetOverdueCount(ctx context.Context) (int, error) {
-	query := `SELECT COUNT(*) FROM maintenance_work_orders WHERE status = 'overdue'`
+	query := `SELECT COUNT(*) FROM maintenance_work_orders WHERE status = 'overdue' AND ` + tenantMatch
 
 	var count int
 	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
@@ -523,7 +523,7 @@ func (r *MaintenanceRepository) GetByMachine(ctx context.Context, machineID uuid
 		       checklist, scheduled_at, started_at, completed_at, due_at,
 		       notes, parts_used, metadata, created_at, updated_at
 		FROM maintenance_work_orders
-		WHERE machine_id = $1
+		WHERE machine_id = $1 AND ` + tenantMatch + `
 		ORDER BY priority ASC, created_at DESC
 	`
 

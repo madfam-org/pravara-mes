@@ -9,15 +9,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 )
 
 // InventoryRepository handles inventory database operations.
 type InventoryRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewInventoryRepository creates a new inventory repository.
-func NewInventoryRepository(db *sql.DB) *InventoryRepository {
+func NewInventoryRepository(db DBTX) *InventoryRepository {
 	return &InventoryRepository{db: db}
 }
 
@@ -76,9 +78,9 @@ func (r *InventoryRepository) ListItems(ctx context.Context, filter InventoryFil
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM inventory_items WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM inventory_items WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -149,7 +151,7 @@ func (r *InventoryRepository) GetItemByID(ctx context.Context, id uuid.UUID) (*I
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -217,7 +219,7 @@ func (r *InventoryRepository) UpdateItem(ctx context.Context, item *InventoryIte
 			unit_cost = $10,
 			currency = $11,
 			metadata = $12
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -346,33 +348,30 @@ func (r *InventoryRepository) UpsertBySKU(ctx context.Context, item *InventoryIt
 // an inventory transaction record with a running balance.
 // Positive quantity adds stock, negative quantity removes stock.
 func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UUID, quantity float64, txnType string, refType *string, refID *uuid.UUID, userID *uuid.UUID, notes *string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return db.InTx(ctx, r.db, func(tx DBTX) error {
+		var err error
 
-	// Update quantity on hand and recalculate available
-	updateQuery := `
+		// Update quantity on hand and recalculate available
+		updateQuery := `
 		UPDATE inventory_items SET
 			quantity_on_hand = quantity_on_hand + $2,
 			quantity_available = (quantity_on_hand + $2) - quantity_reserved,
 			updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING quantity_on_hand
 	`
 
-	var newBalance float64
-	err = tx.QueryRowContext(ctx, updateQuery, itemID, quantity).Scan(&newBalance)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("inventory item not found")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to adjust inventory quantity: %w", err)
-	}
+		var newBalance float64
+		err = tx.QueryRowContext(ctx, updateQuery, itemID, quantity).Scan(&newBalance)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("inventory item not found")
+		}
+		if err != nil {
+			return fmt.Errorf("failed to adjust inventory quantity: %w", err)
+		}
 
-	// Create transaction record
-	txnQuery := `
+		// Create transaction record
+		txnQuery := `
 		INSERT INTO inventory_transactions (
 			id, tenant_id, inventory_item_id, transaction_type,
 			quantity, running_balance, reference_type, reference_id,
@@ -384,16 +383,17 @@ func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UU
 		)
 	`
 
-	txnID := uuid.New()
-	_, err = tx.ExecContext(ctx, txnQuery,
-		txnID, itemID, txnType, quantity, newBalance,
-		refType, refID, notes, userID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create inventory transaction: %w", err)
-	}
+		txnID := uuid.New()
+		_, err = tx.ExecContext(ctx, txnQuery,
+			txnID, itemID, txnType, quantity, newBalance,
+			refType, refID, notes, userID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create inventory transaction: %w", err)
+		}
 
-	return tx.Commit()
+		return nil
+	})
 }
 
 // GetLowStock retrieves inventory items where available stock is at or below the reorder point.
@@ -405,7 +405,7 @@ func (r *InventoryRepository) GetLowStock(ctx context.Context) ([]InventoryItem,
 		       currency, metadata, created_at, updated_at
 		FROM inventory_items
 		WHERE (quantity_on_hand - quantity_reserved) <= reorder_point
-		  AND reorder_point > 0
+		  AND reorder_point > 0 AND ` + tenantMatch + `
 		ORDER BY (quantity_on_hand - quantity_reserved) / NULLIF(reorder_point, 0) ASC
 	`
 
@@ -435,7 +435,7 @@ func (r *InventoryRepository) ListTransactions(ctx context.Context, itemID uuid.
 		       quantity, running_balance, reference_type, reference_id,
 		       notes, created_by, created_at
 		FROM inventory_transactions
-		WHERE inventory_item_id = $1
+		WHERE inventory_item_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at DESC
 	`
 

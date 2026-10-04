@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/observability"
 )
 
@@ -140,12 +142,18 @@ func (h *HealthRecorder) publishHealthTransition(ctx context.Context, component,
 		return
 	}
 
-	// Insert directly into outbox (bypassing publisher since this is a system event)
-	_, err = h.db.ExecContext(ctx,
-		`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
-		 VALUES (gen_random_uuid(), '00000000-0000-0000-0000-000000000000'::uuid, $1, 'system', $2)`,
-		fmt.Sprintf("system.health.%s", newStatus), payloadJSON,
-	)
+	// Insert directly into outbox (bypassing publisher since this is a system
+	// event). System events belong to the nil tenant and are written in that
+	// tenant's scope like any other tenant row.
+	tdb := db.NewTenantDB(h.db, h.log)
+	err = db.RunInTenantTx(ctx, h.db, uuid.Nil.String(), func(ctx context.Context) error {
+		_, err := tdb.ExecContext(ctx,
+			`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
+			 VALUES (gen_random_uuid(), '00000000-0000-0000-0000-000000000000'::uuid, $1, 'system', $2)`,
+			fmt.Sprintf("system.health.%s", newStatus), payloadJSON,
+		)
+		return err
+	})
 	if err != nil {
 		h.log.WithError(err).Error("Failed to publish health transition event")
 	}

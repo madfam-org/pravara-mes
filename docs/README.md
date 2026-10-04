@@ -13,6 +13,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [ECOSYSTEM.md](../ECOSYSTEM.md) | MADFAM ecosystem and Enclii operations context (generated) |
 | [README «Related repositories / contracts»](../README.md#related-repositories--contracts) | Cross-repo contracts, linked to the other side's doc |
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
+| [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
 
 ## API Documentation
 

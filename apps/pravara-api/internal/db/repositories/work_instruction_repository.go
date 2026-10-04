@@ -13,11 +13,11 @@ import (
 
 // WorkInstructionRepository handles work instruction database operations.
 type WorkInstructionRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewWorkInstructionRepository creates a new work instruction repository.
-func NewWorkInstructionRepository(db *sql.DB) *WorkInstructionRepository {
+func NewWorkInstructionRepository(db DBTX) *WorkInstructionRepository {
 	return &WorkInstructionRepository{db: db}
 }
 
@@ -70,9 +70,9 @@ func (r *WorkInstructionRepository) List(ctx context.Context, filter WorkInstruc
 		       product_definition_id, machine_type, steps, tools_required,
 		       ppe_required, is_active, metadata, created_at, updated_at
 		FROM work_instructions
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM work_instructions WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM work_instructions WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -151,7 +151,7 @@ func (r *WorkInstructionRepository) GetByID(ctx context.Context, id uuid.UUID) (
 		       product_definition_id, machine_type, steps, tools_required,
 		       ppe_required, is_active, metadata, created_at, updated_at
 		FROM work_instructions
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -212,7 +212,7 @@ func (r *WorkInstructionRepository) Update(ctx context.Context, wi *WorkInstruct
 			ppe_required = $10,
 			is_active = $11,
 			metadata = $12
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -236,7 +236,7 @@ func (r *WorkInstructionRepository) Update(ctx context.Context, wi *WorkInstruct
 
 // Delete permanently removes a work instruction from the database.
 func (r *WorkInstructionRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM work_instructions WHERE id = $1`
+	query := `DELETE FROM work_instructions WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -259,7 +259,7 @@ func (r *WorkInstructionRepository) GetByProductAndMachineType(ctx context.Conte
 		       product_definition_id, machine_type, steps, tools_required,
 		       ppe_required, is_active, metadata, created_at, updated_at
 		FROM work_instructions
-		WHERE is_active = true
+		WHERE is_active = true AND ` + tenantMatch + `
 	`
 
 	var args []interface{}
@@ -330,7 +330,7 @@ func (r *WorkInstructionRepository) GetForTask(ctx context.Context, taskID uuid.
 		SELECT id, tenant_id, task_id, work_instruction_id,
 		       step_acknowledgements, all_acknowledged, created_at, updated_at
 		FROM task_work_instructions
-		WHERE task_id = $1
+		WHERE task_id = $1 AND ` + tenantMatch + `
 		ORDER BY created_at ASC
 	`
 
@@ -370,7 +370,7 @@ func (r *WorkInstructionRepository) AcknowledgeStep(ctx context.Context, taskID,
 		UPDATE task_work_instructions SET
 			step_acknowledgements = COALESCE(step_acknowledgements, '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb),
 			updated_at = NOW()
-		WHERE task_id = $1 AND work_instruction_id = $2
+		WHERE task_id = $1 AND work_instruction_id = $2 AND ` + tenantMatch + `
 		RETURNING id
 	`
 
@@ -399,7 +399,7 @@ func (r *WorkInstructionRepository) AcknowledgeStep(ctx context.Context, taskID,
 				work_instructions wi
 				WHERE wi.id = twi.work_instruction_id
 			)
-		WHERE twi.task_id = $1 AND twi.work_instruction_id = $2
+		WHERE twi.task_id = $1 AND twi.work_instruction_id = $2 AND ` + tenantMatchOn("twi") + `
 	`
 
 	_, _ = r.db.ExecContext(ctx, updateAllAcked, taskID, wiID)

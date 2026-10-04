@@ -103,7 +103,7 @@ func TestQualityCertificateRepository_List_WithFilters(t *testing.T) {
 
 	// Expect count query with filters
 	countRows := sqlmock.NewRows([]string{"count"}).AddRow(5)
-	mock.ExpectQuery("SELECT COUNT(.+) FROM quality_certificates WHERE 1=1 AND type = (.+) AND status = (.+) AND order_id = (.+) AND issued_date >= (.+) AND issued_date <= (.+)").
+	mock.ExpectQuery("SELECT COUNT(.+) FROM quality_certificates WHERE 1=1 AND tenant_id = (.+) AND type = (.+) AND status = (.+) AND order_id = (.+) AND issued_date >= (.+) AND issued_date <= (.+)").
 		WithArgs(certType, status, orderID, fromDate, toDate).
 		WillReturnRows(countRows)
 
@@ -116,7 +116,7 @@ func TestQualityCertificateRepository_List_WithFilters(t *testing.T) {
 		"metadata", "created_at", "updated_at",
 	})
 
-	mock.ExpectQuery("SELECT (.+) FROM quality_certificates WHERE 1=1 AND type = (.+) AND status = (.+) AND order_id = (.+) AND issued_date >= (.+) AND issued_date <= (.+)").
+	mock.ExpectQuery("SELECT (.+) FROM quality_certificates WHERE 1=1 AND tenant_id = (.+) AND type = (.+) AND status = (.+) AND order_id = (.+) AND issued_date >= (.+) AND issued_date <= (.+)").
 		WithArgs(certType, status, orderID, fromDate, toDate, 10).
 		WillReturnRows(rows)
 

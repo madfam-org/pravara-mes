@@ -9,16 +9,17 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
 // TaskRepository handles task database operations.
 type TaskRepository struct {
-	db *sql.DB
+	db DBTX
 }
 
 // NewTaskRepository creates a new task repository.
-func NewTaskRepository(db *sql.DB) *TaskRepository {
+func NewTaskRepository(db DBTX) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
@@ -42,9 +43,9 @@ func (r *TaskRepository) List(ctx context.Context, filter TaskFilter) ([]types.T
 		       title, description, status, priority, estimated_minutes, actual_minutes,
 		       kanban_position, started_at, completed_at, metadata, created_at, updated_at
 		FROM tasks
-		WHERE 1=1
+		WHERE 1=1 AND ` + tenantMatch + `
 	`
-	countQuery := `SELECT COUNT(*) FROM tasks WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM tasks WHERE 1=1 AND ` + tenantMatch
 
 	var args []interface{}
 	argIndex := 1
@@ -124,7 +125,7 @@ func (r *TaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Task
 		       title, description, status, priority, estimated_minutes, actual_minutes,
 		       kanban_position, started_at, completed_at, metadata, created_at, updated_at
 		FROM tasks
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -200,7 +201,7 @@ func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 			started_at = $13,
 			completed_at = $14,
 			metadata = $15
-		WHERE id = $1
+		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
 
@@ -232,82 +233,80 @@ func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 // The operation is performed within a transaction to maintain data integrity.
 // Returns an error if the task is not found.
 func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition int) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return db.InTx(ctx, r.db, func(tx DBTX) error {
+		var err error
 
-	// Get the current task
-	var currentStatus types.TaskStatus
-	var currentPosition int
-	var tenantID uuid.UUID
+		// Get the current task
+		var currentStatus types.TaskStatus
+		var currentPosition int
+		var tenantID uuid.UUID
 
-	err = tx.QueryRowContext(ctx,
-		`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1`, id,
-	).Scan(&tenantID, &currentStatus, &currentPosition)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("task not found")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
-	}
-
-	// If moving to a different status column
-	if currentStatus != newStatus {
-		// Shift positions in the old column
-		_, err = tx.ExecContext(ctx,
-			`UPDATE tasks SET kanban_position = kanban_position - 1
-			 WHERE tenant_id = $1 AND status = $2 AND kanban_position > $3`,
-			tenantID, currentStatus, currentPosition,
-		)
+		err = tx.QueryRowContext(ctx,
+			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch, id,
+		).Scan(&tenantID, &currentStatus, &currentPosition)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("task not found")
+		}
 		if err != nil {
-			return fmt.Errorf("failed to shift old column: %w", err)
+			return fmt.Errorf("failed to get task: %w", err)
 		}
 
-		// Shift positions in the new column to make room
-		_, err = tx.ExecContext(ctx,
-			`UPDATE tasks SET kanban_position = kanban_position + 1
-			 WHERE tenant_id = $1 AND status = $2 AND kanban_position >= $3`,
-			tenantID, newStatus, newPosition,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to shift new column: %w", err)
-		}
-	} else {
-		// Moving within the same column
-		if newPosition > currentPosition {
-			// Moving down: shift items between current and new position up
+		// If moving to a different status column
+		if currentStatus != newStatus {
+			// Shift positions in the old column
 			_, err = tx.ExecContext(ctx,
 				`UPDATE tasks SET kanban_position = kanban_position - 1
-				 WHERE tenant_id = $1 AND status = $2
-				 AND kanban_position > $3 AND kanban_position <= $4`,
-				tenantID, currentStatus, currentPosition, newPosition,
+			 WHERE tenant_id = $1 AND status = $2 AND kanban_position > $3`,
+				tenantID, currentStatus, currentPosition,
 			)
-		} else if newPosition < currentPosition {
-			// Moving up: shift items between new and current position down
+			if err != nil {
+				return fmt.Errorf("failed to shift old column: %w", err)
+			}
+
+			// Shift positions in the new column to make room
 			_, err = tx.ExecContext(ctx,
 				`UPDATE tasks SET kanban_position = kanban_position + 1
+			 WHERE tenant_id = $1 AND status = $2 AND kanban_position >= $3`,
+				tenantID, newStatus, newPosition,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to shift new column: %w", err)
+			}
+		} else {
+			// Moving within the same column
+			if newPosition > currentPosition {
+				// Moving down: shift items between current and new position up
+				_, err = tx.ExecContext(ctx,
+					`UPDATE tasks SET kanban_position = kanban_position - 1
+				 WHERE tenant_id = $1 AND status = $2
+				 AND kanban_position > $3 AND kanban_position <= $4`,
+					tenantID, currentStatus, currentPosition, newPosition,
+				)
+			} else if newPosition < currentPosition {
+				// Moving up: shift items between new and current position down
+				_, err = tx.ExecContext(ctx,
+					`UPDATE tasks SET kanban_position = kanban_position + 1
 				 WHERE tenant_id = $1 AND status = $2
 				 AND kanban_position >= $3 AND kanban_position < $4`,
-				tenantID, currentStatus, newPosition, currentPosition,
-			)
+					tenantID, currentStatus, newPosition, currentPosition,
+				)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to shift positions: %w", err)
+			}
 		}
+
+		// Update the task's status and position
+		_, err = tx.ExecContext(ctx,
+			`UPDATE tasks SET status = $2, kanban_position = $3 WHERE id = $1 AND `+tenantMatch,
+			id, newStatus, newPosition,
+		)
 		if err != nil {
-			return fmt.Errorf("failed to shift positions: %w", err)
+			return fmt.Errorf("failed to update task: %w", err)
 		}
-	}
 
-	// Update the task's status and position
-	_, err = tx.ExecContext(ctx,
-		`UPDATE tasks SET status = $2, kanban_position = $3 WHERE id = $1`,
-		id, newStatus, newPosition,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update task: %w", err)
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // AssignTask assigns a task to a user and/or machine.
@@ -315,7 +314,7 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 // Passing nil for both clears all assignments.
 // Returns an error if the task is not found.
 func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, machineID *uuid.UUID) error {
-	query := `UPDATE tasks SET assigned_user_id = $2, machine_id = $3 WHERE id = $1`
+	query := `UPDATE tasks SET assigned_user_id = $2, machine_id = $3 WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id, nullUUID(userID), nullUUID(machineID))
 	if err != nil {
@@ -334,7 +333,7 @@ func (r *TaskRepository) AssignTask(ctx context.Context, id uuid.UUID, userID, m
 // This is a hard delete - the task record is not recoverable.
 // Returns an error if the task is not found.
 func (r *TaskRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM tasks WHERE id = $1`
+	query := `DELETE FROM tasks WHERE id = $1 AND ` + tenantMatch
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
