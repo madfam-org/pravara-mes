@@ -44,6 +44,10 @@ func openPG(t *testing.T) *sql.DB {
 		}
 		files, _ := filepath.Glob(filepath.Join("..", "migrations", "*.up.sql"))
 		sort.Strings(files)
+		// infra/db/migrate.sh creates the tracking table first; 029 relies on it.
+		if _, schemaErr = db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); schemaErr != nil {
+			return
+		}
 		for _, f := range files {
 			body, err := os.ReadFile(f)
 			if err != nil {
@@ -66,8 +70,8 @@ func openRLSRole(t *testing.T, admin *sql.DB) *sql.DB {
 	for _, s := range []string{
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + livenessRLSRole + `') THEN
 			CREATE ROLE ` + livenessRLSRole + ` LOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$`,
-		`GRANT SELECT, INSERT, UPDATE ON machines, event_outbox, task_commands TO ` + livenessRLSRole,
-		`GRANT SELECT ON tenants TO ` + livenessRLSRole,
+		// Same table privileges as the production application role (029).
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ` + livenessRLSRole,
 	} {
 		_, err := admin.Exec(s)
 		require.NoError(t, err)

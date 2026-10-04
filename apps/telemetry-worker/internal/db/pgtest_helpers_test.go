@@ -54,6 +54,10 @@ func ensureSchema(db *sql.DB) error {
 		return err
 	}
 	sort.Strings(files)
+	// infra/db/migrate.sh creates the tracking table first; 029 relies on it.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
+		return err
+	}
 	for _, f := range files {
 		body, err := os.ReadFile(f)
 		if err != nil {

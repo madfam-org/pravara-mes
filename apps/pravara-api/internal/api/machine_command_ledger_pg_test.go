@@ -39,6 +39,9 @@ func openCommandTestDB(t *testing.T) *sql.DB {
 	if !exists {
 		files, _ := filepath.Glob(filepath.Join("..", "db", "migrations", "*.up.sql"))
 		sort.Strings(files)
+		// infra/db/migrate.sh creates the tracking table first; 029 relies on it.
+		_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+		require.NoError(t, err)
 		for _, f := range files {
 			body, err := os.ReadFile(f)
 			require.NoError(t, err)

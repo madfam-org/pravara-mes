@@ -25,8 +25,10 @@ func openAppRoleDB(t *testing.T, admin *sql.DB) *sql.DB {
 				CREATE ROLE ` + rlsTestRole + ` LOGIN NOSUPERUSER NOBYPASSRLS;
 			END IF;
 		END $$`,
-		`GRANT SELECT, INSERT, UPDATE ON task_commands, tasks, orders, machines, event_outbox TO ` + rlsTestRole,
-		`GRANT SELECT ON tenants TO ` + rlsTestRole,
+		// Same table privileges as the production application role (029):
+		// row-level security policies, including tenant_references, read
+		// parent tables such as users.
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ` + rlsTestRole,
 	}
 	for _, s := range stmts {
 		_, err := admin.Exec(s)
