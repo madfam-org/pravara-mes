@@ -751,6 +751,7 @@ cd apps/telemetry-worker && go test ./... -race -short
 cd apps/machine-adapter && go test ./... -race -short
 cd apps/visualization-engine && go test ./... -race -short
 cd packages/sdk-go && go test ./... -race -short
+cd packages/sparkplug && go test ./... -race -short
 
 # Front ends
 cd apps/pravara-ui && npm run test:run

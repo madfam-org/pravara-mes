@@ -75,6 +75,10 @@ type MoonrakerAdapter struct {
 	wsReconnect atomic.Bool
 	wsNextID    atomic.Int64
 
+	// Loaded-material cache (moonraker_jobs.go)
+	materials   []LoadedMaterial
+	materialsAt time.Time
+
 	// Telemetry callback
 	OnTelemetry TelemetryCallback
 }

@@ -80,7 +80,7 @@ jobs:
           # go.work uses per-module `use (...)` layout, so `./...` from repo
           # root doesn't resolve. Iterate each workspace module explicitly.
           set -e
-          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go packages/sparkplug; do
             echo "=== go vet $mod ==="
             (cd "$mod" && go vet ./...)
           done
@@ -88,7 +88,7 @@ jobs:
       - name: Test
         run: |
           set -e
-          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go; do
+          for mod in apps/pravara-api apps/machine-adapter apps/telemetry-worker apps/visualization-engine packages/sdk-go packages/sparkplug; do
             echo "=== go test $mod ==="
             (cd "$mod" && go test ./... -race -short)
           done

@@ -23,6 +23,7 @@ COPY apps/machine-adapter/go.mod apps/machine-adapter/go.sum* ./apps/machine-ada
 COPY apps/telemetry-worker/go.mod apps/telemetry-worker/go.sum* ./apps/telemetry-worker/
 COPY apps/visualization-engine/go.mod apps/visualization-engine/go.sum* ./apps/visualization-engine/
 COPY packages/sdk-go/go.mod packages/sdk-go/go.sum* ./packages/sdk-go/
+COPY packages/sparkplug/go.mod packages/sparkplug/go.sum* ./packages/sparkplug/
 
 # Download dependencies
 WORKDIR /build/apps/pravara-api
