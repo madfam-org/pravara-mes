@@ -265,7 +265,7 @@ func TestAPIKeyHandler_Create_WithCustomScopes(t *testing.T) {
 	userID := uuid.New().String()
 	router.POST("/v1/api-keys", setTenantContext(tenantID, userID), handler.Create)
 
-	customScopes := []string{"read:orders", "write:orders"}
+	customScopes := []string{"pravara-mes:jobs", "pravara-mes:read"}
 	rateLimit := 500
 
 	now := time.Now()
@@ -293,4 +293,30 @@ func TestAPIKeyHandler_Create_WithCustomScopes(t *testing.T) {
 	assert.Equal(t, rateLimit, resp.RateLimit)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAPIKeyHandler_Create_RejectsUnknownScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	log := logrus.New()
+	log.SetLevel(logrus.PanicLevel)
+	handler := NewAPIKeyHandler(repositories.NewAPIKeyRepository(db), log)
+	router := gin.New()
+	router.POST("/v1/api-keys", setTenantContext(uuid.New().String(), uuid.New().String()), handler.Create)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"name":   "typo-key",
+		"scopes": []string{"pravara-mes:job"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/api-keys", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid_scope")
+	assert.NoError(t, mock.ExpectationsWereMet(), "no key is written")
 }
