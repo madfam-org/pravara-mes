@@ -106,6 +106,10 @@ func (s *Service) step(ctx context.Context, d *repositories.DispatchJob) {
 		} else if !d.NextAttemptAt.After(now) {
 			d.NextAttemptAt = now.Add(s.cfg.PollInterval)
 		}
+	case serr.wait && now.Sub(d.CreatedAt) < s.cfg.MatchWait:
+		d.ErrorCode, d.ErrorMessage, d.ErrorRetryable = serr.code, serr.msg, ptrBool(true)
+		d.NextAttemptAt = now.Add(backoff(s.cfg.PollInterval, 3))
+		log.WithField("code", serr.code).Info("dispatch waiting: " + serr.msg)
 	case serr.retryable && d.Attempts+1 < d.MaxAttempts:
 		d.Attempts++
 		d.ErrorCode, d.ErrorMessage, d.ErrorRetryable = serr.code, serr.msg, ptrBool(true)

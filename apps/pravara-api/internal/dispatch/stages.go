@@ -170,7 +170,9 @@ func (s *Service) stageMatch(ctx context.Context, d *repositories.DispatchJob) *
 	rec := MatchRecord{Product: *spec, Result: *res, MatchedAt: s.now()}
 	if reserved == nil {
 		d.MatchResult = encode(rec)
-		return retryable("no_eligible_machine", "%s", summarize(res))
+		serr := retryable("no_eligible_machine", "%s", summarize(res))
+		serr.wait = true
+		return serr
 	}
 	rec.Selected = *reserved
 	d.MatchResult = encode(rec)

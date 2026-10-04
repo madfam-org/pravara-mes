@@ -85,6 +85,7 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		PollInterval:       time.Duration(cfg.Dispatch.PollIntervalSeconds) * time.Second,
 		PassportAttempts:   cfg.Dispatch.PassportMaxAttempts,
 		RequireBoundingBox: cfg.Dispatch.RequireBoundingBox,
+		MatchWait:          time.Duration(cfg.Dispatch.MatchWaitSeconds) * time.Second,
 	}, log)
 	switch cfg.Dispatch.RenderFormat {
 	case "", "3mf", "stl":

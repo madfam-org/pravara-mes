@@ -88,9 +88,14 @@ type Settings struct {
 	PollInterval       time.Duration
 	PassportAttempts   int
 	RequireBoundingBox bool
+	// MatchWait bounds how long a dispatch waits for an eligible machine.
+	MatchWait time.Duration
 }
 
 func (s *Settings) defaults() {
+	if s.MatchWait <= 0 {
+		s.MatchWait = 24 * time.Hour
+	}
 	if s.RenderFormat == "" {
 		s.RenderFormat = "3mf"
 	}
@@ -168,6 +173,10 @@ type stepError struct {
 	code      string
 	msg       string
 	retryable bool
+	// wait marks a condition expected to clear on its own (no idle machine
+	// qualifies yet). It is retried without spending the attempt budget,
+	// until the dispatch has waited longer than Settings.MatchWait.
+	wait bool
 }
 
 func (e *stepError) Error() string { return e.code + ": " + e.msg }

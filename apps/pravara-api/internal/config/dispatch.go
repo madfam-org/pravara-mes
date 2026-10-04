@@ -24,6 +24,9 @@ type DispatchConfig struct {
 	// CommandHoldSeconds is how long the reservation is held after start_job is
 	// enqueued, until the job completes or the command fails.
 	CommandHoldSeconds int `mapstructure:"command_hold_seconds"`
+	// MatchWaitSeconds bounds how long a dispatch waits for an eligible
+	// machine (all busy, reserved or unloaded) before it fails.
+	MatchWaitSeconds int `mapstructure:"match_wait_seconds"`
 	// MaxAttempts bounds automatic retries of retryable failures per dispatch.
 	MaxAttempts int `mapstructure:"max_attempts"`
 	// PollIntervalSeconds is the runner tick and the slice-job poll interval.
@@ -91,6 +94,7 @@ func setDispatchDefaults(v *viper.Viper) {
 	v.SetDefault("dispatch.reservation_ttl_seconds", 900)
 	v.SetDefault("dispatch.command_hold_seconds", 6*3600)
 	v.SetDefault("dispatch.max_attempts", 5)
+	v.SetDefault("dispatch.match_wait_seconds", 86400)
 	v.SetDefault("dispatch.poll_interval_seconds", 10)
 	v.SetDefault("dispatch.passport_max_attempts", 20)
 	v.SetDefault("dispatch.require_bounding_box", false)
@@ -108,6 +112,7 @@ func bindDispatchEnv(v *viper.Viper) {
 	_ = v.BindEnv("dispatch.reservation_ttl_seconds", "DISPATCH_RESERVATION_TTL_SECONDS")
 	_ = v.BindEnv("dispatch.command_hold_seconds", "DISPATCH_COMMAND_HOLD_SECONDS")
 	_ = v.BindEnv("dispatch.max_attempts", "DISPATCH_MAX_ATTEMPTS")
+	_ = v.BindEnv("dispatch.match_wait_seconds", "DISPATCH_MATCH_WAIT_SECONDS")
 	_ = v.BindEnv("dispatch.poll_interval_seconds", "DISPATCH_POLL_INTERVAL_SECONDS")
 	_ = v.BindEnv("dispatch.passport_max_attempts", "DISPATCH_PASSPORT_MAX_ATTEMPTS")
 	_ = v.BindEnv("dispatch.require_bounding_box", "DISPATCH_REQUIRE_BOUNDING_BOX")
