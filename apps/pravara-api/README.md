@@ -208,6 +208,7 @@ Recent migrations that support the new features:
 | `022_event_outbox` | `event_outbox`, `webhook_subscriptions`, `webhook_deliveries` | Persistent event log, outbound webhook configuration, and delivery tracking |
 | `023_api_keys` | `api_keys` | Hashed API key storage with tenant association and revocation support |
 | `024_health_snapshots` | `health_snapshots` | Time-series component health data for the public status page |
+| `032_dispatch_matchmaking_passport` | `dispatch_jobs`, `machine_reservations`, `manufacturing_records`, `passport_outbox` | Fabrication dispatch state, machine reservations, append-only manufacturing records and the passport delivery outbox ([docs](../../docs/operations/fabrication-dispatch.md)) |
 
 ## Development
 

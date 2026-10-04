@@ -107,6 +107,11 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+    # HTTPS to MADFAM services: Janua (JWKS and machine-client tokens),
+    # yantra4d, fabrication-prep and asset-shells (fabrication dispatch).
+    - ports:
+        - protocol: TCP
+          port: 443
 ---
 # Allow pravara-ui ingress from ingress controller
 apiVersion: networking.k8s.io/v1

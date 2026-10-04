@@ -60,6 +60,12 @@ spec:
                 name: pravara-config
             - secretRef:
                 name: pravara-secrets
+            # Janua machine clients for fabrication dispatch. Optional so the
+            # API starts before the ExternalSecret syncs; dispatch then answers
+            # 503 naming the missing client.
+            - secretRef:
+                name: pravara-service-clients
+                optional: true
           resources:
             requests:
               cpu: 50m

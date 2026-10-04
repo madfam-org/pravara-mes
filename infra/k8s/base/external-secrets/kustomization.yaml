@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - pravara-admin-auth.yaml
+  - pravara-service-clients.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize

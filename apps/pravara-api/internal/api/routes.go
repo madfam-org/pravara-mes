@@ -13,6 +13,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatch"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
@@ -36,6 +37,9 @@ type RoutesDeps struct {
 	APIKeyRepo  *repositories.APIKeyRepository
 	FeedRepo    *repositories.FeedRepository
 	StatusDB    *sql.DB // raw *sql.DB for status handlers (no RLS)
+	// --- fabrication dispatch (MES-1 §5-§7) ---
+	Dispatch *dispatch.Service // nil: built from cfg (BuildDispatchService)
+	// --- end fabrication dispatch ---
 }
 
 // RegisterRoutesWithRecorder sets up all API routes with optional event publisher and usage recorder.
@@ -376,6 +380,10 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			inventory.PATCH("/:id", inventoryHandler.UpdateItem)
 			inventory.POST("/:id/adjust", inventoryHandler.AdjustItem)
 		}
+
+		// --- fabrication dispatch (MES-1 §5-§7): dispatch_handlers.go ---
+		registerDispatchRoutes(v1, database, cfg, log, publisher, deps.Dispatch)
+		// --- end fabrication dispatch ---
 
 		// Factory layout endpoints (proxy to viz-engine)
 		layouts := v1.Group("/layouts")
