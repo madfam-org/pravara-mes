@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -147,131 +146,6 @@ func (s *Store) UpdateMachineHeartbeat(ctx context.Context, tenantID, machineID 
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update heartbeat: %w", err)
-	}
-	return nil
-}
-
-// MachineInfo is a lightweight machine info struct for the ack handler.
-type MachineInfo struct {
-	ID       uuid.UUID
-	TenantID uuid.UUID
-	Code     string
-	Name     string
-}
-
-// GetMachineInfoByCode retrieves machine info by code for the tenant bound to
-// ctx (tenantctx.WithTopicSegment). Unknown tenant or code returns nil, nil.
-func (s *Store) GetMachineInfoByCode(ctx context.Context, code string) (*MachineInfo, error) {
-	tenantID, err := s.tenantFromContext(ctx)
-	if errors.Is(err, ErrNoTenant) {
-		return nil, nil // unknown tenant: treated like an unknown machine
-	}
-	if err != nil {
-		return nil, err
-	}
-	machine, err := s.getMachineByTenantAndCode(ctx, tenantID, code)
-	if err != nil || machine == nil {
-		return nil, err
-	}
-	return &MachineInfo{
-		ID:       machine.ID,
-		TenantID: machine.TenantID,
-		Code:     machine.Code,
-		Name:     machine.Name,
-	}, nil
-}
-
-// UpdateCommandStatus updates the status of a task command of the tenant
-// bound to ctx.
-func (s *Store) UpdateCommandStatus(ctx context.Context, commandID uuid.UUID, status, message string) error {
-	tenantID, err := s.tenantFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	query := `
-		UPDATE task_commands
-		SET status = $2,
-		    error_message = NULLIF($3, ''),
-		    acked_at = CASE WHEN $2 = 'acknowledged' THEN NOW() ELSE acked_at END,
-		    completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
-		WHERE command_id = $1 AND tenant_id = $4
-	`
-	err = inTenantTx(ctx, s.db, tenantID, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, query, commandID, status, message, tenantID)
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update command status: %w", err)
-	}
-	return nil
-}
-
-// TaskCommandInfo contains task command information.
-type TaskCommandInfo struct {
-	ID          uuid.UUID
-	TaskID      uuid.UUID
-	TenantID    uuid.UUID
-	MachineID   uuid.UUID
-	CommandType string
-}
-
-// GetTaskCommandByCommandID retrieves task command info by command ID for
-// the tenant bound to ctx.
-func (s *Store) GetTaskCommandByCommandID(ctx context.Context, commandID uuid.UUID) (*TaskCommandInfo, error) {
-	tenantID, err := s.tenantFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var info *TaskCommandInfo
-	err = inTenantTx(ctx, s.db, tenantID, func(tx *sql.Tx) error {
-		var i TaskCommandInfo
-		err := tx.QueryRowContext(ctx, `
-			SELECT id, task_id, tenant_id, machine_id, command_type
-			FROM task_commands
-			WHERE command_id = $1 AND tenant_id = $2
-		`, commandID, tenantID).Scan(&i.ID, &i.TaskID, &i.TenantID, &i.MachineID, &i.CommandType)
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		info = &i
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task command: %w", err)
-	}
-	return info, nil
-}
-
-// UpdateTaskStatusOnJobComplete updates a task's status when a job completes,
-// for the tenant bound to ctx.
-func (s *Store) UpdateTaskStatusOnJobComplete(ctx context.Context, taskID uuid.UUID, newStatus string, completedAt time.Time) error {
-	tenantID, err := s.tenantFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	var rows int64
-	err = inTenantTx(ctx, s.db, tenantID, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `
-			UPDATE tasks
-			SET status = $2,
-			    completed_at = $3,
-			    updated_at = NOW()
-			WHERE id = $1 AND tenant_id = $4
-		`, taskID, newStatus, completedAt, tenantID)
-		if err != nil {
-			return err
-		}
-		rows, _ = result.RowsAffected()
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update task status: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("task not found: %s", taskID)
 	}
 	return nil
 }

@@ -81,6 +81,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	orderHandler := NewOrderHandler(orderRepo, orderItemRepo, log)
 	taskHandler := NewTaskHandler(taskRepo, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
+	machineHandler.SetCommandLedger(taskCmdRepo)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
 	tezcaSvc := services.NewTezcaService(cfg.Tezca, log)

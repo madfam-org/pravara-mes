@@ -305,27 +305,29 @@ func (r *MachineRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// GetOfflineMachines returns machines that haven't sent a heartbeat recently.
-// Only machines currently marked as 'online' are checked.
-// The threshold parameter specifies how long since the last heartbeat before
-// a machine is considered offline (e.g., 5 minutes).
-// Used by the health check worker to detect stale connections.
-func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold time.Duration) ([]types.Machine, error) {
+// GetOfflineMachines returns the tenant's machines that are still marked
+// 'online' but have not sent a heartbeat within threshold. It runs in the
+// tenant scope carried by ctx (db.RunInTenantTx); the explicit tenant_id
+// parameter and tenantMatch must agree, so a mismatched scope returns
+// nothing. Used by the liveness sweep (services.OfflineSweeper), which then
+// marks each one offline with a guarded update.
+func (r *MachineRepository) GetOfflineMachines(ctx context.Context, tenantID uuid.UUID, threshold time.Duration) ([]types.Machine, error) {
 	query := `
 		SELECT id, tenant_id, name, code, type, description, status,
 		       capabilities, mqtt_topic, location, specifications, metadata,
 		       last_heartbeat, created_at, updated_at
 		FROM machines
-		WHERE status = 'online'
-		  AND (last_heartbeat IS NULL OR last_heartbeat < $1) AND ` + tenantMatch + `
+		WHERE tenant_id = $1
+		  AND status = 'online'
+		  AND (last_heartbeat IS NULL OR last_heartbeat < $2) AND ` + tenantMatch + `
 	`
 
 	cutoff := time.Now().Add(-threshold)
-	rows, err := r.db.QueryContext(ctx, query, cutoff)
+	rows, err := r.db.QueryContext(ctx, query, tenantID, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query offline machines: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var machines []types.Machine
 	for rows.Next() {
@@ -335,7 +337,9 @@ func (r *MachineRepository) GetOfflineMachines(ctx context.Context, threshold ti
 		}
 		machines = append(machines, *machine)
 	}
-
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read offline machines: %w", err)
+	}
 	return machines, nil
 }
 

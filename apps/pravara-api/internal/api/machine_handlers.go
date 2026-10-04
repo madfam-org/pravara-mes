@@ -21,6 +21,7 @@ type MachineHandler struct {
 	telemetryRepo *repositories.TelemetryRepository
 	log           *logrus.Logger
 	publisher     *pubsub.Publisher
+	commandLedger CommandLedger
 }
 
 // SetPublisher sets the event publisher for real-time updates.
@@ -644,34 +645,58 @@ func (h *MachineHandler) SendCommand(c *gin.Context) {
 		TaskID:      req.TaskID,
 		OrderID:     req.OrderID,
 		IssuedBy:    userUUID,
-		IssuedAt:    time.Now().UTC(),
+		IssuedAt:    directCommandIssuedAt(),
 	}
 
-	// Publish command event for telemetry-worker to dispatch via MQTT
-	if h.publisher != nil {
-		// Publish to Centrifugo for UI real-time updates
-		if err := h.publisher.PublishMachineCommand(c.Request.Context(), machine.TenantID, commandData); err != nil {
-			h.log.WithError(err).WithFields(logrus.Fields{
-				"machine_id": machine.ID,
-				"command":    req.Command,
-			}).Error("Failed to publish machine command to Centrifugo")
-			// Continue - Centrifugo publish is not critical for command dispatch
-		}
+	// Without the dispatch stream the command cannot reach the machine:
+	// refuse it rather than report a dispatch that never happens.
+	if h.publisher == nil {
+		h.log.Error("Command dispatch unavailable: publisher not configured")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "dispatch_unavailable",
+			"message": "Command dispatch is not available",
+		})
+		return
+	}
 
-		// Publish to command dispatch channel for telemetry-worker
-		if err := h.publisher.PublishCommandForDispatch(c.Request.Context(), machine.TenantID, commandData); err != nil {
-			h.log.WithError(err).WithFields(logrus.Fields{
-				"machine_id": machine.ID,
-				"command":    req.Command,
-			}).Error("Failed to publish command to dispatch channel")
+	// Record the command in the ledger first: the worker only dispatches
+	// commands it can find there, and acks correlate by command_id.
+	if h.commandLedger != nil {
+		if err := recordDirectCommand(c.Request.Context(), h.commandLedger, machine.TenantID, commandData); err != nil {
+			h.log.WithError(err).WithField("machine_id", machine.ID).Error("Failed to record machine command")
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "dispatch_error",
-				"message": "Failed to dispatch command to machine",
+				"error":   "internal_error",
+				"message": "Failed to record command",
 			})
 			return
 		}
-	} else {
-		h.log.Warn("Publisher not configured - command will not be dispatched")
+	}
+
+	// Publish to Centrifugo for UI real-time updates (best-effort).
+	if err := h.publisher.PublishMachineCommand(c.Request.Context(), machine.TenantID, commandData); err != nil {
+		h.log.WithError(err).WithFields(logrus.Fields{
+			"machine_id": machine.ID,
+			"command":    req.Command,
+		}).Error("Failed to publish machine command to Centrifugo")
+		// Continue - Centrifugo publish is not critical for command dispatch
+	}
+
+	// Publish to command dispatch channel for telemetry-worker
+	if err := h.publisher.PublishCommandForDispatch(c.Request.Context(), machine.TenantID, commandData); err != nil {
+		h.log.WithError(err).WithFields(logrus.Fields{
+			"machine_id": machine.ID,
+			"command":    req.Command,
+		}).Error("Failed to publish command to dispatch channel")
+		if h.commandLedger != nil {
+			if uerr := h.commandLedger.UpdateStatusDurable(c.Request.Context(), machine.TenantID, commandID, "failed", "Failed to enqueue: "+err.Error()); uerr != nil {
+				h.log.WithError(uerr).Error("Failed to record command enqueue failure")
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "dispatch_error",
+			"message": "Failed to dispatch command to machine",
+		})
+		return
 	}
 
 	h.log.WithFields(logrus.Fields{
@@ -686,6 +711,6 @@ func (h *MachineHandler) SendCommand(c *gin.Context) {
 		"machine_id": machine.ID,
 		"command":    req.Command,
 		"status":     "dispatched",
-		"message":    "Command dispatched to machine",
+		"message":    "Command queued for dispatch to machine",
 	})
 }
