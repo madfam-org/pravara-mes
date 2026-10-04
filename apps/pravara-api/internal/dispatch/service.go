@@ -20,6 +20,7 @@ package dispatch
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -294,4 +295,13 @@ func (s *Service) Request(ctx context.Context, tenantID, taskID uuid.UUID, reque
 		return nil, err
 	}
 	return d, nil
+}
+
+// ErrorInfo exposes a classified dispatch error to HTTP handlers.
+func ErrorInfo(err error) (code, msg string, isRetryable, ok bool) {
+	var se *stepError
+	if errors.As(err, &se) {
+		return se.code, se.msg, se.retryable, true
+	}
+	return "", "", false, false
 }

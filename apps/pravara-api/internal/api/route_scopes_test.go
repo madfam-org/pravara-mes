@@ -81,6 +81,7 @@ func TestMachineRouteScopesKeepCommandAndAdminRoutesHumanOnly(t *testing.T) {
 		"POST /v1/api-keys",
 		"GET /v1/admin/billing/tenants/:id/usage",
 		"DELETE /v1/orders/:id",
+		"POST /v1/dispatches", // fabrication dispatch: ends in start_job
 	} {
 		_, listed := policy[key]
 		assert.False(t, listed, "%s must not accept machine credentials", key)

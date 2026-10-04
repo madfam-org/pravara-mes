@@ -1,0 +1,54 @@
+# ExternalSecret for pravara's Janua machine clients (client_credentials).
+#
+# Used only by pravara-api (fabrication dispatch, MES-1 §5-§7). The keys
+# become environment variables of that container; no other workload mounts
+# this Secret, and it is never merged into pravara-secrets.
+#
+#   YANTRA4D_STEP_READER_*                     aud yantra4d-api, scope yantra4d:render
+#   FABRICATION_PREP_*                         aud fabrication-prep-api, scope fabrication-prep:slice
+#   ASSET_SHELLS_PUBLISHER_MADFAM_ECOSYSTEM_*  aud asset-shells-api, scopes
+#                                              asset-shells:publish-instances asset-shells:read
+#                                              (organisation-bound; mapped to the pravara
+#                                              tenant by ASSET_SHELLS_PUBLISHER_TENANTS)
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: pravara-service-clients
+  namespace: pravara-mes
+  labels:
+    app: pravara-api
+    app.kubernetes.io/managed-by: external-secrets
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    name: vault-store
+    kind: ClusterSecretStore
+  target:
+    name: pravara-service-clients
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  data:
+    - secretKey: YANTRA4D_STEP_READER_CLIENT_ID
+      remoteRef:
+        key: secret/pravara-mes
+        property: yantra4d_step_reader_client_id
+    - secretKey: YANTRA4D_STEP_READER_CLIENT_SECRET
+      remoteRef:
+        key: secret/pravara-mes
+        property: yantra4d_step_reader_client_secret
+    - secretKey: FABRICATION_PREP_CLIENT_ID
+      remoteRef:
+        key: secret/pravara-mes
+        property: fabrication_prep_client_id
+    - secretKey: FABRICATION_PREP_CLIENT_SECRET
+      remoteRef:
+        key: secret/pravara-mes
+        property: fabrication_prep_client_secret
+    - secretKey: ASSET_SHELLS_PUBLISHER_MADFAM_ECOSYSTEM_CLIENT_ID
+      remoteRef:
+        key: secret/pravara-mes
+        property: asset_shells_publisher_madfam_ecosystem_client_id
+    - secretKey: ASSET_SHELLS_PUBLISHER_MADFAM_ECOSYSTEM_CLIENT_SECRET
+      remoteRef:
+        key: secret/pravara-mes
+        property: asset_shells_publisher_madfam_ecosystem_client_secret

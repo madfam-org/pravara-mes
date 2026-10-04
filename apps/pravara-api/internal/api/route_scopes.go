@@ -71,6 +71,15 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(post, "/v1/genealogy/:id/seal"): passports,
 		k(get, "/v1/genealogy/:id/tree"):  passportsRead,
 
+		// --- fabrication dispatch (MES-1 §5-§7) ---
+		// POST /v1/match is a dry run (reserves nothing), so it is a read.
+		// POST /v1/dispatches is deliberately absent: it ends in start_job on
+		// a printer, so it is people-only like POST /v1/machines/:id/command.
+		k(post, "/v1/match"):         jobsRead,
+		k(get, "/v1/dispatches"):     jobsRead,
+		k(get, "/v1/dispatches/:id"): jobsRead,
+		// --- end fabrication dispatch ---
+
 		// Event history and feeds.
 		k(get, "/v1/events"):                        events,
 		k(get, "/v1/events/types"):                  events,
