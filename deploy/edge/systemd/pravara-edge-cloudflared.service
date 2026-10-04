@@ -1,0 +1,19 @@
+[Unit]
+Description=Cloudflare Access TCP listener for the pravara broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# BROKER_HOSTNAME, TUNNEL_SERVICE_TOKEN_ID and TUNNEL_SERVICE_TOKEN_SECRET
+EnvironmentFile=/etc/pravara-edge/cloudflared.env
+ExecStart=/usr/local/bin/cloudflared access tcp --hostname ${BROKER_HOSTNAME} --url 127.0.0.1:8883
+Restart=always
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

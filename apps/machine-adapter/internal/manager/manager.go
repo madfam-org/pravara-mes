@@ -1,17 +1,16 @@
-// Package manager coordinates machine adapters and MQTT communication.
+// Package manager keeps the protocol adapters of the machines connected to
+// this edge node. Every connected machine gets a protocol adapter as its
+// Executor; commands are executed through it.
 package manager
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
-	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/sirupsen/logrus"
 
-	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/mqtt"
 	"github.com/madfam-org/pravara-mes/apps/machine-adapter/internal/registry"
 )
 
@@ -22,9 +21,6 @@ type TelemetryMetric struct {
 	Unit      string  `json:"unit"`
 	Timestamp string  `json:"timestamp"`
 }
-
-// TelemetryCallback is invoked by adapters when new telemetry data is available.
-type TelemetryCallback func(metrics []TelemetryMetric)
 
 // CommandExecutor is implemented by protocol adapters to execute machine commands.
 type CommandExecutor interface {
@@ -40,13 +36,32 @@ type MachineAdapter interface {
 	MapCommand(command string, params map[string]interface{}) (interface{}, error)
 }
 
-// CommandResponse represents the result of a command execution.
-type CommandResponse struct {
-	MachineID string `json:"machine_id"`
-	Command   string `json:"command"`
-	Success   bool   `json:"success"`
-	Message   string `json:"message,omitempty"`
-	Error     string `json:"error,omitempty"`
+// disconnecter is implemented by adapters that hold a connection.
+type disconnecter interface {
+	Disconnect() error
+}
+
+// ConnectionParams says how to reach a machine on the site network.
+type ConnectionParams struct {
+	Host string
+	Port int
+	// Secret is the protocol credential: the Moonraker API key or the Bambu LAN access code.
+	Secret string
+	// Serial is the Bambu printer serial used in its local MQTT topics.
+	Serial string
+	// TLSPinSHA256 optionally pins a self-signed printer certificate (Bambu).
+	TLSPinSHA256 string
+	// FTPSPort overrides the Bambu FTPS port (990).
+	FTPSPort int
+}
+
+// MachineSpec describes a machine to connect.
+type MachineSpec struct {
+	MachineID    string // pravara machine code (Sparkplug device_id)
+	DefinitionID string // registry definition id, e.g. "voron_2_4"
+	Protocol     string // overrides the definition's protocol when set
+	TenantID     string
+	Conn         ConnectionParams
 }
 
 // Adapter represents a connected machine protocol adapter.
@@ -59,238 +74,178 @@ type Adapter struct {
 	Executor    CommandExecutor `json:"-"`
 }
 
-// CommandRequest represents an incoming machine command.
-type CommandRequest struct {
-	MachineID string                 `json:"machine_id"`
-	Command   string                 `json:"command"`
-	Params    map[string]interface{} `json:"params"`
-}
+// ExecutorFactory builds a protocol adapter for spec and connects it.
+type ExecutorFactory func(ctx context.Context, spec MachineSpec, def *registry.MachineDefinition, log *logrus.Logger) (CommandExecutor, error)
 
-// Manager coordinates machine adapters and MQTT communication.
+// Manager tracks connected machines and their executors.
 type Manager struct {
-	mqttClient *mqtt.Client
-	registry   *registry.Registry
-	adapters   map[string]*Adapter
-	mu         sync.RWMutex
-	log        *logrus.Logger
+	registry *registry.Registry
+	factory  ExecutorFactory
+	adapters map[string]*Adapter
+	mu       sync.RWMutex
+	log      *logrus.Logger
 }
 
-// NewManager creates a new adapter manager.
-func NewManager(mqttClient *mqtt.Client, reg *registry.Registry, log *logrus.Logger) *Manager {
+// NewManager creates a manager. factory may be nil to use DefaultExecutorFactory.
+func NewManager(reg *registry.Registry, factory ExecutorFactory, log *logrus.Logger) *Manager {
+	if factory == nil {
+		factory = DefaultExecutorFactory
+	}
 	return &Manager{
-		mqttClient: mqttClient,
-		registry:   reg,
-		adapters:   make(map[string]*Adapter),
-		log:        log,
+		registry: reg,
+		factory:  factory,
+		adapters: make(map[string]*Adapter),
+		log:      log,
 	}
 }
 
-// Start begins listening for MQTT commands and telemetry.
-func (m *Manager) Start(ctx context.Context) error {
-	// Subscribe to command topics for all tenants
-	if err := m.mqttClient.Subscribe("pravara/+/machines/+/command", 1, m.handleCommand); err != nil {
-		return fmt.Errorf("failed to subscribe to command topic: %w", err)
+// ConnectMachine builds the protocol adapter for a machine, connects it and
+// wires it as the machine's Executor.
+func (m *Manager) ConnectMachine(ctx context.Context, spec MachineSpec) (*Adapter, error) {
+	if spec.MachineID == "" {
+		return nil, fmt.Errorf("machine id is required")
+	}
+	m.mu.RLock()
+	_, exists := m.adapters[spec.MachineID]
+	m.mu.RUnlock()
+	if exists {
+		return nil, fmt.Errorf("machine %s is already connected", spec.MachineID)
 	}
 
-	m.log.Info("Adapter manager started, listening for commands")
-	return nil
-}
+	var def *registry.MachineDefinition
+	if spec.DefinitionID != "" {
+		d, ok := m.registry.GetDefinition(spec.DefinitionID)
+		if !ok {
+			return nil, fmt.Errorf("unknown machine definition %q", spec.DefinitionID)
+		}
+		def = d
+	}
+	protocol := spec.Protocol
+	if protocol == "" && def != nil {
+		protocol = string(def.Protocol)
+	}
+	if protocol == "" {
+		return nil, fmt.Errorf("machine %s: protocol is required", spec.MachineID)
+	}
+	spec.Protocol = protocol
 
-// ConnectMachine creates an adapter for a machine and establishes the connection.
-func (m *Manager) ConnectMachine(machineID, machineType, protocol, tenantID string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, exists := m.adapters[machineID]; exists {
-		return fmt.Errorf("machine %s is already connected", machineID)
+	exec, err := m.factory(ctx, spec, def, m.log)
+	if err != nil {
+		return nil, fmt.Errorf("connect %s (%s): %w", spec.MachineID, protocol, err)
 	}
 
 	adapter := &Adapter{
-		MachineID:   machineID,
-		MachineType: machineType,
+		MachineID:   spec.MachineID,
+		MachineType: spec.DefinitionID,
 		Protocol:    protocol,
 		Status:      "connected",
-		TenantID:    tenantID,
+		TenantID:    spec.TenantID,
+		Executor:    exec,
 	}
-
-	m.adapters[machineID] = adapter
-
-	// Subscribe to telemetry for this specific machine
-	telemetryTopic := fmt.Sprintf("pravara/%s/machines/%s/telemetry", tenantID, machineID)
-	if err := m.mqttClient.Subscribe(telemetryTopic, 1, m.handleTelemetry); err != nil {
-		m.log.WithError(err).WithField("machine_id", machineID).Error("Failed to subscribe to telemetry")
+	m.mu.Lock()
+	if _, raced := m.adapters[spec.MachineID]; raced {
+		m.mu.Unlock()
+		disconnect(exec)
+		return nil, fmt.Errorf("machine %s is already connected", spec.MachineID)
 	}
-
-	// Publish status update
-	statusTopic := fmt.Sprintf("pravara/%s/machines/%s/status", tenantID, machineID)
-	statusPayload, _ := json.Marshal(map[string]string{
-		"machine_id": machineID,
-		"status":     "connected",
-	})
-	if err := m.mqttClient.Publish(statusTopic, 1, statusPayload); err != nil {
-		m.log.WithError(err).WithField("machine_id", machineID).Warn("Failed to publish status update")
-	}
+	m.adapters[spec.MachineID] = adapter
+	m.mu.Unlock()
 
 	m.log.WithFields(logrus.Fields{
-		"machine_id": machineID,
-		"type":       machineType,
+		"machine_id": spec.MachineID,
+		"definition": spec.DefinitionID,
 		"protocol":   protocol,
 	}).Info("Machine connected")
-
-	return nil
+	return adapter, nil
 }
 
-// DisconnectMachine removes the adapter for a machine.
+// DisconnectMachine closes and removes a machine's adapter.
 func (m *Manager) DisconnectMachine(machineID string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	adapter, exists := m.adapters[machineID]
+	if exists {
+		delete(m.adapters, machineID)
+	}
+	m.mu.Unlock()
 	if !exists {
 		return fmt.Errorf("machine %s is not connected", machineID)
 	}
-
 	adapter.Status = "disconnected"
-	delete(m.adapters, machineID)
-
+	disconnect(adapter.Executor)
 	m.log.WithField("machine_id", machineID).Info("Machine disconnected")
 	return nil
 }
 
-// GetStatus returns the status of a connected machine.
+func disconnect(exec CommandExecutor) {
+	if d, ok := exec.(disconnecter); ok {
+		_ = d.Disconnect()
+	}
+}
+
+// GetStatus returns a copy of a connected machine's adapter record.
 func (m *Manager) GetStatus(machineID string) (*Adapter, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	adapter, exists := m.adapters[machineID]
 	if !exists {
 		return nil, fmt.Errorf("machine %s is not connected", machineID)
 	}
-
-	return adapter, nil
+	cp := *adapter
+	return &cp, nil
 }
 
-// ListConnected returns all connected adapters.
-func (m *Manager) ListConnected() []*Adapter {
+// Executor returns the executor wired for a connected machine.
+func (m *Manager) Executor(machineID string) (CommandExecutor, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	adapters := make([]*Adapter, 0, len(m.adapters))
-	for _, a := range m.adapters {
-		adapters = append(adapters, a)
+	adapter, exists := m.adapters[machineID]
+	if !exists || adapter.Executor == nil {
+		return nil, false
 	}
-	return adapters
+	return adapter.Executor, true
 }
 
-// PublishTelemetry publishes telemetry metrics to MQTT for a specific machine.
-func (m *Manager) PublishTelemetry(tenantID, machineID string, metrics []TelemetryMetric) {
-	topic := fmt.Sprintf("pravara/%s/machines/%s/telemetry", tenantID, machineID)
-
-	payload, err := json.Marshal(map[string]interface{}{
-		"machine_id": machineID,
-		"metrics":    metrics,
-		"timestamp":  time.Now().UTC().Format(time.RFC3339Nano),
-	})
-	if err != nil {
-		m.log.WithError(err).Error("Failed to marshal telemetry payload")
-		return
-	}
-
-	if err := m.mqttClient.Publish(topic, 0, payload); err != nil {
-		m.log.WithError(err).WithField("machine_id", machineID).Warn("Failed to publish telemetry")
-	}
-}
-
-// MakeTelemetryCallback creates a TelemetryCallback bound to a specific tenant and machine.
-func (m *Manager) MakeTelemetryCallback(tenantID, machineID string) TelemetryCallback {
-	return func(metrics []TelemetryMetric) {
-		m.PublishTelemetry(tenantID, machineID, metrics)
-	}
-}
-
-// handleCommand processes incoming MQTT command messages.
-func (m *Manager) handleCommand(_ paho.Client, msg paho.Message) {
-	var cmd CommandRequest
-	if err := json.Unmarshal(msg.Payload(), &cmd); err != nil {
-		m.log.WithError(err).Debug("Failed to parse command payload")
-		return
-	}
-
+// ListConnected returns copies of all connected adapter records.
+func (m *Manager) ListConnected() []Adapter {
 	m.mu.RLock()
-	adapter, exists := m.adapters[cmd.MachineID]
-	m.mu.RUnlock()
-
-	if !exists {
-		m.log.WithField("machine_id", cmd.MachineID).Debug("Command received for unconnected machine")
-		return
+	defer m.mu.RUnlock()
+	out := make([]Adapter, 0, len(m.adapters))
+	for _, a := range m.adapters {
+		out = append(out, *a)
 	}
-
-	m.log.WithFields(logrus.Fields{
-		"machine_id": adapter.MachineID,
-		"command":    cmd.Command,
-		"protocol":   adapter.Protocol,
-	}).Info("Routing command to adapter")
-
-	if adapter.Executor == nil {
-		m.log.WithField("machine_id", cmd.MachineID).Warn("No executor available for machine")
-		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, "no executor available")
-		return
-	}
-
-	// Use protocol-aware MapCommand for adapters that implement MachineAdapter,
-	// fall back to G-code mapping for serial adapters (GRBL, Marlin).
-	if ma, ok := adapter.Executor.(MachineAdapter); ok {
-		if _, err := ma.MapCommand(cmd.Command, cmd.Params); err != nil {
-			m.log.WithError(err).WithFields(logrus.Fields{
-				"machine_id": cmd.MachineID,
-				"command":    cmd.Command,
-			}).Error("Command execution failed")
-			m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, err.Error())
-			return
-		}
-		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, true, "")
-		return
-	}
-
-	gcode, timeout := mapCommandToGCode(cmd.Command, cmd.Params)
-	if gcode == "" {
-		m.log.WithField("command", cmd.Command).Warn("Unknown command, cannot map to G-code")
-		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, "unknown command")
-		return
-	}
-
-	if err := adapter.Executor.SendCommand(gcode, timeout); err != nil {
-		m.log.WithError(err).WithFields(logrus.Fields{
-			"machine_id": cmd.MachineID,
-			"command":    cmd.Command,
-			"gcode":      gcode,
-		}).Error("Command execution failed")
-		m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, false, err.Error())
-		return
-	}
-
-	m.publishCommandResponse(adapter.TenantID, cmd.MachineID, cmd.Command, true, "")
+	return out
 }
 
-// publishCommandResponse sends a command ACK/NACK to MQTT.
-func (m *Manager) publishCommandResponse(tenantID, machineID, command string, success bool, errMsg string) {
-	topic := fmt.Sprintf("pravara/%s/machines/%s/command/response", tenantID, machineID)
+// Execute runs a high-level command on a machine through its Executor:
+// protocol-aware adapters translate it themselves (MapCommand); serial
+// G-code adapters get the G-code mapping below.
+func (m *Manager) Execute(machineID, command string, params map[string]interface{}) error {
+	exec, ok := m.Executor(machineID)
+	if !ok {
+		return fmt.Errorf("machine %s is not connected", machineID)
+	}
+	if ma, ok := exec.(MachineAdapter); ok {
+		_, err := ma.MapCommand(command, params)
+		return err
+	}
+	gcode, timeout := mapCommandToGCode(command, params)
+	if gcode == "" {
+		return fmt.Errorf("unknown command %q", command)
+	}
+	return exec.SendCommand(gcode, timeout)
+}
 
-	resp := CommandResponse{
-		MachineID: machineID,
-		Command:   command,
-		Success:   success,
+// Stop disconnects all machines.
+func (m *Manager) Stop() {
+	m.mu.Lock()
+	adapters := m.adapters
+	m.adapters = make(map[string]*Adapter)
+	m.mu.Unlock()
+	for _, a := range adapters {
+		a.Status = "disconnected"
+		disconnect(a.Executor)
 	}
-	if success {
-		resp.Message = "ok"
-	} else {
-		resp.Error = errMsg
-	}
-
-	payload, _ := json.Marshal(resp)
-	if err := m.mqttClient.Publish(topic, 1, payload); err != nil {
-		m.log.WithError(err).Warn("Failed to publish command response")
-	}
+	m.log.Info("Adapter manager stopped")
 }
 
 // mapCommandToGCode maps a high-level command name to G-code and timeout.
@@ -333,22 +288,4 @@ func mapCommandToGCode(command string, params map[string]interface{}) (string, t
 	default:
 		return "", 0
 	}
-}
-
-// handleTelemetry processes incoming MQTT telemetry messages.
-func (m *Manager) handleTelemetry(_ paho.Client, msg paho.Message) {
-	m.log.WithField("topic", msg.Topic()).Debug("Telemetry received")
-}
-
-// Stop gracefully shuts down the manager and disconnects all machines.
-func (m *Manager) Stop() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for id := range m.adapters {
-		m.adapters[id].Status = "disconnected"
-		delete(m.adapters, id)
-	}
-
-	m.log.Info("Adapter manager stopped")
 }
