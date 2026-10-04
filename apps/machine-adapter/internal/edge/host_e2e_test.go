@@ -401,7 +401,9 @@ func TestPrimaryHostAndEdgeNodeEndToEnd(t *testing.T) {
 	eventually(t, "rebirth after the gap", func() bool {
 		return count(seen(), "rebirth_requested") >= 1 && count(store.EventLog(), "NBIRTH "+testGroup+"/"+testEdge) > births
 	})
-	eventually(t, "state after the rebirth", func() bool { return store.Online(voronKey) && store.Snapshot(voronKey)[sparkplug.MetricTempsHotend] == 170.0 })
+	eventually(t, "state after the rebirth", func() bool {
+		return store.Online(voronKey) && store.Snapshot(voronKey)[sparkplug.MetricTempsHotend] == 170.0
+	})
 
 	// --- 7. ACL: the edge credential cannot reach another tenant's namespace
 	spy := paho.NewClient(paho.NewClientOptions().AddBroker(brokerURL).SetClientID("edge-e2e-spy").

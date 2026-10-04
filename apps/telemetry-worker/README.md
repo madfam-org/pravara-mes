@@ -125,6 +125,18 @@ completed, failed (bounded retries) or timeout. Acks only apply to commands
 issued to the machine whose topic they arrive on. Command-channel topics
 (`…/cmd`, `…/ack`) are not ingested as telemetry and do not refresh liveness.
 
+### Sparkplug primary host
+With `PRAVARA_SPARKPLUG_ENABLED=true` the worker also runs the Sparkplug B
+primary host (`packages/sparkplug/host`) on its own broker credential
+(`PRAVARA_SPARKPLUG_BROKER_URL`, `_USERNAME`, `_PASSWORD`, `_CA_FILE`,
+`_TLS_SERVER_NAME`, `_HOST_ID`). It records births and deaths of registered
+edge nodes, keeps `machine_live_state`, quarantines unregistered devices in
+`discovered_machines`, binds `Command/*` and `Job/*` to commands issued to
+that device and writes `machine.job_completed` when a job completes.
+Commands for machines with `sparkplug_edge_id` leave the command stream as
+DCMD; `spBv1.0/...` topics are never ingested as legacy telemetry. See
+[docs/operations/sparkplug-broker-and-enrollment.md](../../docs/operations/sparkplug-broker-and-enrollment.md).
+
 ### Graceful Shutdown
 The worker handles SIGINT/SIGTERM for clean shutdown, flushing pending batches and closing connections.
 

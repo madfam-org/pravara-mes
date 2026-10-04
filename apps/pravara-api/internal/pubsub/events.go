@@ -21,6 +21,11 @@ const (
 	EventMachineCommandSent    EventType = "machine.command_sent"
 	EventMachineCommandAck     EventType = "machine.command_ack"
 	EventMachineCommandFailed  EventType = "machine.command_failed"
+	// EventMachineJobCompleted is written by the telemetry worker's Sparkplug
+	// primary host when a device reports Job/Status = complete for a job
+	// bound to an issued start_job command (payload: worker
+	// db.MachineJobCompletedData). The passport updater consumes it.
+	EventMachineJobCompleted EventType = "machine.job_completed"
 
 	// Task events
 	EventTaskCreated      EventType = "task.created"
