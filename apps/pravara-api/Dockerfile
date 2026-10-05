@@ -33,6 +33,7 @@ RUN go mod download
 WORKDIR /build
 COPY apps/pravara-api/ ./apps/pravara-api/
 COPY packages/sdk-go/ ./packages/sdk-go/
+COPY packages/sparkplug/ ./packages/sparkplug/
 
 # Build the binary
 WORKDIR /build/apps/pravara-api

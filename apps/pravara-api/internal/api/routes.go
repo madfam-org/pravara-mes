@@ -254,6 +254,9 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			machines.GET("/:id/maintenance", maintenanceHandler.GetMachineMaintenance)
 		}
 
+		// Sparkplug edge-node registry, enrollment and live state (edge_routes.go).
+		registerEdgeRoutes(router, v1, database, tdb, cfg, log)
+
 		// Telemetry endpoints
 		telemetry := v1.Group("/telemetry")
 		{

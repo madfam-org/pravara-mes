@@ -37,6 +37,12 @@ type LedgerCommand struct {
 	Attempts    int
 	// MachineTopic is the machine's current base MQTT topic (machines.mqtt_topic).
 	MachineTopic string
+	// SparkplugEdgeID is set for a machine registered as a Sparkplug device
+	// (machines.sparkplug_edge_id); such commands go out as DCMD to
+	// spBv1.0/{TenantSlug}/DCMD/{SparkplugEdgeID}/{MachineCode}.
+	SparkplugEdgeID string
+	MachineCode     string
+	TenantSlug      string
 }
 
 // DispatchFailure describes a failed MQTT publish attempt.

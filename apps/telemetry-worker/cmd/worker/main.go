@@ -188,6 +188,9 @@ func main() {
 		log.Error("Command dispatch disabled - Redis publisher not available")
 	}
 
+	// Sparkplug B primary host (cmd/worker/sparkplug.go); off unless enabled.
+	waitSparkplug := startSparkplugHost(ctx, cfg, store, dispatcher, log)
+
 	log.Info("Telemetry worker is running")
 
 	// Wait for shutdown signal
@@ -199,6 +202,9 @@ func main() {
 
 	// Cancel context to stop workers
 	cancel()
+
+	// The host publishes its offline STATE once ctx is cancelled.
+	waitSparkplug()
 
 	if deadlineSweeper != nil {
 		deadlineSweeper.Stop()

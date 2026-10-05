@@ -47,13 +47,16 @@ func (l *CommandLedger) LoadForDispatch(ctx context.Context, tenantID, commandID
 		var taskID uuid.NullUUID
 		err := tx.QueryRowContext(ctx, `
 			SELECT tc.tenant_id, tc.command_id, tc.machine_id, tc.task_id, tc.command_type,
-			       COALESCE(tc.status, 'pending'), tc.attempts, COALESCE(m.mqtt_topic, '')
+			       COALESCE(tc.status, 'pending'), tc.attempts, COALESCE(m.mqtt_topic, ''),
+			       COALESCE(m.sparkplug_edge_id, ''), m.code, t.slug
 			FROM task_commands tc
 			JOIN machines m ON m.id = tc.machine_id AND m.tenant_id = tc.tenant_id
+			JOIN tenants t ON t.id = tc.tenant_id
 			WHERE tc.command_id = $1 AND tc.tenant_id = $2`,
 			commandID, tenantID,
 		).Scan(&c.TenantID, &c.CommandID, &c.MachineID, &taskID, &c.CommandType,
-			&c.Status, &c.Attempts, &c.MachineTopic)
+			&c.Status, &c.Attempts, &c.MachineTopic,
+			&c.SparkplugEdgeID, &c.MachineCode, &c.TenantSlug)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -199,8 +202,24 @@ func uniqueMachine(ctx context.Context, tx *sql.Tx, query string, tenantID uuid.
 
 // ApplyAck implements command.AckLedger.
 func (l *CommandLedger) ApplyAck(ctx context.Context, a command.AckApplication) (*command.AckOutcome, error) {
-	out := &command.AckOutcome{}
+	var out *command.AckOutcome
 	err := l.scope.WithTenant(ctx, a.Machine.TenantID, func(tx *sql.Tx) error {
+		var err error
+		out, err = l.applyAckTx(ctx, tx, a)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// applyAckTx applies an ack inside tx, which must be scoped to the machine's
+// tenant. The Sparkplug host uses it to bind DDATA Command/* and Job/* in the
+// same transaction as the device's live state.
+func (l *CommandLedger) applyAckTx(ctx context.Context, tx *sql.Tx, a command.AckApplication) (*command.AckOutcome, error) {
+	out := &command.AckOutcome{}
+	err := func() error {
 		var (
 			machineID       uuid.UUID
 			status, cmdType string
@@ -281,7 +300,7 @@ func (l *CommandLedger) ApplyAck(ctx context.Context, a command.AckApplication) 
 			out.Completion = completion
 		}
 		return nil
-	})
+	}()
 	if err != nil {
 		return nil, err
 	}

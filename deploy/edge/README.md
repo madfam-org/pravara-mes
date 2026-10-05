@@ -46,15 +46,49 @@ On a digest mismatch the printer is never contacted.
      box. Optionally, pin the printer certificate with `tls_pin_sha256`.
 2. **pravara**
    - Every printer is pre-registered as a machine. Its machine code is the
-     `device_id`, and it carries this box's edge node id.
-   - Under MES-1 the host quarantines a DBIRTH from a device the registry does
-     not know. It never trusts such a device automatically. The host-side
-     handling is a separate change.
+     `device_id`. Attach it to this box with
+     `PUT /v1/machines/{id}/sparkplug {"edge_node_id": "site-<slug>"}`.
+   - The host quarantines a DBIRTH from a device that is not registered under
+     this edge node (`discovered_machines`). It never trusts such a device
+     automatically.
+   - A tenant admin approves the box's enrollment (next section).
 3. **Platform**
    - The broker hostname is protected by a Cloudflare Access application.
-   - The box has an Access **service token** and its own MQTT username and
-     password for this edge node.
+   - The box has an Access **service token**. Issuing one per box is a
+     platform step (Enclii); this kit only reads it from
+     `/etc/pravara-edge/cloudflared.env`.
    - You also need the broker's CA certificate.
+
+## Enroll the box (no person handles the MQTT credential)
+
+The box creates its own MQTT credential. pravara stores only a bcrypt hash of
+it, and a person approves the box by a short, non-secret code.
+
+1. In `config.yaml`, set `edge.enrollment_url` to the pravara API base URL
+   (https) and keep `password_file` inside `state_dir`
+   (`/var/lib/pravara-edge/mqtt_password`). Leave `username` empty: it
+   defaults to `edge:<group_id>:<edge_node_id>`, the name pravara assigns.
+2. Run the enrollment once:
+
+   ```bash
+   # container
+   docker compose -f deploy/edge/compose.yaml run --rm edge -config /etc/pravara-edge/config.yaml -enroll
+   # systemd install
+   sudo -u pravara-edge /usr/local/bin/pravara-edge -config /etc/pravara-edge/config.yaml -enroll
+   ```
+
+   The box writes 32 random bytes to `password_file` (mode 0600), registers
+   them with pravara and prints a user code such as `BCDF-GHJK`. The
+   credential is never printed.
+3. A tenant admin, signed in to pravara, approves the code for this edge node:
+   `POST /v1/edge/enrollments/approve {"user_code": "BCDF-GHJK", "edge_node_id": "site-<slug>"}`.
+   Machine credentials (API keys, service tokens) cannot approve. The code
+   expires after 15 minutes; run step 2 again if it does.
+4. The command exits once approved. Start the edge node as below.
+
+Rotate the credential with `-enroll -rotate-credential`: the new credential
+replaces the current one only after its approval. Revoke a box with
+`POST /v1/edge/nodes/{id}/disable` (people only); the broker then refuses it.
 
 ## Install (container)
 
@@ -65,7 +99,6 @@ On a digest mismatch the printer is never contacted.
    /etc/pravara-edge/config.yaml          # from config.example.yaml
    /etc/pravara-edge/broker-ca.pem        # broker CA certificate
    /etc/pravara-edge/cloudflared.env      # TUNNEL_SERVICE_TOKEN_ID=..., TUNNEL_SERVICE_TOKEN_SECRET=...
-   /etc/pravara-edge/secrets/mqtt_password
    /etc/pravara-edge/secrets/<device>.moonraker_key | <device>.access_code
    ```
 
@@ -74,7 +107,9 @@ On a digest mismatch the printer is never contacted.
    - Pin `CLOUDFLARED_IMAGE` to a released tag or digest.
 3. In `config.yaml`, set `broker_url: ssl://cloudflared:8883` and
    `tls_server_name` to the broker's certificate name.
-4. Start it: `docker compose -f deploy/edge/compose.yaml up -d --build`.
+4. Build, enroll (previous section), then start it:
+   `docker compose -f deploy/edge/compose.yaml up -d --build`. The MQTT
+   credential lives in the `edge-state` volume.
 
 ## Install (systemd, no containers)
 
@@ -119,7 +154,9 @@ session.
 
 | Symptom | Check |
 |---|---|
-| `degraded`, never born | The primary host has not published `online` on `spBv1.0/STATE/pravara-mes`. Or the credential or ACL is rejected (see the broker logs). Or the Access token is wrong (see the `cloudflared` logs). |
+| `degraded`, never born | The primary host has not published `online` on `spBv1.0/STATE/pravara-mes`. Or the credential or ACL is rejected (see the broker logs): enrollment not approved yet, or the node was disabled. Or the Access token is wrong (see the `cloudflared` logs). |
+| `-enroll` fails with `unknown_group` | `group_id` is not the pravara tenant slug. |
+| `-enroll` ends with status `expired` | Nobody approved the code in time. Run it again; a new code is issued. |
 | A printer never appears | The printer is unreachable from the box. Or the API key/access code is wrong. Or the `definition` id is wrong. |
 | `DDEATH` repeatedly | The network to the printer is unstable. Raise `offline_after`. |
 | `start_job` fails with `artifact digest mismatch` | The artifact URL served different bytes than commanded. Nothing was sent to the printer. |

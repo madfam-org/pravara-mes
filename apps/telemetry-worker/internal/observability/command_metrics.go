@@ -9,7 +9,8 @@ const commandSubsystem = "command"
 
 var (
 	// CommandDispatchOutcomes counts stream entries by dispatch outcome:
-	// published, retry, failed, duplicate, rejected.
+	// published, deferred (Sparkplug device not born yet), retry, failed,
+	// duplicate, rejected.
 	CommandDispatchOutcomes = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,

@@ -31,6 +31,8 @@ var (
 
 func main() {
 	configPath := flag.String("config", "", "path to the config file (default: search config.yaml)")
+	enroll := flag.Bool("enroll", false, "register this box's self-generated broker credential with pravara and wait for approval, then exit")
+	rotate := flag.Bool("rotate-credential", false, "with -enroll: generate a new credential even if one exists")
 	flag.Parse()
 
 	log := logrus.New()
@@ -43,6 +45,16 @@ func main() {
 	}
 	if level, err := logrus.ParseLevel(cfg.LogLevel); err == nil {
 		log.SetLevel(level)
+	}
+
+	if *enroll {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		err := edge.Enroll(ctx, cfg.Edge, edge.EnrollOptions{Out: os.Stdout, Rotate: *rotate})
+		stop()
+		if err != nil {
+			log.WithError(err).Fatal("Edge enrollment failed")
+		}
+		return
 	}
 
 	reg := registry.NewRegistry()

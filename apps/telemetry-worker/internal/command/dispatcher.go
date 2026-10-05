@@ -88,6 +88,9 @@ type Dispatcher struct {
 	cfg         DispatcherConfig
 	log         *logrus.Logger
 	now         func() time.Time
+	// sparkplug delivers commands to Sparkplug-registered machines
+	// (dispatcher_sparkplug.go); nil when the primary host is disabled.
+	sparkplug SparkplugSender
 
 	mu      sync.Mutex
 	started bool
@@ -263,6 +266,13 @@ func (d *Dispatcher) handleEntry(ctx context.Context, msg redis.XMessage) {
 		log.WithField("status", lc.Status).Debug("Command no longer pending, entry acknowledged")
 		observability.CommandDispatchOutcomes.WithLabelValues("duplicate").Inc()
 		d.ackEntry(ctx, msg.ID)
+		return
+	}
+
+	// Sparkplug-registered machines receive DCMD through the primary host
+	// instead of the legacy {mqtt_topic}/cmd channel.
+	if lc.SparkplugEdgeID != "" {
+		d.dispatchSparkplug(ctx, log, msg.ID, tenantID, cmd, lc)
 		return
 	}
 

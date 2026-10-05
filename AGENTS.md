@@ -71,6 +71,10 @@ Regenerate or repair these files with
   machine-adapter are **not built or deployed** by any workflow. See
   README.md «Deployment». machine-adapter runs on site boxes as the
   Sparkplug B edge node (`deploy/edge/`, `packages/sparkplug/`).
+  telemetry-worker runs the Sparkplug primary host when
+  `PRAVARA_SPARKPLUG_ENABLED` is set; pravara-api serves the broker's
+  HTTP auth/ACL on an internal port and edge enrollment
+  (`docs/operations/sparkplug-broker-and-enrollment.md`).
 - **Toolchains.** Go `go 1.25.0` with toolchain `go1.25.14` (`go.work`, each
   `go.mod`, the builder images and `GO_VERSION` in the workflows move
   together). Node 22 in CI. pravara-ui and pravara-landing use Next 15.5;
