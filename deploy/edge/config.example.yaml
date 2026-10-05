@@ -34,6 +34,14 @@ edge:
 
   # simulate: true replaces every printer with a local simulator (dry run).
   simulate: false
+  # Motion/* telemetry (MES-1 §1, Phase 7): raw Klipper axis values for Moonraker
+  # printers. Off by default. min_interval 250ms matches Klipper's own 0.25 s
+  # subscription refresh; the deadbands are conventions.
+  motion:
+    enabled: false
+    min_interval: 250ms
+    position_deadband_mm: 0.05
+    velocity_deadband_mm_s: 1.0
 
   devices:
     # Klipper printer via Moonraker. device_id = the machine code registered in pravara.

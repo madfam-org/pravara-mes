@@ -47,6 +47,23 @@ Eclipse Sparkplug 3.0 building blocks shared by pravara's edge node
 | `Command/Error` | String | null unless failed |
 | DCMD: `Command/Id`, `Command/Name`, `Command/TaskId`, `Command/Artifact/Url`, `Command/Artifact/Sha256`, `Command/Artifact/MediaType` | String | `Command/Name` ∈ `start_job`, `pause`, `resume`, `cancel` |
 
+### Motion metrics (MES-1 §1 amendment, Phase 7)
+
+Moonraker devices declare these in DBIRTH when the edge config sets `motion.enabled: true` (off by default).
+Values are the printer's own, unchanged: no rounding, no kinematics.
+
+| Metric | Datatype | Source (Klipper Status Reference) | Unit |
+|---|---|---|---|
+| `Motion/Position/X`, `/Y`, `/Z`, `/E` | Double | `motion_report.live_position` (falls back to `toolhead.position` only when the printer has no `motion_report`) | mm, printer coordinates |
+| `Motion/Velocity` | Double | `motion_report.live_velocity` | mm/s |
+| `Motion/Homed` | String | `toolhead.homed_axes`, verbatim (`""`, `"xy"`, `"xyz"`) | |
+
+Values are null until the printer first reports them. The metric timestamp is the edge box's receipt time of the
+printer update. DDATA rules: at most one motion DDATA per `min_interval` (default 250 ms, Klipper's subscription
+refresh interval). A sample is published whole, meaning every differing field, when an axis moved at least
+`position_deadband_mm` (convention 0.05), the velocity changed by `velocity_deadband_mm_s` (convention 1.0) or the
+homed axes changed. At rest (velocity 0) any difference is published, so the last value equals the printer's.
+
 Node metrics: `bdSeq` (Int64) and `Node Control/Rebirth` (Boolean).
 
 ## Edge-node ACL (per credential)

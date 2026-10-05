@@ -45,6 +45,9 @@ type Config struct {
 	// printer is contacted.
 	Simulate bool `mapstructure:"simulate"`
 
+	// Motion configures the Motion/* metrics (MES-1 §1, Phase 7).
+	Motion MotionConfig `mapstructure:"motion"`
+
 	Devices []DeviceConfig `mapstructure:"devices"`
 }
 
@@ -66,6 +69,32 @@ type DeviceConfig struct {
 	// Capabilities override or extend the fabrication-capabilities derived from the definition.
 	Capabilities map[string]interface{} `mapstructure:"capabilities"`
 }
+
+// MotionConfig bounds the Motion/* telemetry of Moonraker devices. The edge
+// node forwards the printer's raw axis values; these settings only decide
+// when a change is worth a DDATA.
+type MotionConfig struct {
+	// Enabled declares Motion/* in the DBIRTH of Moonraker devices and
+	// subscribes to Klipper's toolhead and motion_report objects. Off by default.
+	Enabled bool `mapstructure:"enabled"`
+	// MinInterval is the shortest time between two motion DDATA of one device.
+	// Default 250 ms, Klipper's own subscription refresh interval, so the edge
+	// never publishes faster than the printer reports.
+	MinInterval time.Duration `mapstructure:"min_interval"`
+	// PositionDeadbandMM suppresses position changes smaller than this while
+	// the toolhead moves (convention: 0.05 mm). At rest (velocity 0) every
+	// change is published, so the last value always equals the printer's.
+	PositionDeadbandMM float64 `mapstructure:"position_deadband_mm"`
+	// VelocityDeadbandMMS does the same for Motion/Velocity (convention: 1 mm/s).
+	VelocityDeadbandMMS float64 `mapstructure:"velocity_deadband_mm_s"`
+}
+
+// Motion telemetry defaults (see MotionConfig).
+const (
+	DefaultMotionMinInterval         = 250 * time.Millisecond
+	DefaultMotionPositionDeadbandMM  = 0.05
+	DefaultMotionVelocityDeadbandMMS = 1.0
+)
 
 // ApplyDefaults fills unset tunables.
 func (c *Config) ApplyDefaults() {
@@ -92,6 +121,15 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.JobStartTimeout <= 0 {
 		c.JobStartTimeout = 2 * time.Minute
+	}
+	if c.Motion.MinInterval <= 0 {
+		c.Motion.MinInterval = DefaultMotionMinInterval
+	}
+	if c.Motion.PositionDeadbandMM == 0 {
+		c.Motion.PositionDeadbandMM = DefaultMotionPositionDeadbandMM
+	}
+	if c.Motion.VelocityDeadbandMMS == 0 {
+		c.Motion.VelocityDeadbandMMS = DefaultMotionVelocityDeadbandMMS
 	}
 }
 
@@ -121,6 +159,9 @@ func (c *Config) Validate() error {
 	}
 	if (c.TLSClientCertFile == "") != (c.TLSClientKeyFile == "") {
 		return fmt.Errorf("tls_client_cert_file and tls_client_key_file go together")
+	}
+	if c.Motion.PositionDeadbandMM < 0 || c.Motion.VelocityDeadbandMMS < 0 {
+		return fmt.Errorf("motion deadbands must not be negative")
 	}
 	if len(c.Devices) == 0 {
 		return fmt.Errorf("at least one device is required")
