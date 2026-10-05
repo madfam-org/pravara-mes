@@ -64,6 +64,8 @@ type Node struct {
 	devices []*device
 	byID    map[string]*device
 
+	motionCount motionCounters
+
 	hostMu  sync.Mutex
 	host    sparkplug.HostTracker
 	hostUp  chan struct{}
@@ -112,7 +114,7 @@ func NewNode(cfg Config, reg *registry.Registry, mgr *manager.Manager, log *logr
 		n.fetcher.Client = &c
 	}
 	for _, dc := range cfg.Devices {
-		d, err := newDevice(dc, cfg.GroupID, reg, opts)
+		d, err := newDevice(dc, cfg.GroupID, reg, opts, cfg.Motion)
 		if err != nil {
 			return nil, fmt.Errorf("device %s: %w", dc.DeviceID, err)
 		}
@@ -131,6 +133,13 @@ func (n *Node) Run(ctx context.Context) error {
 			defer n.running.Done()
 			n.runDevice(ctx, d)
 		}(d)
+		if d.motionEnabled() {
+			n.running.Add(1)
+			go func(d *device) {
+				defer n.running.Done()
+				n.runMotion(ctx, d)
+			}(d)
+		}
 	}
 	defer n.running.Wait()
 	for {
@@ -424,6 +433,7 @@ type Status struct {
 	Born      bool           `json:"born"`
 	BdSeq     uint64         `json:"bd_seq"`
 	Devices   []DeviceStatus `json:"devices"`
+	Motion    MotionCounters `json:"motion"`
 }
 
 // DeviceStatus is one device's local view.
@@ -438,7 +448,7 @@ type DeviceStatus struct {
 // Status reports the node's session and device state.
 func (n *Node) Status() Status {
 	n.pubMu.Lock()
-	s := Status{Connected: n.client != nil, Born: n.session != 0, BdSeq: n.bdSeq}
+	s := Status{Connected: n.client != nil, Born: n.session != 0, BdSeq: n.bdSeq, Motion: n.motionCount.snapshot()}
 	n.pubMu.Unlock()
 	for _, d := range n.devices {
 		d.mu.Lock()

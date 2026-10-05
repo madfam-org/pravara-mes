@@ -38,14 +38,16 @@ type device struct {
 	online        bool
 	failures      int
 	bornIn        uint64
-	values        map[sparkplug.MetricName]any // every device metric, nil = null
+	values        map[sparkplug.MetricName]any       // every device metric, nil = null
+	stamps        map[sparkplug.MetricName]time.Time // per-metric source time (motion); else publish time
+	motion        *motionState                       // nil = no Motion/* metrics
 	job           jobState
 	lastCommandID string
 	startInFlight bool
 	wake          chan struct{}
 }
 
-func newDevice(dc DeviceConfig, tenant string, reg *registry.Registry, opts Options) (*device, error) {
+func newDevice(dc DeviceConfig, tenant string, reg *registry.Registry, opts Options, motion MotionConfig) (*device, error) {
 	var def *registry.MachineDefinition
 	if dc.Definition != "" {
 		d, ok := reg.GetDefinition(dc.Definition)
@@ -108,7 +110,12 @@ func newDevice(dc DeviceConfig, tenant string, reg *registry.Registry, opts Opti
 		},
 		slots:  slots,
 		values: map[sparkplug.MetricName]any{},
+		stamps: map[sparkplug.MetricName]time.Time{},
 		wake:   make(chan struct{}, 1),
+	}
+	if motion.Enabled && conn == sparkplug.ConnectivityMoonraker {
+		d.motion = &motionState{wake: make(chan struct{}, 1)}
+		d.declareMotionLocked()
 	}
 	v := d.values
 	v[sparkplug.MetricPropertiesModel] = model
@@ -151,7 +158,11 @@ func (d *device) birthMetricsLocked(now time.Time) ([]*pb.Payload_Metric, error)
 func (d *device) metricsLocked(names []sparkplug.MetricName, now time.Time) ([]*pb.Payload_Metric, error) {
 	out := make([]*pb.Payload_Metric, 0, len(names))
 	for _, name := range names {
-		m, err := sparkplug.NewContractMetric(name, d.values[name], now)
+		ts := now
+		if st, ok := d.stamps[name]; ok {
+			ts = st
+		}
+		m, err := sparkplug.NewContractMetric(name, d.values[name], ts)
 		if err != nil {
 			return nil, err
 		}
@@ -305,6 +316,7 @@ func (n *Node) pollDevice(ctx context.Context, d *device) {
 		d.mu.Lock()
 		d.connected, d.failures = true, 0
 		d.mu.Unlock()
+		n.attachMotion(d)
 	}
 	exec, ok := n.mgr.Executor(d.id)
 	src, isSource := exec.(adapters.SnapshotSource)
