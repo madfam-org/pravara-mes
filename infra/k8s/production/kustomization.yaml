@@ -85,7 +85,7 @@ images:
 - digest: sha256:6ffbeb0666b80399a03a3e8098005d2ea7d897085fb6869a4bd9418d6509941a
   name: pravara-admin
   newName: ghcr.io/madfam-org/pravara-admin
-- digest: sha256:6f5d30d66871990d5b9b09f87f7e8084ccd49075b30c9d8b4ed74c49708cb8c9
+- digest: sha256:33e193996a2942cf149d591afa0421802f38cfc7ec1e412fd09c67825cdd8d14
   name: pravara-api
   newName: ghcr.io/madfam-org/pravara-api
 - digest: sha256:a6653a0c7e4ecc5a857e2bbac9e5ac89031db434a3f822690b84fa87ef55b728
@@ -100,6 +100,6 @@ images:
 - name: redis
   newName: docker.io/library/redis
   newTag: 7-alpine
-- digest: sha256:9f3f3c305fd87b0f8ded518ad2095f0fb3777db42278fce05bc4e8408c3d9a05
+- digest: sha256:7fee4b1b8d4e407240e9c7633feadd479191d3ed7296f30e2559e441c1251bdc
   name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
