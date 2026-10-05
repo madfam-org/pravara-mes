@@ -80,6 +80,70 @@ No P0 items are open. The #45 "Build and Deploy" and "Deploy Admin" runs on
 `main` succeeded on 2026-10-02. #46 deployed nothing, because ml-orchestrator
 is not built.
 
+### Digital twins programme (MES-1): status as of 2026-10-05
+
+A dated snapshot for someone resuming from a fresh clone. **The
+[open-PR list](https://github.com/madfam-org/pravara-mes/pulls) is
+authoritative**; when this section and GitHub disagree, GitHub wins. Operator
+runbooks are kept privately. Scope stays as the repo states it: JSON routing,
+state management and telemetry orchestration, with no geometry math in the MES.
+Nothing here moves a machine: every new path ships off by default and is
+exercised against simulators and dry runs only.
+
+**Landed recently** (all on `main`, `f1c9216b` at the time of writing):
+
+| PR | What it did |
+|---|---|
+| [#49](https://github.com/madfam-org/pravara-mes/pull/49) | Tenant context per transaction and aligned row-level security (migrations 028 and 029 written; 029 waits for the app-role switch) |
+| [#50](https://github.com/madfam-org/pravara-mes/pull/50) | Route scope matrix for machine callers (`pravara-mes:jobs`, `nodes`, `passports`, `read`) |
+| [#51](https://github.com/madfam-org/pravara-mes/pull/51) | Durable command stream, ack binding and the offline sweeper (migration 030) |
+| [#52](https://github.com/madfam-org/pravara-mes/pull/52) | Sparkplug B edge node in machine-adapter; the site-box kit in `deploy/edge/` |
+| [#53](https://github.com/madfam-org/pravara-mes/pull/53) | [`docs/operations/database-app-role.md`](docs/operations/database-app-role.md): the application-role rollout without a person-held credential |
+| [#54](https://github.com/madfam-org/pravara-mes/pull/54) | Sparkplug primary host, broker auth and ACL, the edge-node registry and enrollment (MES-1 §1–§3, migration 031); off by default, see [`docs/operations/sparkplug-broker-and-enrollment.md`](docs/operations/sparkplug-broker-and-enrollment.md) |
+
+**Open PRs, in merge order.** Every merge to `main` runs Build and Deploy for
+the cluster services.
+
+| PR | Purpose | Precondition | Deploys |
+|---|---|---|---|
+| [#56](https://github.com/madfam-org/pravara-mes/pull/56) | Phase 7 edge side: `Motion/*` telemetry from Klipper (contract `pravara.machine-motion/1`), off by default; also fixes the adapter's parsing of status notifications | CI green | Edge component only; the cluster rebuild carries no behaviour change |
+| [#55](https://github.com/madfam-org/pravara-mes/pull/55) | Fabrication dispatch: matchmaking v2, the dispatcher (render bundle, then slice job, then signed G-code, then `start_job`) and the passport updater; off by default | Rebased onto the merged #54; migration 032 applied before the merge | Yes (pravara-api; adds the dedicated service-client ExternalSecret) |
+
+**Next, in order:**
+
+1. Merge #56 once green.
+2. Phase 7 host side (PR 2, not opened yet): `Motion/*` routing in
+   telemetry-worker, `GET /v1/machines/{id}/motion` as server-sent events, the
+   OpenAPI entry and a full-chain latency test. It builds on `main` and needs
+   no migration.
+3. #55, after its rebase and migration 032.
+4. Tenant alignment: map the identity provider's organisation to the pravara
+   tenant (the next free migration number, 033 unless taken), plus
+   least-privilege scopes for each webhook sender. Queued.
+5. Migration 029 and the application-role switch, per
+   [`docs/operations/database-app-role.md`](docs/operations/database-app-role.md).
+6. Broker enablement, a site box and the first physical print. That is the
+   programme's MVP: one order, one real printer, G-code, and a passport event on
+   the part's twin.
+
+**Known red on `main`:** two security-scan checks fail on every run,
+pre-existing. One cause is that the dependency review denies AGPL-3.0, the
+repo's own licence.
+
+**Cross-repo contracts:**
+- the Sparkplug package: [`packages/sparkplug/README.md`](packages/sparkplug/README.md);
+- the slicing service the dispatcher calls: fabrication-prep
+  [`README.md`](https://github.com/madfam-org/fabrication-prep/blob/main/README.md)
+  (`POST /v1/slice-jobs`);
+- render bundles and GOC-1 `variables.json`: yantra4d
+  [`docs/reference/generator-output.md`](https://github.com/madfam-org/yantra4d/blob/main/docs/reference/generator-output.md);
+- instance shells and passport events: asset-shells
+  [`README.md`](https://github.com/madfam-org/asset-shells/blob/main/README.md)
+  (*Publish API*, *Twin graph*);
+- machine bindings that turn raw axis values into a pose: hyperobjects-spec
+  [`docs/ASSEMBLIES.md`](https://github.com/madfam-org/hyperobjects-spec/blob/main/docs/ASSEMBLIES.md)
+  (ASM-1 §9). The viewer does this mapping; the MES only forwards the values.
+
 ### P1
 
 1. **Cotiza → Pravara fabrication-dispatch contract drift.** *Owner decision,

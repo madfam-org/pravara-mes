@@ -171,6 +171,9 @@ PRAVARA_REDIS_PORT=6379
 and pinned in `infra/k8s/production/kustomization.yaml`; see
 [Deployment](#deployment). Open work on the undeployed services is in
 [ROADMAP.md, «Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
+The digital twins programme's dated status (what landed, open PRs in merge
+order, next steps) is in
+[ROADMAP.md, «Digital twins programme (MES-1)»](./ROADMAP.md#digital-twins-programme-mes-1-status-as-of-2026-10-05).
 
 ## Project Structure
 
