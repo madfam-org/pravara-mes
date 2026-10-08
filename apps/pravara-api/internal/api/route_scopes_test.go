@@ -167,3 +167,84 @@ func TestInternalBrokerRoutesRefuseWithoutTheKey(t *testing.T) {
 	unset.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
+
+// inventoryScopeRouter serves the /v1/inventory route patterns behind the real
+// machine route table, with caller standing in for authentication.
+func inventoryScopeRouter(caller middleware.Caller) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyCaller), caller)
+		c.Next()
+	})
+	router.Use(middleware.EnforceRouteScopes(MachineRouteScopes(), nil))
+	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
+	inventory := router.Group("/v1/inventory")
+	inventory.GET("", ok)
+	inventory.POST("", ok)
+	inventory.GET("/low-stock", ok)
+	inventory.GET("/:id", ok)
+	inventory.PATCH("/:id", ok)
+	inventory.POST("/:id/adjust", ok)
+	return router
+}
+
+// TestMachineInventoryAccessIsReadOnly: machine callers holding
+// pravara-mes:read may list and get inventory items; no machine scope opens an
+// inventory write.
+func TestMachineInventoryAccessIsReadOnly(t *testing.T) {
+	routes := registeredV1Routes(t)
+	for _, key := range []string{
+		"GET /v1/inventory", "POST /v1/inventory", "GET /v1/inventory/low-stock",
+		"GET /v1/inventory/:id", "PATCH /v1/inventory/:id", "POST /v1/inventory/:id/adjust",
+	} {
+		require.True(t, routes[key], "%s is not registered; update inventoryScopeRouter", key)
+	}
+
+	serve := func(caller middleware.Caller, method, path string) int {
+		w := httptest.NewRecorder()
+		inventoryScopeRouter(caller).ServeHTTP(w, httptest.NewRequest(method, path, nil))
+		return w.Code
+	}
+	machine := func(scopes ...string) middleware.Caller {
+		return middleware.Caller{Kind: middleware.CallerServiceAccount, ID: "jnc_inventory_test", Scopes: scopes}
+	}
+	apiKey := func(scopes ...string) middleware.Caller {
+		return middleware.Caller{Kind: middleware.CallerAPIKey, ID: "00000000-0000-0000-0000-00000000000a", Scopes: scopes}
+	}
+	var namedKeyScopes []string // every API-key scope except the wildcard
+	for _, s := range middleware.APIKeyScopes {
+		if s != middleware.ScopeWildcard {
+			namedKeyScopes = append(namedKeyScopes, s)
+		}
+	}
+
+	const item = "/v1/inventory/00000000-0000-0000-0000-000000000001"
+	reads := []string{"/v1/inventory?search=SKU-1&limit=100", item}
+	writes := []struct{ method, path string }{
+		{http.MethodPost, "/v1/inventory"},
+		{http.MethodPatch, item},
+		{http.MethodPost, item + "/adjust"},
+	}
+
+	for _, caller := range []middleware.Caller{machine(middleware.ScopeRead), apiKey(middleware.ScopeRead)} {
+		for _, path := range reads {
+			assert.Equal(t, http.StatusOK, serve(caller, http.MethodGet, path), "%s with pravara-mes:read: GET %s", caller.Kind, path)
+		}
+	}
+	for _, caller := range []middleware.Caller{
+		machine(middleware.ScopeRead), machine(middleware.MachineScopes...),
+		apiKey(middleware.ScopeRead), apiKey(namedKeyScopes...),
+	} {
+		for _, wr := range writes {
+			assert.Equal(t, http.StatusForbidden, serve(caller, wr.method, wr.path), "%s %v: %s %s", caller.Kind, caller.Scopes, wr.method, wr.path)
+		}
+	}
+	// Only pravara-mes:read opens these reads, and only on these two routes.
+	for _, caller := range []middleware.Caller{
+		machine(), machine(middleware.ScopeJobs), machine(middleware.ScopeNodes), machine(middleware.ScopePassports),
+	} {
+		assert.Equal(t, http.StatusForbidden, serve(caller, http.MethodGet, "/v1/inventory"), "%v: GET /v1/inventory", caller.Scopes)
+	}
+	assert.Equal(t, http.StatusForbidden, serve(machine(middleware.ScopeRead), http.MethodGet, "/v1/inventory/low-stock"))
+}

@@ -164,6 +164,17 @@ A background health recorder periodically checks the status of all system compon
 
 See [docs/operations/sparkplug-broker-and-enrollment.md](../../docs/operations/sparkplug-broker-and-enrollment.md).
 
+### Inventory
+
+| Method | Path | Access |
+|--------|------|--------|
+| `GET` | `/v1/inventory`, `/v1/inventory/:id` | `pravara-mes:read` |
+| `GET` | `/v1/inventory/low-stock` | people, or an API key holding `*` |
+| `POST` | `/v1/inventory`, `/v1/inventory/:id/adjust` | people, or an API key holding `*` |
+| `PATCH` | `/v1/inventory/:id` | people, or an API key holding `*` |
+
+`GET /v1/inventory` takes `search` (case-insensitive match on name or SKU), `category`, `limit` (default 20) and `offset`. Machine reads return only the tenant of the token or API key, like every other route.
+
 ### API Key Management (admin only)
 
 | Method | Path | Description |
