@@ -1,0 +1,19 @@
+{
+  "_comment": "Advisories the NPM Security Audit gate waives (scripts/npm-audit-gate.mjs). Each entry needs a reason and a review_by date; an expired entry fails the gate again. Keep this list to advisories with no usable fix.",
+  "advisories": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "severity": "high",
+      "reason": "No patched braces release exists (checked 2026-10-09). It enters through tailwindcss's build-time file tooling (chokidar, micromatch, fast-glob); the UI never expands untrusted brace patterns.",
+      "review_by": "2026-11-09"
+    },
+    {
+      "id": "GHSA-rj75-hqrm-r3gf",
+      "package": "postcss-selector-parser",
+      "severity": "moderate",
+      "reason": "Fixed only in 7.x, while tailwindcss 3.4 and postcss-nested pin 6.x (checked 2026-10-09). It parses first-party CSS at build time.",
+      "review_by": "2026-11-09"
+    }
+  ]
+}
