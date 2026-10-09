@@ -9,6 +9,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -246,4 +247,67 @@ func TestScopeEnforcementAgainstPostgres(t *testing.T) {
 			assert.Equal(t, tc.want, w.Code, "body: %s", w.Body.String())
 		})
 	}
+}
+
+// TestMachineInventoryReadsAgainstPostgres: a machine token holding
+// pravara-mes:read reads its own tenant's inventory and nothing of another
+// tenant's. The tenant comes from the token's tenant_id claim, through the same
+// request scope as every other route.
+func TestMachineInventoryReadsAgainstPostgres(t *testing.T) {
+	rig := newScopeRig(t)
+
+	// The rig's tenant (A) owns one item; tenant B owns none.
+	itemID := uuid.New()
+	sku := "INV-" + itemID.String()[:8]
+	tdb := (&db.DB{DB: rig.sqlDB}).Tenant(logrus.New())
+	require.NoError(t, db.RunInTenantTx(context.Background(), rig.sqlDB, rig.tenantID.String(), func(ctx context.Context) error {
+		_, err := tdb.ExecContext(ctx, `INSERT INTO inventory_items (id, tenant_id, sku, name, category, quantity_on_hand, reorder_point)
+			VALUES ($1, $2, $3, 'Tenant A spool', 'filament', 7, 2)`, itemID, rig.tenantID, sku)
+		return err
+	}))
+	tenantB := uuid.New()
+	_, err := rig.sqlDB.Exec(`INSERT INTO tenants (id, name, slug) VALUES ($1, 'Scope test B', $2)`, tenantB, "scope-"+tenantB.String()[:8])
+	require.NoError(t, err)
+
+	readA := rig.machineToken(t, "pravara-mes:read", nil)
+	readB := rig.machineToken(t, "pravara-mes:read", func(c jwt.MapClaims) { c["tenant_id"] = tenantB.String() })
+	list := "/v1/inventory?search=" + sku + "&limit=100"
+	item := "/v1/inventory/" + itemID.String()
+
+	// Control: tenant A's machine token reads its own item.
+	w := rig.do(http.MethodGet, list, readA, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), itemID.String())
+	w = rig.do(http.MethodGet, item, readA, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Tenant B's machine token, same scope and query: nothing of A's.
+	w = rig.do(http.MethodGet, list, readB, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var page struct {
+		Total int `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+	assert.Zero(t, page.Total, w.Body.String())
+	for _, leak := range []string{itemID.String(), sku, rig.tenantID.String()} {
+		assert.NotContains(t, w.Body.String(), leak)
+	}
+	w = rig.do(http.MethodGet, item, readB, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	// pravara-mes:read opens no inventory write.
+	for _, tc := range []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodPost, "/v1/inventory", map[string]any{"sku": "INV-new", "name": "Not created"}},
+		{http.MethodPatch, item, map[string]any{"name": "Changed by a machine"}},
+		{http.MethodPost, item + "/adjust", map[string]any{"quantity": 5, "type": "adjustment"}},
+	} {
+		w = rig.do(tc.method, tc.path, readA, tc.body)
+		assert.Equal(t, http.StatusForbidden, w.Code, "%s %s: %s", tc.method, tc.path, w.Body.String())
+	}
+	w = rig.do(http.MethodGet, item, readA, nil)
+	assert.Contains(t, w.Body.String(), "Tenant A spool")
+	assert.NotContains(t, w.Body.String(), "Changed by a machine")
 }

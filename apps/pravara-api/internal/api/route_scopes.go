@@ -92,6 +92,11 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(get, "/v1/feeds/social/highlights"):       feeds,
 		k(get, "/v1/feeds/status/detailed"):         status,
 		k(get, "/v1/feeds/status/incidents"):        status,
+
+		// Inventory reads (stock checks by SKU or name). Writes (create,
+		// update, adjust) stay unlisted: people and wildcard API keys only.
+		k(get, "/v1/inventory"):     read,
+		k(get, "/v1/inventory/:id"): read,
 	}
 }
 
