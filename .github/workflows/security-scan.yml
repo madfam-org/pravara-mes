@@ -86,9 +86,12 @@ jobs:
         run: npm ci
 
       - name: Run npm audit
+        # Fails on any moderate-or-worse advisory that npm-audit-allowlist.json does not
+        # waive with a reason and an unexpired review_by date (scripts/npm-audit-gate.mjs).
         run: |
-          npm audit --audit-level=moderate --json > npm-audit-results.json || true
-          npm audit --audit-level=moderate
+          npm audit --json > npm-audit-results.json || true
+          node --test scripts/npm-audit-gate.test.mjs
+          node scripts/npm-audit-gate.mjs npm-audit-results.json npm-audit-allowlist.json
 
       - name: Upload npm audit results
         if: always()
