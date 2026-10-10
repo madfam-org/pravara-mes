@@ -1,8 +1,0 @@
-{
-  "branch": "main",
-  "manifestPath": "infra/k8s/production",
-  "name": "pravara-mes",
-  "namespace": "pravara-mes",
-  "partOf": "pravara-mes",
-  "repoURL": "https://github.com/madfam-org/pravara-mes.git"
-}
