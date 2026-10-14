@@ -34,6 +34,44 @@ const (
 	MetricCommandError           MetricName = "Command/Error"
 )
 
+// MES-1 §1 motion metrics (Phase 7 amendment). They carry the printer's own
+// axis values unchanged: Klipper's motion_report.live_position (mm, printer
+// coordinates), motion_report.live_velocity (mm/s) and toolhead.homed_axes.
+// The edge node does no kinematics; consumers map axes to joints.
+const (
+	MetricMotionPositionX MetricName = "Motion/Position/X"
+	MetricMotionPositionY MetricName = "Motion/Position/Y"
+	MetricMotionPositionZ MetricName = "Motion/Position/Z"
+	MetricMotionPositionE MetricName = "Motion/Position/E"
+	MetricMotionHomed     MetricName = "Motion/Homed"
+	MetricMotionVelocity  MetricName = "Motion/Velocity"
+)
+
+// MotionPrefix is the common prefix of the motion metrics.
+const MotionPrefix = "Motion/"
+
+// MotionPositionMetrics are the position metrics in axis order X, Y, Z, E.
+var MotionPositionMetrics = [4]MetricName{
+	MetricMotionPositionX, MetricMotionPositionY, MetricMotionPositionZ, MetricMotionPositionE,
+}
+
+// MotionMetrics lists every motion metric a device with motion telemetry
+// declares in its DBIRTH.
+var MotionMetrics = []MetricName{
+	MetricMotionPositionX, MetricMotionPositionY, MetricMotionPositionZ, MetricMotionPositionE,
+	MetricMotionHomed, MetricMotionVelocity,
+}
+
+// IsMotionMetric reports whether name is one of the motion metrics.
+func IsMotionMetric(name MetricName) bool {
+	switch name {
+	case MetricMotionPositionX, MetricMotionPositionY, MetricMotionPositionZ, MetricMotionPositionE,
+		MetricMotionHomed, MetricMotionVelocity:
+		return true
+	}
+	return false
+}
+
 // MES-1 DCMD metrics written by the host application.
 const (
 	MetricCommandID                MetricName = "Command/Id"
@@ -208,6 +246,12 @@ var fixedDatatypes = map[MetricName]pb.DataType{
 	MetricCommandArtifactURL:       pb.DataType_String,
 	MetricCommandArtifactSHA256:    pb.DataType_String,
 	MetricCommandArtifactMediaType: pb.DataType_String,
+	MetricMotionPositionX:          pb.DataType_Double,
+	MetricMotionPositionY:          pb.DataType_Double,
+	MetricMotionPositionZ:          pb.DataType_Double,
+	MetricMotionPositionE:          pb.DataType_Double,
+	MetricMotionHomed:              pb.DataType_String,
+	MetricMotionVelocity:           pb.DataType_Double,
 }
 
 // DatatypeOf returns the contract datatype of a MES-1 metric name, including

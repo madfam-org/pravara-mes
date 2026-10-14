@@ -74,6 +74,10 @@ type MoonrakerAdapter struct {
 	wsCancel    context.CancelFunc
 	wsReconnect atomic.Bool
 	wsNextID    atomic.Int64
+	wsWriteMu   sync.Mutex // gorilla/websocket allows one concurrent writer
+
+	// Live motion subscription (moonraker_motion.go), guarded by mu.
+	motion motionState
 
 	// Loaded-material cache (moonraker_jobs.go)
 	materials   []LoadedMaterial
@@ -139,10 +143,12 @@ func (a *MoonrakerAdapter) Disconnect() error {
 	defer a.mu.Unlock()
 
 	if a.wsConn != nil {
+		a.wsWriteMu.Lock()
 		a.wsConn.WriteMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		)
+		a.wsWriteMu.Unlock()
 		a.wsConn.Close()
 		a.wsConn = nil
 	}
@@ -456,29 +462,37 @@ func (a *MoonrakerAdapter) wsConnect() error {
 func (a *MoonrakerAdapter) wsSubscribe() error {
 	a.mu.RLock()
 	conn := a.wsConn
+	withMotion := a.motion.handler != nil
 	a.mu.RUnlock()
 
 	if conn == nil {
 		return fmt.Errorf("websocket not connected")
 	}
 
+	objects := map[string]interface{}{
+		"extruder":       nil,
+		"heater_bed":     nil,
+		"print_stats":    nil,
+		"display_status": nil,
+		"fan":            nil,
+	}
+	if withMotion {
+		for k, v := range motionSubscription {
+			objects[k] = v
+		}
+	}
 	id := a.wsNextID.Add(1)
 	msg := moonrakerWSMessage{
 		JSONRPC: "2.0",
 		Method:  "printer.objects.subscribe",
-		Params: map[string]interface{}{
-			"objects": map[string]interface{}{
-				"extruder":       nil,
-				"heater_bed":     nil,
-				"print_stats":    nil,
-				"display_status": nil,
-				"fan":            nil,
-			},
-		},
-		ID: id,
+		Params:  map[string]interface{}{"objects": objects},
+		ID:      id,
 	}
 
-	if err := conn.WriteJSON(msg); err != nil {
+	a.wsWriteMu.Lock()
+	err := conn.WriteJSON(msg)
+	a.wsWriteMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("websocket subscribe failed: %w", err)
 	}
 
@@ -519,14 +533,18 @@ func (a *MoonrakerAdapter) wsReadLoop() {
 }
 
 // processWSMessage parses and processes a WebSocket JSON-RPC message.
+//
+// The subscribe result is {"eventtime": t, "status": {...}}; a
+// notify_status_update notification carries params [status diff, eventtime]
+// (Moonraker external API §Subscription Updates).
 func (a *MoonrakerAdapter) processWSMessage(data []byte) {
+	received := time.Now()
 	var msg struct {
-		Method string `json:"method"`
-		Params []struct {
-			Status map[string]map[string]interface{} `json:"status"`
-		} `json:"params"`
+		Method string            `json:"method"`
+		Params []json.RawMessage `json:"params"`
 		Result *struct {
-			Status map[string]map[string]interface{} `json:"status"`
+			EventTime float64                           `json:"eventtime"`
+			Status    map[string]map[string]interface{} `json:"status"`
 		} `json:"result"`
 	}
 
@@ -538,14 +556,41 @@ func (a *MoonrakerAdapter) processWSMessage(data []byte) {
 	// Handle subscription initial result
 	if msg.Result != nil && msg.Result.Status != nil {
 		a.updateStatusFromQuery(msg.Result.Status)
+		a.applyMotion(msg.Result.Status, msg.Result.EventTime, received, true)
 		a.emitTelemetry()
 		return
 	}
 
 	// Handle notify_status_update events
 	if msg.Method == "notify_status_update" && len(msg.Params) > 0 {
-		a.updateStatusFromQuery(msg.Params[0].Status)
+		var status map[string]map[string]interface{}
+		if err := json.Unmarshal(msg.Params[0], &status); err != nil {
+			a.log.WithError(err).Debug("Failed to parse status update")
+			return
+		}
+		var eventtime float64
+		if len(msg.Params) > 1 {
+			_ = json.Unmarshal(msg.Params[1], &eventtime)
+		}
+		a.updateStatusFromQuery(status)
+		a.applyMotion(status, eventtime, received, false)
 		a.emitTelemetry()
+	}
+}
+
+// applyMotion updates the motion state and hands a sample to the motion
+// handler when a motion field changed.
+func (a *MoonrakerAdapter) applyMotion(status map[string]map[string]interface{}, eventtime float64, at time.Time, initial bool) {
+	a.mu.Lock()
+	touched := a.applyMotionLocked(status, initial)
+	h := a.motion.handler
+	var s MotionSample
+	if touched && h != nil {
+		s = a.motionSampleLocked(eventtime, at)
+	}
+	a.mu.Unlock()
+	if touched && h != nil {
+		h(s)
 	}
 }
 
