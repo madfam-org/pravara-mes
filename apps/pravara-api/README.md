@@ -148,6 +148,33 @@ A background health recorder periodically checks the status of all system compon
 | `GET` | `/status` | Composite system health status |
 | `GET` | `/status/history` | 90-day uptime history |
 
+### Sparkplug edge nodes
+
+| Method | Path | Access |
+|--------|------|--------|
+| `POST` | `/v1/edge/enrollments` | public: a site box registers its self-generated credential (rate limited) |
+| `GET` | `/v1/edge/enrollments/:id` | public: enrollment status |
+| `GET` | `/v1/edge/enrollments` | admin: pending enrollments |
+| `POST` | `/v1/edge/enrollments/approve` | people only, admin |
+| `GET` | `/v1/edge/nodes`, `/v1/edge/live-state` | `pravara-mes:read` or `pravara-mes:nodes` |
+| `POST` | `/v1/edge/nodes/:id/disable` | people only, admin |
+| `PUT` | `/v1/machines/:id/sparkplug` | `pravara-mes:nodes` |
+| `GET` | `/v1/machines/:id/live-state` | `pravara-mes:read` or `pravara-mes:nodes` |
+| `POST` | `/v1/mqtt/auth`, `/v1/mqtt/acl` | internal listener (`INTERNAL_HTTP_PORT`, default 4510) with `X-Pravara-Internal-Key` |
+
+See [docs/operations/sparkplug-broker-and-enrollment.md](../../docs/operations/sparkplug-broker-and-enrollment.md).
+
+### Inventory
+
+| Method | Path | Access |
+|--------|------|--------|
+| `GET` | `/v1/inventory`, `/v1/inventory/:id` | `pravara-mes:read` |
+| `GET` | `/v1/inventory/low-stock` | people, or an API key holding `*` |
+| `POST` | `/v1/inventory`, `/v1/inventory/:id/adjust` | people, or an API key holding `*` |
+| `PATCH` | `/v1/inventory/:id` | people, or an API key holding `*` |
+
+`GET /v1/inventory` takes `search` (case-insensitive match on name or SKU), `category`, `limit` (default 20) and `offset`. Machine reads return only the tenant of the token or API key, like every other route.
+
 ### API Key Management (admin only)
 
 | Method | Path | Description |

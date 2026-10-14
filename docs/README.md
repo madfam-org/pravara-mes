@@ -15,6 +15,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
 | [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
 | [operations/fabrication-dispatch.md](./operations/fabrication-dispatch.md) | Matchmaking, dispatch (render → slice → start_job) and the passport updater |
+| [operations/sparkplug-broker-and-enrollment.md](./operations/sparkplug-broker-and-enrollment.md) | Broker HTTP auth/ACL, edge enrollment, primary host and EMQX configuration |
 | [deploy/edge/README.md](../deploy/edge/README.md) | Site box kit: machine adapter as the Sparkplug B edge node |
 | [packages/sparkplug/README.md](../packages/sparkplug/README.md) | Sparkplug B namespace, metrics, commands and ACL (MES-1) |
 

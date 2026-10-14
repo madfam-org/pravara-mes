@@ -19,6 +19,8 @@ type Config struct {
 	Redis       RedisConfig    `mapstructure:"redis"`
 	Worker      WorkerConfig   `mapstructure:"worker"`
 	Command     CommandConfig  `mapstructure:"command"`
+	// Sparkplug configures the Sparkplug B primary host (sparkplug.go).
+	Sparkplug SparkplugConfig `mapstructure:"sparkplug"`
 }
 
 // CommandConfig holds command dispatcher configuration.
@@ -179,6 +181,9 @@ func Load() (*Config, error) {
 	v.SetDefault("command.ack_timeout_seconds", 120)
 	v.SetDefault("command.dispatch_timeout_seconds", 600)
 	v.SetDefault("command.sweep_interval_seconds", 15)
+
+	// Sparkplug primary host defaults (sparkplug.go)
+	setSparkplugDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")

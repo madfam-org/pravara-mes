@@ -30,6 +30,8 @@ type Config struct {
 	Dispatch       DispatchConfig       `mapstructure:"dispatch"`
 	MachineClients MachineClientsConfig `mapstructure:"machine_clients"`
 	// --- end fabrication dispatch ---
+	// Edge: Sparkplug edge-node registry and broker auth (edge.go).
+	Edge EdgeConfig `mapstructure:"edge"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -150,6 +152,7 @@ func Load() (*Config, error) {
 	setDefaults(v)
 	setCommandChannelDefaults(v)
 	setDispatchDefaults(v) // fabrication dispatch
+	setEdgeDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -160,6 +163,7 @@ func Load() (*Config, error) {
 	bindEnvVars(v)
 	bindCommandChannelEnv(v)
 	bindDispatchEnv(v) // fabrication dispatch
+	bindEdgeEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")

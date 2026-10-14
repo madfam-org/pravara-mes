@@ -30,8 +30,13 @@ type Config struct {
 	// AllowPlaintextBroker permits tcp:// brokers on loopback only (tests and simulators).
 	AllowPlaintextBroker bool   `mapstructure:"allow_plaintext_broker"`
 	ClientID             string `mapstructure:"client_id"` // defaults to edge_node_id
-	Username             string `mapstructure:"username"`
-	PasswordFile         string `mapstructure:"password_file"`
+	// Username defaults to sparkplug.EdgeNodeUsername(group_id, edge_node_id),
+	// the name pravara assigns at enrollment.
+	Username     string `mapstructure:"username"`
+	PasswordFile string `mapstructure:"password_file"`
+	// EnrollmentURL is the pravara API base URL (https) used by -enroll to
+	// register this box's self-generated credential (enroll.go).
+	EnrollmentURL string `mapstructure:"enrollment_url"`
 
 	StateDir         string        `mapstructure:"state_dir"` // bdSeq + artifact scratch
 	PollInterval     time.Duration `mapstructure:"poll_interval"`
@@ -74,6 +79,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.ClientID == "" {
 		c.ClientID = c.EdgeNodeID
+	}
+	if c.Username == "" {
+		c.Username = sparkplug.EdgeNodeUsername(c.GroupID, c.EdgeNodeID)
 	}
 	if c.PollInterval <= 0 {
 		c.PollInterval = 2 * time.Second

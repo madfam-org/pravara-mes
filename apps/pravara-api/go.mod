@@ -6,6 +6,8 @@ toolchain go1.25.14
 
 replace github.com/madfam-org/pravara-mes/packages/sdk-go => ../../packages/sdk-go
 
+replace github.com/madfam-org/pravara-mes/packages/sparkplug => ../../packages/sparkplug
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.37.0
@@ -17,6 +19,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.11.2
 	github.com/madfam-org/pravara-mes/packages/sdk-go v0.0.0-00010101000000-000000000000
+	github.com/madfam-org/pravara-mes/packages/sparkplug v0.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
