@@ -206,6 +206,13 @@ func main() {
 		FeedRepo:    feedRepo,
 		StatusDB:    database.DB,
 	}
+	// --- fabrication dispatch (MES-1 §5-§7) ---
+	dispatchService, err := api.BuildDispatchService(cfg, database, publisher, log)
+	if err != nil {
+		log.WithError(err).Fatal("Invalid fabrication dispatch configuration")
+	}
+	routesDeps.Dispatch = dispatchService
+	// --- end fabrication dispatch ---
 	api.RegisterRoutesAll(router, database, cfg, log, publisher, usageRecorder, routesDeps)
 
 	// Start background services
@@ -246,6 +253,10 @@ func main() {
 		offlineSweeper.UseTenantScopes(database.DB)
 		offlineSweeper.Start(ctx)
 	}
+
+	// --- fabrication dispatch: runner (no-op unless DISPATCH_ENABLED) ---
+	dispatchService.Start(ctx)
+	// --- end fabrication dispatch ---
 
 	// Create HTTP server
 	srv := &http.Server{

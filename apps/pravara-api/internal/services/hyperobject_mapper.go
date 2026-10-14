@@ -154,6 +154,7 @@ func (m *HyperobjectMapper) Import(ctx context.Context, req HyperobjectImportReq
 	metadata := map[string]interface{}{
 		"source":     "yantra4d",
 		"slug":       manifest.Project.Slug,
+		"mode":       mode, // read by fabrication dispatch (internal/dispatch/product.go)
 		"tags":       manifest.Project.Tags,
 		"domain":     manifest.Hyperobject.Domain,
 		"engine":     manifest.Project.Engine,

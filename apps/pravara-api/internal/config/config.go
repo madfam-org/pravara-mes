@@ -26,6 +26,10 @@ type Config struct {
 	Orders     OrdersConfig     `mapstructure:"orders"`
 	Commands   CommandsConfig   `mapstructure:"commands"`
 	Liveness   LivenessConfig   `mapstructure:"liveness"`
+	// --- fabrication dispatch (MES-1 §5-§7), see dispatch.go ---
+	Dispatch       DispatchConfig       `mapstructure:"dispatch"`
+	MachineClients MachineClientsConfig `mapstructure:"machine_clients"`
+	// --- end fabrication dispatch ---
 	// Edge: Sparkplug edge-node registry and broker auth (edge.go).
 	Edge EdgeConfig `mapstructure:"edge"`
 }
@@ -147,6 +151,7 @@ func Load() (*Config, error) {
 	// Set defaults
 	setDefaults(v)
 	setCommandChannelDefaults(v)
+	setDispatchDefaults(v) // fabrication dispatch
 	setEdgeDefaults(v)
 
 	// Read from environment variables
@@ -157,6 +162,7 @@ func Load() (*Config, error) {
 	// Map environment variables to config keys
 	bindEnvVars(v)
 	bindCommandChannelEnv(v)
+	bindDispatchEnv(v) // fabrication dispatch
 	bindEdgeEnv(v)
 
 	// Optionally read from config file

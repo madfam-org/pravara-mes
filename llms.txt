@@ -15,6 +15,9 @@ physical jobs (orders, tasks, machines, telemetry, quality).
 - `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context (generated;
   do not hand-edit).
 - `llms-full.txt` — full context map and durable operating contract.
+- `docs/operations/fabrication-dispatch.md` — matchmaking (`POST /v1/match`),
+  dispatch (`/v1/dispatches`: render → slice → start_job) and the passport
+  updater; off unless `DISPATCH_ENABLED=true`.
 
 ## Deployed vs not deployed
 
