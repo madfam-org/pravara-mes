@@ -26,6 +26,8 @@ type Config struct {
 	Orders     OrdersConfig     `mapstructure:"orders"`
 	Commands   CommandsConfig   `mapstructure:"commands"`
 	Liveness   LivenessConfig   `mapstructure:"liveness"`
+	// Edge: Sparkplug edge-node registry and broker auth (edge.go).
+	Edge EdgeConfig `mapstructure:"edge"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -145,6 +147,7 @@ func Load() (*Config, error) {
 	// Set defaults
 	setDefaults(v)
 	setCommandChannelDefaults(v)
+	setEdgeDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -154,6 +157,7 @@ func Load() (*Config, error) {
 	// Map environment variables to config keys
 	bindEnvVars(v)
 	bindCommandChannelEnv(v)
+	bindEdgeEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")

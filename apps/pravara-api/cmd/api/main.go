@@ -263,6 +263,25 @@ func main() {
 		}
 	}()
 
+	// In-cluster listener for the EMQX HTTP authentication and
+	// authorization calls (/v1/mqtt/auth, /v1/mqtt/acl). It is a separate
+	// port that the public ingress never routes to.
+	var internalSrv *http.Server
+	if cfg.Edge.InternalPort > 0 {
+		internalSrv = &http.Server{
+			Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Edge.InternalPort),
+			Handler:      api.NewInternalRouter(database, cfg, log),
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+		}
+		go func() {
+			log.WithField("addr", internalSrv.Addr).Info("Internal broker-auth listener")
+			if err := internalSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.WithError(err).Error("Internal broker-auth listener failed")
+			}
+		}()
+	}
+
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -284,6 +303,9 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.WithError(err).Error("Server forced to shutdown")
+	}
+	if internalSrv != nil {
+		_ = internalSrv.Shutdown(shutdownCtx)
 	}
 
 	log.Info("Server exited")

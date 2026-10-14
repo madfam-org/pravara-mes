@@ -33,6 +33,7 @@ RUN go mod download
 WORKDIR /build
 COPY apps/telemetry-worker/ ./apps/telemetry-worker/
 COPY packages/sdk-go/ ./packages/sdk-go/
+COPY packages/sparkplug/ ./packages/sparkplug/
 
 # Build the binary
 WORKDIR /build/apps/telemetry-worker

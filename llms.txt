@@ -22,7 +22,10 @@ Deployed by GitOps: pravara-api, telemetry-worker, pravara-ui,
 pravara-landing, pravara-gateway (Centrifugo), pravara-admin. Not built or
 deployed: visualization-engine, video-streaming (does not build),
 ml-orchestrator, luban-bridge, octoprint-connector, machine-adapter (runs on
-site boxes as the Sparkplug B edge node; kit in `deploy/edge/`).
+site boxes as the Sparkplug B edge node; kit in `deploy/edge/`). The
+telemetry worker can run the Sparkplug primary host (off by default); edge
+enrollment and broker auth are in
+`docs/operations/sparkplug-broker-and-enrollment.md`.
 
 ## Production operations
 

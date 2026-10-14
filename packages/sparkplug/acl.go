@@ -97,3 +97,12 @@ func FormatACL(rules []ACLRule) string {
 	}
 	return b.String()
 }
+
+// EdgeNodeUsername is the MQTT username of an edge-node credential:
+// "edge:{group}:{edge}". pravara-api derives it at enrollment and the edge
+// node uses it when no username is configured, so no person has to copy it.
+// The broker credential registry maps it back to (group, edge); it is never
+// parsed.
+func EdgeNodeUsername(group, edge string) string {
+	return "edge:" + group + ":" + edge
+}

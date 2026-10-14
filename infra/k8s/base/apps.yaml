@@ -43,6 +43,10 @@ spec:
           ports:
             - containerPort: 4500
               name: http
+            # In-cluster only: EMQX HTTP auth/ACL (/v1/mqtt/auth, /v1/mqtt/acl).
+            # Served by the pravara-api-internal Service; no ingress routes it.
+            - containerPort: 4510
+              name: internal
           # The Go binary is built with CGO_ENABLED=0 (musl/distroless),
           # so `os/user.Current()` (called transitively by lib/pq when no
           # explicit user= is in the DSN) fails with:
@@ -112,6 +116,27 @@ spec:
     - port: 80
       targetPort: 4500
       name: http
+  selector:
+    app: pravara-api
+    app.kubernetes.io/name: pravara-api
+---
+# In-cluster listener of pravara-api for the broker's HTTP authentication and
+# authorization calls. Not referenced by any Ingress or tunnel route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravara-api-internal
+  namespace: pravara-mes
+  labels:
+    app: pravara-api
+    app.kubernetes.io/name: pravara-api
+    app.kubernetes.io/part-of: pravara-mes
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4510
+      targetPort: 4510
+      name: internal
   selector:
     app: pravara-api
     app.kubernetes.io/name: pravara-api

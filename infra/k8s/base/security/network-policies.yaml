@@ -69,6 +69,14 @@ spec:
       ports:
         - protocol: TCP
           port: 4500
+    # Allow the broker's HTTP auth/ACL calls to the internal listener only
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: emqx
+      ports:
+        - protocol: TCP
+          port: 4510
 ---
 # Allow pravara-api egress to PostgreSQL, Redis
 apiVersion: networking.k8s.io/v1
@@ -363,3 +371,25 @@ spec:
       ports:
         - protocol: TCP
           port: 1883
+---
+# Allow EMQX egress to pravara-api's internal listener (HTTP authentication
+# and authorization of edge-node credentials, MES-1 §3)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: emqx-egress
+  namespace: pravara-mes
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: emqx
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pravara-api
+      ports:
+        - protocol: TCP
+          port: 4510
