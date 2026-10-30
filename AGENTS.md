@@ -94,7 +94,10 @@ Regenerate or repair these files with
   which side is canonical.
 - **Pending work.** The one canonical list is ROADMAP.md
   [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
-  Don't start a second list here, in README or in the llms files.
+  Don't start a second list here, in README or in the llms files. The digital
+  twins programme's dated status (merge order of its open PRs, next steps) is a
+  subsection there:
+  [«Digital twins programme (MES-1)»](./ROADMAP.md#digital-twins-programme-mes-1-status-as-of-2026-10-05).
 - **Public repository.** No internal hostnames, cluster or tunnel ids, client
   names or unfixed-vulnerability detail in docs, PRs or commits. Write
   "(tracked privately)" instead.
