@@ -18,7 +18,7 @@ const (
 	// ScopeNodes: producer-node registry, heartbeats and telemetry.
 	ScopeNodes = "pravara-mes:nodes"
 	// ScopePassports: passport and genealogy writes.
-	ScopePassports = "pravara-mes:passports"
+	ScopePassports = "pravara-mes:passports" // #nosec G101 -- OAuth scope name ("passports" = product passports), not a credential
 	// ScopeRead: read-only access to the machine-facing resources.
 	ScopeRead = "pravara-mes:read"
 

@@ -207,7 +207,7 @@ func pollEnrollment(ctx context.Context, client *http.Client, base *url.URL, id 
 
 func loadEnrollmentState(path string) (enrollmentState, bool) {
 	var st enrollmentState
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- the node's own enrollment-state file from its local config, not remote input
 	if err != nil || json.Unmarshal(b, &st) != nil || st.EnrollmentID == "" {
 		return enrollmentState{}, false
 	}
