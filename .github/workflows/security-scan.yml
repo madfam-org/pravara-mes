@@ -48,7 +48,9 @@ jobs:
       - name: Run gosec security scanner
         uses: securego/gosec@master
         with:
-          args: '-fmt sarif -out gosec-results.sarif ./...'
+          # -stdout -verbose=text prints every finding in the job log as well as
+          # writing the SARIF file, so a red step says why without the Security tab.
+          args: '-fmt sarif -out gosec-results.sarif -stdout -verbose=text ./...'
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
