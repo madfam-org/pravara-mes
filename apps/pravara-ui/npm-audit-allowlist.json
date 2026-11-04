@@ -14,6 +14,13 @@
       "severity": "moderate",
       "reason": "Fixed only in 7.x, while tailwindcss 3.4 and postcss-nested pin 6.x (checked 2026-10-09). It parses first-party CSS at build time.",
       "review_by": "2026-11-09"
+    },
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "severity": "moderate",
+      "reason": "Fixed only in minimatch 11.0.1 (advisory published 2026-10-30, no 3.x/9.x/10.x backport; checked 2026-11-04). It enters only through lint tooling (eslint 9, @eslint/eslintrc, eslint-plugin-import need minimatch 3.x; @typescript-eslint/typescript-estree needs 10.x), and 11.x drops the default export those call. Dev-only: globs come from first-party lint config, never from untrusted input, and nothing ships to the browser.",
+      "review_by": "2026-12-04"
     }
   ]
 }
