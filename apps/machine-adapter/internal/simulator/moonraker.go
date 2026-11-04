@@ -268,7 +268,7 @@ func (m *Moonraker) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20) // cap the upload before parsing (gosec G120)
-	if err := r.ParseMultipartForm(64 << 20); err != nil {
+	if err := r.ParseMultipartForm(64 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader on the line above
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
