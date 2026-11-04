@@ -149,7 +149,7 @@ func (a *BambuAdapter) Connect(host, accessCode, serial string) error {
 // when TLSPinSHA256 is set the leaf certificate must match it.
 func (a *BambuAdapter) tlsConfig() *tls.Config {
 	cfg := &tls.Config{
-		InsecureSkipVerify: true, //nolint:gosec // self-signed printer certificate; optional pin below
+		InsecureSkipVerify: true, //nolint:gosec // #nosec G402 -- LAN printer presents a self-signed certificate; optional SHA-256 pin below
 		MinVersion:         tls.VersionTLS12,
 	}
 	if pin := strings.ToLower(strings.TrimSpace(a.TLSPinSHA256)); pin != "" {

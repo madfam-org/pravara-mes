@@ -125,7 +125,7 @@ func proxyToVizEngine(path string, log *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		url := vizEngineURL + path
 
-		resp, err := http.Get(url)
+		resp, err := http.Get(url) // #nosec G107 -- vizEngineURL comes from config; path is the fixed route string given at registration, never request input
 		if err != nil {
 			log.WithError(err).WithField("path", path).Error("Failed to proxy to viz-engine")
 			c.JSON(http.StatusBadGateway, gin.H{"error": "viz-engine unavailable"})

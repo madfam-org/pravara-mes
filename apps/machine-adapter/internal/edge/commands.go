@@ -158,7 +158,7 @@ func (n *Node) startJob(d *device, cmd sparkplug.DeviceCommand) error {
 	defer func() { _ = os.Remove(path) }()
 
 	name := artifactFileName(jobIDFor(cmd), cmd.ArtifactSHA256, cmd.ArtifactMediaType)
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- temp file the fetcher just wrote and digest-checked; removed on return
 	if err != nil {
 		return fmt.Errorf("open artifact: %w", err)
 	}

@@ -215,8 +215,9 @@ func main() {
 	// Start server
 	port := viper.GetString("server.port")
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: router,
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second, // bound slow-header clients (gosec G112)
 	}
 
 	// Graceful shutdown
