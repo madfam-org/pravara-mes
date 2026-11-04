@@ -46,23 +46,35 @@ jobs:
             packages/sdk-go/go.sum
 
       - name: Run gosec security scanner
-        uses: securego/gosec@v2.30.0
-        with:
-          # Pinned: @master changed under this repo on 2026-10-27. Until then the
-          # scanner loaded no package at all (0 files checked, so it always
-          # passed); the new image checks all 261 files and found 226 issues.
-          # Exclusions match enclii's gosec gate:
-          #   G104 unchecked errors: golangci-lint errcheck's job (pr-validation.yml);
-          #   G115 integer-conversion heuristic: Sparkplug B carries Int8/16/32/64
-          #        as unsigned two's complement by spec, so every codec cast trips it;
-          #   G204/G301/G302/G306 subprocess and file-mode heuristics.
-          # -exclude-generated skips sparkplug_b.pb.go (protoc output, G103).
-          # apps/video-streaming is not in go.work, does not compile on main and
-          # has no Deployment, so gosec cannot type-check it; owner to delete or
-          # revive it (then drop this exclusion).
-          # -stdout -verbose=text prints every finding in the job log as well as
-          # writing the SARIF file, so a red step says why without the Security tab.
-          args: '-exclude=G104,G115,G204,G301,G302,G306 -exclude-generated -exclude-dir=apps/video-streaming -fmt sarif -out gosec-results.sarif -stdout -verbose=text ./...'
+        # The gosec image by digest (2.30.0, the image securego/gosec's own
+        # action.yml pins on master). Do NOT use `securego/gosec@v2.30.0`: that
+        # tag's action.yml still runs the 2.29.0 image, which loads no package
+        # in this workspace (0 files checked, always green). That blind scan is
+        # what `@master` ran until 2026-10-27; the 2.30.0 image checks all
+        # 261 files and found 226 issues on an unchanged main.
+        #
+        # Exclusions match enclii's gosec gate:
+        #   G104 unchecked errors: golangci-lint errcheck's job (pr-validation.yml);
+        #   G115 integer-conversion heuristic: Sparkplug B carries Int8/16/32/64
+        #        as unsigned two's complement by spec, so every codec cast trips it;
+        #   G204/G301/G302/G306 subprocess and file-mode heuristics.
+        # -exclude-generated skips sparkplug_b.pb.go (protoc output, G103).
+        # apps/video-streaming is not in go.work, does not compile on main and
+        # has no Deployment, so gosec cannot type-check it; owner to delete or
+        # revive it (then drop this exclusion).
+        shell: bash
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            ghcr.io/securego/gosec@sha256:7bcf1edbab3e80d8006a28d53e7031a9c9775be8eec30679e4adc1f51d272121 \
+            -exclude=G104,G115,G204,G301,G302,G306 -exclude-generated \
+            -exclude-dir=apps/video-streaming \
+            -fmt sarif -out gosec-results.sarif -stdout -verbose=text ./... | tee gosec-results.txt
+          # A scan that loaded nothing is a failed read, not a pass.
+          files=$(grep -oE 'Files[[:space:]]*:[[:space:]]*[0-9]+' gosec-results.txt | grep -oE '[0-9]+$' | head -1)
+          if [ "${files:-0}" -lt 100 ]; then
+            echo "::error::gosec checked ${files:-0} files; expected the whole workspace (261 on 2026-11-04)"
+            exit 1
+          fi
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
