@@ -150,7 +150,7 @@ spec:
                   key: api_key
           resources:
             requests:
-              cpu: 50m
+              cpu: 25m
               memory: 128Mi
             limits:
               cpu: 500m
@@ -195,7 +195,7 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70
+          averageUtilization: 140
     - type: Resource
       resource:
         name: memory
