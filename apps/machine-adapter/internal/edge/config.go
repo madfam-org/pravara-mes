@@ -201,7 +201,7 @@ func readSecret(path string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- secret file path from the node's local config, not remote input
 	if err != nil {
 		return "", fmt.Errorf("read secret file: %w", err)
 	}
