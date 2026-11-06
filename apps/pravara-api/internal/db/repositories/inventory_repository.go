@@ -168,15 +168,17 @@ func (r *InventoryRepository) GetItemByID(ctx context.Context, id uuid.UUID) (*I
 
 // CreateItem inserts a new inventory item into the database.
 // If item.ID is nil, a new UUID is generated automatically.
+// quantity_available is a generated column (021): PostgreSQL computes it and
+// rejects any written value, so it is read back, never inserted.
 func (r *InventoryRepository) CreateItem(ctx context.Context, item *InventoryItem) error {
 	query := `
 		INSERT INTO inventory_items (
 			id, tenant_id, sku, name, category, description, unit,
-			quantity_on_hand, quantity_reserved, quantity_available,
+			quantity_on_hand, quantity_reserved,
 			reorder_point, reorder_quantity, forgesight_id, unit_cost,
 			currency, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		RETURNING created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING quantity_available, created_at, updated_at
 	`
 
 	if item.ID == uuid.Nil {
@@ -193,9 +195,9 @@ func (r *InventoryRepository) CreateItem(ctx context.Context, item *InventoryIte
 	err := r.db.QueryRowContext(ctx, query,
 		item.ID, item.TenantID, item.SKU, item.Name, item.Category,
 		description, item.Unit, item.QuantityOnHand, item.QuantityReserved,
-		item.QuantityAvailable, item.ReorderPoint, item.ReorderQuantity,
+		item.ReorderPoint, item.ReorderQuantity,
 		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON,
-	).Scan(&item.CreatedAt, &item.UpdatedAt)
+	).Scan(&item.QuantityAvailable, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
 		return fmt.Errorf("failed to create inventory item: %w", err)
@@ -351,11 +353,11 @@ func (r *InventoryRepository) AdjustQuantity(ctx context.Context, itemID uuid.UU
 	return db.InTx(ctx, r.db, func(tx DBTX) error {
 		var err error
 
-		// Update quantity on hand and recalculate available
+		// Update quantity on hand; quantity_available is a generated column
+		// that PostgreSQL recomputes (and refuses to be written).
 		updateQuery := `
 		UPDATE inventory_items SET
 			quantity_on_hand = quantity_on_hand + $2,
-			quantity_available = (quantity_on_hand + $2) - quantity_reserved,
 			updated_at = NOW()
 		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING quantity_on_hand
