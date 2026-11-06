@@ -148,6 +148,20 @@ var (
 		[]string{"result"},
 	)
 
+	// ForgeSightReferenceItemsTotal counts ForgeSight webhook items by outcome.
+	// ForgeSight data is reference only: no outcome writes inventory cost or
+	// stock ("reference" = accepted and logged; "ignored_missing_id" = no
+	// forgesight_id).
+	ForgeSightReferenceItemsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "forgesight_reference_items_total",
+			Help:      "ForgeSight webhook items received as reference data (never written to inventory)",
+		},
+		[]string{"outcome"},
+	)
+
 	// SSEConnectionsActive tracks the number of active SSE connections.
 	SSEConnectionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{

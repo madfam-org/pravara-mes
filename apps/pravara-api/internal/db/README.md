@@ -145,7 +145,7 @@ internal/db/
 | `GenealogyRepository` | ProductGenealogy | `Seal`, `GetTree` |
 | `WorkInstructionRepository` | WorkInstruction, TaskWorkInstruction | `AttachToTask`, `AcknowledgeStep` |
 | `SPCRepository` | SPCControlLimit, SPCViolation | `ComputeLimits`, `UpsertLimit`, `AcknowledgeViolation` |
-| `InventoryRepository` | InventoryItem, InventoryTransaction | `AdjustQuantity`, `UpsertByForgeSightID`, `GetLowStock` |
+| `InventoryRepository` | InventoryItem, InventoryTransaction | `AdjustQuantity`, `GetLowStock` (ForgeSight data is reference only and never written here) |
 
 ## Transactions
 

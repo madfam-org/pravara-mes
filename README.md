@@ -300,7 +300,7 @@ HMAC-SHA256 signature header.
 |--------|----------|------------------|-------------|
 | POST | `/v1/webhooks/cotiza` | `X-Cotiza-Signature` | Cotiza order events (`order.created`/`confirmed`/`updated`/`cancelled`). **Contract drift:** Cotiza's dispatcher does not call this route; see [Related repositories / contracts](#related-repositories--contracts) |
 | POST | `/v1/webhooks/dhanam` | `X-Dhanam-Signature` | Dhanam billing events |
-| POST | `/v1/webhooks/forgesight` | `X-ForgeSight-Signature` | ForgeSight price/inventory events |
+| POST | `/v1/webhooks/forgesight` | `X-ForgeSight-Signature` | ForgeSight benchmark events, **reference only**: each item is logged and counted (`pravara_api_forgesight_reference_items_total`); inventory `unit_cost`, stock and items are never written from it |
 | POST | `/v1/webhooks/tezca` | `X-Tezca-Signature` (`sha256=<hex>`) | Tezca law-change notifications |
 
 ### Webhook Subscriptions API
@@ -816,7 +816,7 @@ infra/k8s/production` is break-glass only.
 | Pravara → PhyndCRM fabrication status (**header drift**) | outbound webhook subscriptions, `X-Pravara-Signature: sha256=<hex>` (`internal/services/webhook_dispatcher.go`) | [phynd-crm `/api/webhooks/pravara`](https://github.com/madfam-org/phynd-crm/blob/main/apps/web/src/app/api/webhooks/pravara/route.ts) verifies `x-webhook-signature`; event names: [phynd-crm `docs/ENGAGEMENT_EVENT_TAXONOMY.md`](https://github.com/madfam-org/phynd-crm/blob/main/docs/ENGAGEMENT_EVENT_TAXONOMY.md) |
 | Tezca → Pravara law-change webhook | `POST /v1/webhooks/tezca`, `X-Tezca-Signature: sha256=<hex>` | [tezca `apps/api/tasks.py`](https://github.com/madfam-org/tezca/blob/main/apps/api/tasks.py) (signs and delivers) |
 | Forj → Pravara orders; Pravara → Forj status | `POST /v1/orders` with an API key; `order.status_changed` and `task.assignment_failed` via webhook subscriptions (`X-Pravara-Signature`) | forj (private repository) |
-| Dhanam billing events; ForgeSight price feed | `POST /v1/webhooks/dhanam` (`X-Dhanam-Signature`); `POST /v1/webhooks/forgesight` (`X-ForgeSight-Signature`) | Dhanam and ForgeSight (private repositories; sender side not re-verified in the 2026-10-02 pass) |
+| Dhanam billing events; ForgeSight benchmark feed (reference only, never written to inventory) | `POST /v1/webhooks/dhanam` (`X-Dhanam-Signature`); `POST /v1/webhooks/forgesight` (`X-ForgeSight-Signature`) | Dhanam and ForgeSight (private repositories; sender side not re-verified in the 2026-10-02 pass) |
 | Karafiel CFDI on completed jobs | not wired; see [ROADMAP pending item 18](./ROADMAP.md#pending-work-and-roadmap-ahead) | Karafiel (private repository) |
 | Build, sign and digest pin; ecosystem context | `.github/workflows/build-deploy.yml`, `deploy-admin.yml`; `ECOSYSTEM.md` (generated) | [enclii `docs/runbooks/SIGNED_GITOPS_DIGESTS.md`](https://github.com/madfam-org/enclii/blob/main/docs/runbooks/SIGNED_GITOPS_DIGESTS.md); ECOSYSTEM.md source: [enclii `docs/templates/ecosystem/metadata_fabrication.py`](https://github.com/madfam-org/enclii/blob/main/docs/templates/ecosystem/metadata_fabrication.py) |
 

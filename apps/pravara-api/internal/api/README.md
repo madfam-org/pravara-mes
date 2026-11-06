@@ -25,7 +25,7 @@ This package provides Gin HTTP handlers following the repository pattern. Each h
 | `ProductHandler` | 8 | Product catalog and BOM management |
 | `GenealogyHandler` | 6 | Product genealogy and sealing |
 | `WorkInstructionHandler` | 5+3 | Work instruction CRUD and task attachment |
-| `InventoryHandler` | 7 | Inventory management and ForgeSight webhook |
+| `InventoryHandler` | 7 | Inventory management and the ForgeSight webhook (reference only: never writes cost or stock) |
 
 ## Request/Response Pattern
 

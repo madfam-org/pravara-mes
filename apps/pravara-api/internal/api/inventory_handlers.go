@@ -15,6 +15,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/observability"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/services"
 )
@@ -95,6 +96,8 @@ type ForgeSightWebhookPayload struct {
 }
 
 // ForgeSightWebhookItem represents a single item in the ForgeSight webhook.
+// Quantity and UnitCost are market reference values: they are logged and
+// never written to inventory (see ForgeSightWebhook).
 type ForgeSightWebhookItem struct {
 	ForgeSightID string   `json:"forgesight_id"`
 	SKU          string   `json:"sku"`
@@ -431,7 +434,19 @@ func (h *InventoryHandler) GetLowStock(c *gin.Context) {
 	})
 }
 
-// ForgeSightWebhook handles incoming webhook events from ForgeSight.
+// ForgeSightWebhook accepts ForgeSight events as reference data only.
+//
+// ForgeSight is market intelligence: its prices are benchmarks, not this
+// tenant's cost, and its quantities are not this shop's stock. Valuing
+// consumption belongs to the cost ledger (Dhanam), and stock moves only
+// through inventory transactions (people, or job consumption). So the
+// webhook still authenticates, verifies the signature and parses the payload,
+// then records each item as a reference (one log line and a counter) and
+// never writes inventory: unit_cost, quantity_on_hand and every other
+// inventory column stay as they are, and no item is created.
+//
+// The response keeps its shape ({message, received, processed}) so senders
+// keep working; processed counts the items accepted as reference.
 func (h *InventoryHandler) ForgeSightWebhook(c *gin.Context) {
 	// Read body for HMAC verification
 	body, err := io.ReadAll(c.Request.Body)
@@ -477,45 +492,56 @@ func (h *InventoryHandler) ForgeSightWebhook(c *gin.Context) {
 	}
 
 	tenantID, _ := middleware.GetTenantID(c)
-	tenantUUID, _ := uuid.Parse(tenantID)
 
-	var processed int
+	var accepted int
 	for _, fsItem := range payload.Items {
-		item := &repositories.InventoryItem{
-			TenantID:       tenantUUID,
-			SKU:            fsItem.SKU,
-			Name:           fsItem.Name,
-			Category:       fsItem.Category,
-			Unit:           fsItem.Unit,
-			QuantityOnHand: fsItem.Quantity,
-			ForgeSightID:   &fsItem.ForgeSightID,
-			UnitCost:       fsItem.UnitCost,
-			Currency:       fsItem.Currency,
-		}
-
-		if item.Currency == "" {
-			item.Currency = "MXN"
-		}
-		if item.Category == "" {
-			item.Category = "material"
-		}
-
-		if err := h.inventoryRepo.UpsertByForgeSightID(c.Request.Context(), item); err != nil {
-			h.log.WithError(err).WithField("forgesight_id", fsItem.ForgeSightID).Error("Failed to upsert inventory from ForgeSight")
+		if fsItem.ForgeSightID == "" {
+			observability.ForgeSightReferenceItemsTotal.WithLabelValues(forgeSightItemIgnored).Inc()
 			continue
 		}
-		processed++
+		accepted++
+		observability.ForgeSightReferenceItemsTotal.WithLabelValues(forgeSightItemReference).Inc()
+
+		fields := logrus.Fields{
+			"tenant_id":          tenantID,
+			"event":              payload.Event,
+			"forgesight_id":      fsItem.ForgeSightID,
+			"sku":                fsItem.SKU,
+			"benchmark_quantity": fsItem.Quantity,
+			"benchmark_unit":     fsItem.Unit,
+			"benchmark_currency": fsItem.Currency,
+		}
+		if fsItem.UnitCost != nil {
+			fields["benchmark_unit_cost"] = *fsItem.UnitCost
+		}
+		if accepted <= forgeSightItemLogLimit {
+			h.log.WithFields(fields).Info("ForgeSight reference item (inventory unchanged)")
+		}
 	}
 
 	h.log.WithFields(logrus.Fields{
-		"event":     payload.Event,
-		"received":  len(payload.Items),
-		"processed": processed,
-	}).Info("ForgeSight webhook processed")
+		"tenant_id":            tenantID,
+		"event":                payload.Event,
+		"received":             len(payload.Items),
+		"processed":            accepted,
+		"ignored":              len(payload.Items) - accepted,
+		"item_lines_truncated": accepted > forgeSightItemLogLimit,
+	}).Info("ForgeSight webhook received as reference only; inventory cost and stock unchanged")
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":   "Webhook processed",
-		"received":  len(payload.Items),
-		"processed": processed,
+		"message":        "Webhook received; ForgeSight data is reference only and does not change inventory cost or stock",
+		"received":       len(payload.Items),
+		"processed":      accepted,
+		"reference_only": true,
 	})
 }
+
+// forgeSightItemLogLimit caps the per-item reference log lines of one call;
+// the counter still counts every item.
+const forgeSightItemLogLimit = 100
+
+// Outcome labels of observability.ForgeSightReferenceItemsTotal.
+const (
+	forgeSightItemReference = "reference"
+	forgeSightItemIgnored   = "ignored_missing_id"
+)
