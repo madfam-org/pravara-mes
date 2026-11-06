@@ -79,6 +79,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	wiRepo := repositories.NewWorkInstructionRepository(tdb)
 	spcRepo := repositories.NewSPCRepository(tdb)
 	inventoryRepo := repositories.NewInventoryRepository(tdb)
+	consumptionRepo := repositories.NewJobConsumptionRepository(tdb)
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
@@ -105,6 +106,8 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	wiHandler := NewWorkInstructionHandler(wiRepo, log)
 	spcHandler := NewSPCHandler(spcRepo, log)
 	inventoryHandler := NewInventoryHandler(inventoryRepo, log)
+	consumptionHandler := NewConsumptionHandler(consumptionRepo,
+		services.NewConsumptionService(tdb, consumptionRepo, genealogyRepo, log), log)
 
 	// Initialize Yantra4D handler
 	var yantra4dHandler *Yantra4DHandler
@@ -241,6 +244,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			// Work instruction endpoints on tasks
 			tasks.POST("/:id/work-instructions", wiHandler.AttachToTask)
 			tasks.GET("/:id/work-instructions", wiHandler.GetTaskWorkInstructions)
+			tasks.POST("/:id/consumption", consumptionHandler.Report)
 			tasks.POST("/:id/work-instructions/:wiId/acknowledge", wiHandler.AcknowledgeStep)
 		}
 
@@ -383,6 +387,9 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			inventory.PATCH("/:id", inventoryHandler.UpdateItem)
 			inventory.POST("/:id/adjust", inventoryHandler.AdjustItem)
 		}
+
+		// Job consumption (quantities only): consumption_handlers.go
+		v1.GET("/jobs/consumption", consumptionHandler.List)
 
 		// --- fabrication dispatch (MES-1 §5-§7): dispatch_handlers.go ---
 		registerDispatchRoutes(v1, database, cfg, log, publisher, deps.Dispatch)
