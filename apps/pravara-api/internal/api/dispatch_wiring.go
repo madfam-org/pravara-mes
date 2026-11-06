@@ -72,6 +72,8 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		deps.Ledger = repositories.NewTaskCommandRepository(tdb)
 		deps.Genealogy = services.NewGenealogyService(repositories.NewGenealogyRepository(tdb),
 			repositories.NewProductRepository(tdb), publisher, log)
+		deps.Consumption = services.NewConsumptionService(tdb, repositories.NewJobConsumptionRepository(tdb),
+			repositories.NewGenealogyRepository(tdb), log)
 	}
 	if publisher != nil {
 		deps.Enqueuer = publisher

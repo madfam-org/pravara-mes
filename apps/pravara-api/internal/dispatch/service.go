@@ -132,6 +132,8 @@ type Deps struct {
 	Enqueuer  CommandEnqueuer
 	Genealogy GenealogyCreator
 	Clients   *machineclients.Set
+	// Consumption records what a completed job consumed (nil: not recorded).
+	Consumption *services.ConsumptionService
 }
 
 // Service is the dispatcher, matchmaker and passport updater.

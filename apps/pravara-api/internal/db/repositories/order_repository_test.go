@@ -41,17 +41,17 @@ func TestOrderRepository_List(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
 					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-					"created_at", "updated_at",
+					"created_at", "updated_at", "engagement_slug",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
 						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
-						time.Now(), time.Now(),
+						time.Now(), time.Now(), nil,
 					).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-002", "Customer B", "customer2@example.com",
 						types.OrderStatusInProduction, 3, time.Now(), 2000.00, "USD", nil, []byte("{}"),
-						time.Now(), time.Now(),
+						time.Now(), time.Now(), nil,
 					)
 
 				mock.ExpectQuery("SELECT id, tenant_id").WillReturnRows(rows)
@@ -74,12 +74,12 @@ func TestOrderRepository_List(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
 					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-					"created_at", "updated_at",
+					"created_at", "updated_at", "engagement_slug",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
 						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
-						time.Now(), time.Now(),
+						time.Now(), time.Now(), nil,
 					)
 
 				// Args: status=$1, limit=$2 (offset not added when 0)
@@ -105,12 +105,12 @@ func TestOrderRepository_List(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
 					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-					"created_at", "updated_at",
+					"created_at", "updated_at", "engagement_slug",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-001", "Customer A", "customer@example.com",
 						types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
-						time.Now(), time.Now(),
+						time.Now(), time.Now(), nil,
 					)
 
 				// Args: priority=$1, limit=$2 (offset not added when 0)
@@ -134,12 +134,12 @@ func TestOrderRepository_List(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
 					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-					"created_at", "updated_at",
+					"created_at", "updated_at", "engagement_slug",
 				}).
 					AddRow(
 						uuid.New(), uuid.New(), "EXT-011", "Customer K", "customerk@example.com",
 						types.OrderStatusReceived, 3, time.Now(), 500.00, "USD", nil, []byte("{}"),
-						time.Now(), time.Now(),
+						time.Now(), time.Now(), nil,
 					)
 
 				mock.ExpectQuery("SELECT id, tenant_id.*LIMIT.*OFFSET").
@@ -205,11 +205,11 @@ func TestOrderRepository_GetByID(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "tenant_id", "external_id", "customer_name", "customer_email",
 					"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-					"created_at", "updated_at",
+					"created_at", "updated_at", "engagement_slug",
 				}).AddRow(
 					id, uuid.New(), "EXT-001", "Customer A", "customer@example.com",
 					types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, metadataJSON,
-					time.Now(), time.Now(),
+					time.Now(), time.Now(), nil,
 				)
 
 				mock.ExpectQuery("SELECT id, tenant_id.*FROM orders WHERE id").
@@ -516,14 +516,14 @@ func TestOrderRepository_GetByExternalID(t *testing.T) {
 	rows := sqlmock.NewRows([]string{
 		"id", "tenant_id", "external_id", "customer_name", "customer_email",
 		"status", "priority", "due_date", "total_amount", "currency", "shipping_address", "metadata",
-		"created_at", "updated_at",
+		"created_at", "updated_at", "engagement_slug",
 	}).AddRow(
 		uuid.New(), uuid.New(), externalID, "Customer A", "customer@example.com",
 		types.OrderStatusReceived, 5, time.Now(), 1000.00, "USD", nil, []byte("{}"),
-		time.Now(), time.Now(),
+		time.Now(), time.Now(), "acme-2026",
 	)
 
-	mock.ExpectQuery("SELECT id, tenant_id.*FROM orders WHERE external_id").
+	mock.ExpectQuery("SELECT id, tenant_id.*engagement_slug.*FROM orders WHERE external_id").
 		WithArgs(externalID).
 		WillReturnRows(rows)
 
@@ -538,6 +538,42 @@ func TestOrderRepository_GetByExternalID(t *testing.T) {
 
 	if order.ExternalID != externalID {
 		t.Errorf("external ID: got %q, want %q", order.ExternalID, externalID)
+	}
+	if order.EngagementSlug != "acme-2026" {
+		t.Errorf("engagement slug: got %q, want %q", order.EngagementSlug, "acme-2026")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestOrderRepository_EngagementSlugWrites(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	repo := NewOrderRepository(db)
+	a := sqlmock.AnyArg()
+
+	// Create stores the slug as the 13th argument.
+	mock.ExpectQuery("INSERT INTO orders .*engagement_slug").
+		WithArgs(a, a, a, a, a, a, a, a, a, a, a, a, "acme-2026").
+		WillReturnRows(sqlmock.NewRows([]string{"created_at", "updated_at"}).AddRow(time.Now(), time.Now()))
+	if err := repo.Create(context.Background(), &types.Order{TenantID: uuid.New(), CustomerName: "c",
+		Status: types.OrderStatusReceived, EngagementSlug: "acme-2026"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// An empty slug is stored as NULL (unattributed), on create and update.
+	var nilString *string
+	mock.ExpectQuery("UPDATE orders SET.*engagement_slug = \\$11").
+		WithArgs(a, a, a, a, a, a, a, a, a, a, nilString).
+		WillReturnRows(sqlmock.NewRows([]string{"updated_at"}).AddRow(time.Now()))
+	if err := repo.Update(context.Background(), &types.Order{ID: uuid.New(), CustomerName: "c",
+		Status: types.OrderStatusReceived}); err != nil {
+		t.Fatalf("update: %v", err)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

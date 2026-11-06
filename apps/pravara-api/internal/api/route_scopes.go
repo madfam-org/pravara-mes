@@ -88,6 +88,11 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(get, "/v1/dispatches/:id"): jobsRead,
 		// --- end fabrication dispatch ---
 
+		// Job consumption reads for downstream cost ledgers (quantities only).
+		// POST /v1/tasks/:id/consumption is deliberately absent: it moves
+		// stock, so it is people-only like the inventory writes.
+		k(get, "/v1/jobs/consumption"): jobsRead,
+
 		// Event history and feeds.
 		k(get, "/v1/events"):                        events,
 		k(get, "/v1/events/types"):                  events,

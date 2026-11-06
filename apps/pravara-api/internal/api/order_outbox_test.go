@@ -59,10 +59,10 @@ func TestOrderHandler_UpdateStatusWritesOutboxEvent(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "tenant_id", "external_id", "customer_name", "customer_email",
 			"status", "priority", "due_date", "total_amount", "currency",
-			"shipping_address", "metadata", "created_at", "updated_at",
+			"shipping_address", "metadata", "created_at", "updated_at", "engagement_slug",
 		}).AddRow(
 			orderID, tenantID, "EXT-77", "Acme MX", "ops@acme.mx",
-			"received", 5, now, 100.0, "MXN", nil, []byte("{}"), now, now,
+			"received", 5, now, 100.0, "MXN", nil, []byte("{}"), now, now, nil,
 		))
 
 	// 2) the UPDATE persists the NORMALIZED status (validated, not confirmed)
@@ -70,7 +70,7 @@ func TestOrderHandler_UpdateStatusWritesOutboxEvent(t *testing.T) {
 		WithArgs(
 			orderID, "Acme MX", sqlmock.AnyArg(), "validated",
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"updated_at"}).AddRow(now))
 
@@ -119,10 +119,10 @@ func TestOrderHandler_UpdateRejectsUnknownStatus(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "tenant_id", "external_id", "customer_name", "customer_email",
 			"status", "priority", "due_date", "total_amount", "currency",
-			"shipping_address", "metadata", "created_at", "updated_at",
+			"shipping_address", "metadata", "created_at", "updated_at", "engagement_slug",
 		}).AddRow(
 			orderID, uuid.New(), "EXT-78", "Acme MX", "ops@acme.mx",
-			"received", 5, now, 100.0, "MXN", nil, []byte("{}"), now, now,
+			"received", 5, now, 100.0, "MXN", nil, []byte("{}"), now, now, nil,
 		))
 
 	router := gin.New()

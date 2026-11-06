@@ -2,6 +2,7 @@
 package types
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,6 +75,19 @@ func IsCanonicalOrderStatus(s OrderStatus) bool {
 	return canonicalOrderStatuses[s]
 }
 
+// EngagementSlugPattern is the format of an engagement slug: lowercase
+// letters, digits and hyphens, 1-63 characters, starting with a letter or
+// digit. The orders_engagement_slug_format CHECK (migration 033) enforces the
+// same pattern.
+const EngagementSlugPattern = `^[a-z0-9][a-z0-9-]{0,62}$`
+
+var engagementSlugRE = regexp.MustCompile(EngagementSlugPattern)
+
+// ValidEngagementSlug reports whether s is a well-formed engagement slug.
+func ValidEngagementSlug(s string) bool {
+	return engagementSlugRE.MatchString(s)
+}
+
 // TaskStatus represents the Kanban board state of a task.
 type TaskStatus string
 
@@ -125,16 +139,20 @@ type User struct {
 
 // Order represents a manufacturing order (typically from Cotiza).
 type Order struct {
-	ID            uuid.UUID   `json:"id"`
-	TenantID      uuid.UUID   `json:"tenant_id"`
-	ExternalID    string      `json:"external_id,omitempty"`
-	CustomerName  string      `json:"customer_name"`
-	CustomerEmail string      `json:"customer_email,omitempty"`
-	Status        OrderStatus `json:"status"`
-	Priority      int         `json:"priority"`
-	DueDate       *time.Time  `json:"due_date,omitempty"`
-	TotalAmount   float64     `json:"total_amount,omitempty"`
-	Currency      string      `json:"currency"`
+	ID         uuid.UUID `json:"id"`
+	TenantID   uuid.UUID `json:"tenant_id"`
+	ExternalID string    `json:"external_id,omitempty"`
+	// EngagementSlug attributes the order to an engagement (one slug shared
+	// across the ecosystem). Empty when unattributed. Backed by
+	// orders.engagement_slug (migration 033); see ValidEngagementSlug.
+	EngagementSlug string      `json:"engagement_slug,omitempty"`
+	CustomerName   string      `json:"customer_name"`
+	CustomerEmail  string      `json:"customer_email,omitempty"`
+	Status         OrderStatus `json:"status"`
+	Priority       int         `json:"priority"`
+	DueDate        *time.Time  `json:"due_date,omitempty"`
+	TotalAmount    float64     `json:"total_amount,omitempty"`
+	Currency       string      `json:"currency"`
 	// ShippingAddress holds delivery details as free-form JSON
 	// (e.g. line1, line2, city, state, postal_code, country, contact_name,
 	// contact_phone). Backed by orders.shipping_address (migration 025).

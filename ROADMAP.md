@@ -219,6 +219,22 @@ is not built.
     [#38](https://github.com/madfam-org/pravara-mes/issues/38) (Dependency
     graph) appears resolved: on 2026-10-02 the Dependency Review job ran on #45
     and passed with no high-severity findings.
+22. **Job consumption follow-ups.** *Owner decision, then engineering.*
+    Pravara records per-job quantities and order engagement
+    ([docs/operations/job-consumption.md](docs/operations/job-consumption.md)).
+    Still open, each needing a ruling first:
+    - who owns the material-code registry (today: batch-lot product code,
+      else material class; print jobs use the profile's material type);
+    - emitting consumption to the cost ledger (an event outbox) instead of
+      only serving `GET /v1/jobs/consumption`; Pravara stays quantities-only;
+    - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is
+      set by hand today), together with item 1;
+    - a print-job completion path that calls
+      `ConsumptionService.RecordPrintJob` (nothing marks print jobs completed
+      today);
+    - operator corrections of a reported actual (today: 409, then the
+      inventory adjust endpoint);
+    - the ForgeSight webhook's writes to inventory (unchanged here).
 
 ### Roadmap ahead (feature work)
 

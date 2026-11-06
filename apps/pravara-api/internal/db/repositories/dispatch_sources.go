@@ -234,6 +234,27 @@ func (s *DispatchSources) CommandLedgerState(ctx context.Context, commandID uuid
 	return status, machineID, completedAt, msg.String, err
 }
 
+// CommandTimes returns when a ledger row was acknowledged by the machine
+// (the job started) and completed; nil for a time not recorded.
+func (s *DispatchSources) CommandTimes(ctx context.Context, commandID uuid.UUID) (ackedAt, completedAt *time.Time, err error) {
+	var acked, done sql.NullTime
+	err = s.db.QueryRowContext(ctx, `SELECT acked_at, completed_at FROM task_commands WHERE command_id = $1`,
+		commandID).Scan(&acked, &done)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("command times: %w", err)
+	}
+	if acked.Valid {
+		ackedAt = &acked.Time
+	}
+	if done.Valid {
+		completedAt = &done.Time
+	}
+	return ackedAt, completedAt, nil
+}
+
 // TenantSlug returns a tenant's slug (tenants has no row-level security).
 func (s *DispatchSources) TenantSlug(ctx context.Context, tenantID uuid.UUID) (string, error) {
 	var slug string

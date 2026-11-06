@@ -948,6 +948,119 @@
                 }
             }
         },
+        "/jobs/consumption": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Per-job consumption rows, quantities only (no cost): material (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate) and source (printer, operator or slicer). engagement_slug is the order's current engagement. Rows are ordered by occurred_at (the job's completion); from is inclusive and to exclusive.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "List job consumption",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "occurred_at \u003e= from (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "occurred_at \u003c to (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task (UUID)",
+                        "name": "task_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by order (UUID)",
+                        "name": "order_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by the order's engagement slug",
+                        "name": "engagement_slug",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Page size (max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated consumption rows",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/internal_api.ListResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.JobConsumption"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/machines": {
             "get": {
                 "security": [
@@ -2356,7 +2469,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}.",
+                "description": "Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}. engagement_slug, when given, must match ^[a-z0-9][a-z0-9-]{0,62}$ (400 invalid_engagement_slug otherwise).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2481,7 +2594,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed.",
+                "description": "Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed. engagement_slug sets the engagement (\"\" clears it; omitted leaves it unchanged) and must match ^[a-z0-9][a-z0-9-]{0,62}$.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2518,7 +2631,7 @@
                         }
                     },
                     "400": {
-                        "description": "Validation error or invalid status",
+                        "description": "Validation error, invalid status or invalid engagement_slug",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -4863,6 +4976,78 @@
                 }
             }
         },
+        "/tasks/{id}/consumption": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records an operator-reported actual (basis actual, source operator) for a task: material with material_code and unit g, mm, ml or sheet, or machine time with unit min. It belongs to the task's latest completed dispatch when there is one. When material_code is the SKU of an inventory item in the same unit, stock relieved for the job is brought to this actual (an adjustment against the slicer estimate already relieved). The same actual can be reported once per job and material (409 already_recorded).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Report a task's actual consumption",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Actual consumption",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ConsumptionReportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{consumption, stock_movements}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid report",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Already recorded {error, consumption}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/tasks/{id}/move": {
             "post": {
                 "security": [
@@ -5486,6 +5671,72 @@
                 }
             }
         },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.JobConsumption": {
+            "type": "object",
+            "properties": {
+                "basis": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "dispatch_id": {
+                    "type": "string"
+                },
+                "engagement_slug": {
+                    "description": "EngagementSlug is read from the order at query time (List only).",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "job_kind": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "machine_id": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_lot": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "print_job_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "recorded_by": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule": {
             "type": "object",
             "properties": {
@@ -5907,6 +6158,28 @@
                 }
             }
         },
+        "internal_api.ConsumptionReportRequest": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "unit"
+            ],
+            "properties": {
+                "material_code": {
+                    "description": "MaterialCode is required for material (unit g, mm, ml or sheet): the\ninventory SKU when the material is stocked. Omit it for machine time\n(unit min).",
+                    "type": "string"
+                },
+                "material_lot": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.CotizaItemData": {
             "type": "object",
             "required": [
@@ -6304,6 +6577,10 @@
                     "type": "string"
                 },
                 "due_date": {
+                    "type": "string"
+                },
+                "engagement_slug": {
+                    "description": "EngagementSlug attributes the order to an engagement\n(^[a-z0-9][a-z0-9-]{0,62}$). Optional.",
                     "type": "string"
                 },
                 "external_id": {
@@ -6964,6 +7241,10 @@
                 "due_date": {
                     "type": "string"
                 },
+                "engagement_slug": {
+                    "description": "EngagementSlug sets the order's engagement when present; \"\" clears it\nand an absent field leaves it unchanged.",
+                    "type": "string"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {}
@@ -7380,6 +7661,10 @@
                     "type": "string"
                 },
                 "due_date": {
+                    "type": "string"
+                },
+                "engagement_slug": {
+                    "description": "EngagementSlug attributes the order to an engagement (one slug shared\nacross the ecosystem). Empty when unattributed. Backed by\norders.engagement_slug (migration 033); see ValidEngagementSlug.",
                     "type": "string"
                 },
                 "external_id": {

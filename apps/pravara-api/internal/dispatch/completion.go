@@ -152,7 +152,8 @@ func buildRecord(d *repositories.DispatchJob, code string, ev *repositories.Comp
 
 // recordCompletion writes, in one tenant transaction: the genealogy record,
 // the ManufacturingRecord, the instance publish and the first passport
-// event (outbox), and releases the reservation. Delivery happens later.
+// event (outbox), the job's consumption (in a savepoint, see
+// recordConsumption), and releases the reservation. Delivery happens later.
 func (s *Service) recordCompletion(ctx context.Context, d *repositories.DispatchJob, ev *repositories.CompletionEvent) *stepError {
 	code, err := s.machineCode(ctx, d)
 	if err != nil {
@@ -215,6 +216,7 @@ func (s *Service) recordCompletion(ctx context.Context, d *repositories.Dispatch
 			ManufacturingRecordID: row.ID, Kind: repositories.PassportKindEvent, EventID: &eventID, Payload: evBody}); err != nil {
 			return err
 		}
+		s.recordConsumption(ctx, d, rec, orderID)
 		return s.Dispatch.ReleaseReservations(ctx, d.ID, "job completed")
 	})
 	if err != nil {

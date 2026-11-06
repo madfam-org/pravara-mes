@@ -44,7 +44,7 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
 		       status, priority, due_date, total_amount, currency,
-		       shipping_address, metadata, created_at, updated_at
+		       shipping_address, metadata, created_at, updated_at, engagement_slug
 		FROM orders
 		WHERE 1=1 AND ` + tenantMatch + `
 	`
@@ -110,7 +110,7 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 	var orders []types.Order
 	for rows.Next() {
 		var order types.Order
-		var externalID, customerEmail sql.NullString
+		var externalID, customerEmail, engagementSlug sql.NullString
 		var dueDate sql.NullTime
 		var totalAmount sql.NullFloat64
 		var shippingJSON, metadataJSON []byte
@@ -119,7 +119,7 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 			&order.ID, &order.TenantID, &externalID, &order.CustomerName,
 			&customerEmail, &order.Status, &order.Priority, &dueDate,
 			&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
-			&order.CreatedAt, &order.UpdatedAt,
+			&order.CreatedAt, &order.UpdatedAt, &engagementSlug,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan order: %w", err)
@@ -132,6 +132,7 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter) ([]types
 		if externalID.Valid {
 			order.ExternalID = externalID.String
 		}
+		order.EngagementSlug = engagementSlug.String
 		if customerEmail.Valid {
 			order.CustomerEmail = customerEmail.String
 		}
@@ -158,13 +159,13 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
 		       status, priority, due_date, total_amount, currency,
-		       shipping_address, metadata, created_at, updated_at
+		       shipping_address, metadata, created_at, updated_at, engagement_slug
 		FROM orders
 		WHERE id = $1 AND ` + tenantMatch + `
 	`
 
 	var order types.Order
-	var externalID, customerEmail sql.NullString
+	var externalID, customerEmail, engagementSlug sql.NullString
 	var dueDate sql.NullTime
 	var totalAmount sql.NullFloat64
 	var shippingJSON, metadataJSON []byte
@@ -173,7 +174,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 		&order.ID, &order.TenantID, &externalID, &order.CustomerName,
 		&customerEmail, &order.Status, &order.Priority, &dueDate,
 		&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.CreatedAt, &order.UpdatedAt, &engagementSlug,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -185,6 +186,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*types.Ord
 	if externalID.Valid {
 		order.ExternalID = externalID.String
 	}
+	order.EngagementSlug = engagementSlug.String
 	if customerEmail.Valid {
 		order.CustomerEmail = customerEmail.String
 	}
@@ -213,8 +215,8 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 		INSERT INTO orders (
 			id, tenant_id, external_id, customer_name, customer_email,
 			status, priority, due_date, total_amount, currency,
-			shipping_address, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			shipping_address, metadata, engagement_slug
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at
 	`
 
@@ -237,6 +239,7 @@ func (r *OrderRepository) Create(ctx context.Context, order *types.Order) error 
 		order.ID, order.TenantID, externalID, order.CustomerName,
 		customerEmail, order.Status, order.Priority, order.DueDate,
 		order.TotalAmount, order.Currency, shippingJSON, metadataJSON,
+		nullableString(order.EngagementSlug),
 	).Scan(&order.CreatedAt, &order.UpdatedAt)
 
 	if err != nil {
@@ -261,7 +264,8 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 			total_amount = $7,
 			currency = $8,
 			shipping_address = $9,
-			metadata = $10
+			metadata = $10,
+			engagement_slug = $11
 		WHERE id = $1 AND ` + tenantMatch + `
 		RETURNING updated_at
 	`
@@ -277,7 +281,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *types.Order) error 
 	err := r.db.QueryRowContext(ctx, query,
 		order.ID, order.CustomerName, customerEmail, order.Status,
 		order.Priority, order.DueDate, order.TotalAmount, order.Currency,
-		shippingJSON, metadataJSON,
+		shippingJSON, metadataJSON, nullableString(order.EngagementSlug),
 	).Scan(&order.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -323,13 +327,13 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 	query := `
 		SELECT id, tenant_id, external_id, customer_name, customer_email,
 		       status, priority, due_date, total_amount, currency,
-		       shipping_address, metadata, created_at, updated_at
+		       shipping_address, metadata, created_at, updated_at, engagement_slug
 		FROM orders
 		WHERE external_id = $1 AND ` + tenantMatch + `
 	`
 
 	var order types.Order
-	var extID, customerEmail sql.NullString
+	var extID, customerEmail, engagementSlug sql.NullString
 	var dueDate sql.NullTime
 	var totalAmount sql.NullFloat64
 	var shippingJSON, metadataJSON []byte
@@ -338,7 +342,7 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 		&order.ID, &order.TenantID, &extID, &order.CustomerName,
 		&customerEmail, &order.Status, &order.Priority, &dueDate,
 		&totalAmount, &order.Currency, &shippingJSON, &metadataJSON,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.CreatedAt, &order.UpdatedAt, &engagementSlug,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -350,6 +354,7 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 	if extID.Valid {
 		order.ExternalID = extID.String
 	}
+	order.EngagementSlug = engagementSlug.String
 	if customerEmail.Valid {
 		order.CustomerEmail = customerEmail.String
 	}
@@ -367,6 +372,14 @@ func (r *OrderRepository) GetByExternalID(ctx context.Context, externalID string
 	}
 
 	return &order, nil
+}
+
+// nullableString maps "" to SQL NULL.
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // marshalNullableJSON serializes a map for a nullable JSONB column,
