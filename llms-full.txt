@@ -42,8 +42,8 @@ gap or incident link.
   Dhanam, ForgeSight and Tezca. Native MCP `POST /mcp`
   (`internal/mcp`, `internal/api/mcp_*.go`): off unless
   `PRAVARA_MCP_ENABLED=true` (the owner turns it on); Janua machine tokens
-  with `pravara-cogs:read` only; read tools `mes.job_consumption` and
-  `mes.inventory_levels` (quantities only, no money), each the same read as
+  with `pravara-cogs:read` only; read tools `mes_job_consumption` and
+  `mes_inventory_levels` (quantities only, no money), each the same read as
   its HTTP route; coverage contract `MCPCoverage()` with a CI drift guard.
   See `docs/operations/native-mcp.md`.
 - `apps/telemetry-worker` (Go): MQTT telemetry ingest and machine command

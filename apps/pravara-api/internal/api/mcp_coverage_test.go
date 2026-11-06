@@ -82,6 +82,7 @@ func TestMCPToolsAndCoverageAgree(t *testing.T) {
 	}
 	for name := range tools {
 		assert.True(t, used[name], "tool %s covers no HTTP route", name)
+		assert.True(t, mcp.ValidToolName(name), "tool %s: names must match %s", name, mcp.ToolNamePattern)
 	}
 }
 

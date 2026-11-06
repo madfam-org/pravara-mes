@@ -78,8 +78,11 @@ func NewServer(cfg Config, tools ...Tool) (*Server, error) {
 	s := &Server{cfg: cfg, byName: map[string]*Tool{}, limiter: newClientLimiter(cfg.RatePerMinute, cfg.Burst), now: time.Now}
 	for i := range tools {
 		t := tools[i]
-		if t.Name == "" || t.Call == nil || t.InputSchema == nil {
-			return nil, fmt.Errorf("mcp: tool %q needs a name, an input schema and a Call", t.Name)
+		if !ValidToolName(t.Name) {
+			return nil, fmt.Errorf("mcp: tool name %q must match %s", t.Name, ToolNamePattern)
+		}
+		if t.Call == nil || t.InputSchema == nil {
+			return nil, fmt.Errorf("mcp: tool %q needs an input schema and a Call", t.Name)
 		}
 		if _, dup := s.byName[t.Name]; dup {
 			return nil, fmt.Errorf("mcp: duplicate tool %q", t.Name)

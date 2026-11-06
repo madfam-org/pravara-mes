@@ -52,18 +52,21 @@ not open the MCP.
 ## Tools
 
 Both tools are read-only (`readOnlyHint: true`). There are no write tools.
+Tool names use an underscore because Claude accepts only tool names matching
+`^[a-zA-Z0-9_-]{1,64}$`. Each tool's `title` carries its RFC 0051 catalog
+name (`mes.job_consumption`, `mes.inventory_levels`).
 
 | Tool | Arguments | Returns | Same read as |
 | --- | --- | --- | --- |
-| `mes.job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
-| `mes.inventory_levels` | `material_code?` (exact SKU), `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: SKU, name, category, unit, on hand, reserved, available, reorder point | `GET /v1/inventory` (same repository; `material_code` is the search narrowed to the exact SKU) |
+| `mes_job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
+| `mes_inventory_levels` | `material_code?` (exact SKU), `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: SKU, name, category, unit, on hand, reserved, available, reorder point | `GET /v1/inventory` (same repository; `material_code` is the search narrowed to the exact SKU) |
 
 What the tools leave out:
-- `mes.job_consumption` omits `recorded_by` (the id of the person who
+- `mes_job_consumption` omits `recorded_by` (the id of the person who
   reported an actual). Engagement slugs are returned only to callers whose
   scopes read them over HTTP (the `GET /v1/jobs/consumption` scope
   requirement decides).
-- `mes.inventory_levels` omits `unit_cost`, `currency`, `forgesight_id`,
+- `mes_inventory_levels` omits `unit_cost`, `currency`, `forgesight_id`,
   `description` and `metadata`.
 
 An argument the caller can fix (bad timestamp, unknown argument, limit out
@@ -80,8 +83,8 @@ families (`/v1/jobs`, `/v1/inventory`, `/v1/tasks/:id/consumption`,
 
 | Route | Status |
 | --- | --- |
-| `GET /v1/jobs/consumption` | COVERED by `mes.job_consumption` |
-| `GET /v1/inventory`, `GET /v1/inventory/:id` | COVERED by `mes.inventory_levels` |
+| `GET /v1/jobs/consumption` | COVERED by `mes_job_consumption` |
+| `GET /v1/inventory`, `GET /v1/inventory/:id` | COVERED by `mes_inventory_levels` |
 | `GET /v1/inventory/low-stock` | EXEMPTED: reorder alerting, not a cost input |
 | `POST /v1/inventory`, `PATCH /v1/inventory/:id` | EXEMPTED: writes, people only |
 | `POST /v1/inventory/:id/adjust` | EXEMPTED: manual adjust moves stock |
@@ -95,7 +98,9 @@ The drift guard (`mcp_coverage_test.go`) fails CI when:
 - a route in those families is added without an entry;
 - an entry matches no route;
 - a tool covers no route, or a COVERED route is not a machine-readable GET;
-- `mes.job_consumption`'s arguments differ from the published OpenAPI
+- a tool name falls outside `^[a-zA-Z0-9_-]{1,64}$` (the server also refuses
+  to start with one);
+- `mes_job_consumption`'s arguments differ from the published OpenAPI
   parameters of `GET /jobs/consumption` (`docs/swagger.json`);
 - a tool returns a field its HTTP route does not, or returns an excluded
   field.
@@ -140,7 +145,7 @@ All of these belong to the owner or the platform; no agent runs them.
    environment, either the `pravara-config` ConfigMap or the Enclii-managed
    equivalent. Merging that change is a deploy.
 4. **Smoke test with an agent.** Call `initialize`, then `tools/list` (two
-   tools), then `mes.job_consumption` for a closed month. Then check the
+   tools), then `mes_job_consumption` for a closed month. Then check the
    `mcp.call` lines and `pravara_api_mcp_calls_total`.
 
 To turn it off, unset the variable (or set it to `false`). The route then

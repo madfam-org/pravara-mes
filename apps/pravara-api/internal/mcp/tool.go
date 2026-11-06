@@ -12,12 +12,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 )
+
+// ToolNamePattern is the tool-name format every client accepts: Claude
+// (Anthropic tool use) rejects any other character, a dot included.
+const ToolNamePattern = `^[a-zA-Z0-9_-]{1,64}$`
+
+var toolNameRE = regexp.MustCompile(ToolNamePattern)
+
+// ValidToolName reports whether name matches ToolNamePattern.
+func ValidToolName(name string) bool { return toolNameRE.MatchString(name) }
 
 // Tool is one MCP tool. Every tool is read-only (RFC 0051 Phase A).
 type Tool struct {

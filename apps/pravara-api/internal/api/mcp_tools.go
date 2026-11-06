@@ -21,10 +21,16 @@ import (
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
-// MCP tool names (RFC 0051 catalog, Pravara MES).
+// MCP tool names. RFC 0051's catalog spells them mes.job_consumption and
+// mes.inventory_levels; Claude's tool names must match ^[a-zA-Z0-9_-]{1,64}$
+// (no dot), so the wire names use an underscore and each tool's title
+// carries the RFC name.
 const (
-	MCPToolJobConsumption  = "mes.job_consumption"
-	MCPToolInventoryLevels = "mes.inventory_levels"
+	MCPToolJobConsumption  = "mes_job_consumption"
+	MCPToolInventoryLevels = "mes_inventory_levels"
+
+	mcpRFCNameJobConsumption  = "mes.job_consumption"
+	mcpRFCNameInventoryLevels = "mes.inventory_levels"
 )
 
 const (
@@ -33,7 +39,7 @@ const (
 	inventoryLevelsMaxOffset    = 1 << 30
 )
 
-// inventoryLevelsParams are the arguments of mes.inventory_levels.
+// inventoryLevelsParams are the arguments of mes_inventory_levels.
 var inventoryLevelsParams = []string{"material_code", "limit", "offset"}
 
 // mcpConsumptionRow is the MCP projection of repositories.JobConsumption:
@@ -106,7 +112,7 @@ func (t *mcpTools) tools() []mcp.Tool {
 	return []mcp.Tool{
 		{
 			Name:  MCPToolJobConsumption,
-			Title: "Job consumption (quantities)",
+			Title: mcpRFCNameJobConsumption + " — job consumption (quantities)",
 			Description: "Per-job consumption for a period, quantities only (no cost): material in g, mm, ml or sheet " +
 				"and machine time in min, each with basis (actual or estimate) and source (printer, operator or slicer), " +
 				"with the order's engagement slug. Same rows and filters as GET /v1/jobs/consumption, ordered by " +
@@ -117,7 +123,7 @@ func (t *mcpTools) tools() []mcp.Tool {
 		},
 		{
 			Name:  MCPToolInventoryLevels,
-			Title: "Inventory levels (quantities)",
+			Title: mcpRFCNameInventoryLevels + " — inventory levels (quantities)",
 			Description: "Stock levels per inventory item: on hand, reserved, available and reorder point, in the item's " +
 				"unit. Quantities only: no unit cost or currency. material_code is the item SKU (the material_code " +
 				"of job consumption rows when the material is stocked). Same rows as GET /v1/inventory.",

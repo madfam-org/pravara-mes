@@ -31,16 +31,16 @@ type echoResult struct {
 
 func testTools() []Tool {
 	return []Tool{
-		{Name: "t.echo", Title: "Echo", Description: "echoes", InputSchema: map[string]any{"type": "object"},
+		{Name: "t_echo", Title: "Echo", Description: "echoes", InputSchema: map[string]any{"type": "object"},
 			Call: func(_ context.Context, req Request) (any, error) {
 				if req.TenantID != testTenant {
 					return nil, fmt.Errorf("tenant %q", req.TenantID)
 				}
 				return echoResult{Got: req.Args}, nil
 			}},
-		{Name: "t.invalid", InputSchema: map[string]any{"type": "object"},
+		{Name: "t_invalid", InputSchema: map[string]any{"type": "object"},
 			Call: func(context.Context, Request) (any, error) { return nil, Invalid("from is required") }},
-		{Name: "t.broken", InputSchema: map[string]any{"type": "object"},
+		{Name: "t_broken", InputSchema: map[string]any{"type": "object"},
 			Call: func(context.Context, Request) (any, error) {
 				return nil, errors.New("pq: relation does not exist (internal detail)")
 			}},
@@ -148,7 +148,7 @@ func TestPingAndToolsList(t *testing.T) {
 func TestToolsCallResultsErrorsAndInternalFailures(t *testing.T) {
 	r := newRig(t, 600, 100)
 
-	w := r.post(call(4, "tools/call", `{"name":"t.echo","arguments":{"b":2,"a":"x"}}`))
+	w := r.post(call(4, "tools/call", `{"name":"t_echo","arguments":{"b":2,"a":"x"}}`))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	res := decode(t, w).Result
 	assert.Equal(t, false, res["isError"])
@@ -156,22 +156,22 @@ func TestToolsCallResultsErrorsAndInternalFailures(t *testing.T) {
 	text := res["content"].([]any)[0].(map[string]any)["text"].(string)
 	assert.JSONEq(t, `{"got":{"a":"x","b":2}}`, text)
 
-	w = r.post(call(5, "tools/call", `{"name":"t.invalid","arguments":{}}`))
+	w = r.post(call(5, "tools/call", `{"name":"t_invalid","arguments":{}}`))
 	require.Equal(t, http.StatusOK, w.Code)
 	res = decode(t, w).Result
 	assert.Equal(t, true, res["isError"], "argument errors are tool results the model can correct")
 	assert.Equal(t, "from is required", res["content"].([]any)[0].(map[string]any)["text"])
 
-	w = r.post(call(6, "tools/call", `{"name":"t.broken"}`))
+	w = r.post(call(6, "tools/call", `{"name":"t_broken"}`))
 	assert.Equal(t, http.StatusInternalServerError, w.Code, "500 rolls the tenant transaction back")
 	reply := decode(t, w)
 	require.NotNil(t, reply.Error)
 	assert.Equal(t, CodeInternalError, reply.Error.Code)
 	assert.NotContains(t, w.Body.String(), "relation", "internal detail stays in the log")
 
-	w = r.post(call(7, "tools/call", `{"name":"t.missing"}`))
+	w = r.post(call(7, "tools/call", `{"name":"t_missing"}`))
 	assert.Equal(t, CodeInvalidParams, decode(t, w).Error.Code)
-	w = r.post(call(8, "tools/call", `{"name":"t.echo","arguments":[1]}`))
+	w = r.post(call(8, "tools/call", `{"name":"t_echo","arguments":[1]}`))
 	assert.Equal(t, CodeInvalidParams, decode(t, w).Error.Code)
 	w = r.post(call(9, "resources/list", ""))
 	assert.Equal(t, CodeMethodNotFound, decode(t, w).Error.Code)
@@ -267,8 +267,8 @@ func TestOneAuditLinePerCallWithTheArgumentsHashedNeverLogged(t *testing.T) {
 	r := newRig(t, 600, 100)
 	const marker = "order-7f3a-do-not-log"
 
-	r.post(call(1, "tools/call", fmt.Sprintf(`{"name":"t.echo","arguments":{"order_id":%q,"limit":5}}`, marker)))
-	r.post(call(2, "tools/call", fmt.Sprintf(`{"name":"t.echo","arguments":{"limit":5,"order_id":%q}}`, marker)))
+	r.post(call(1, "tools/call", fmt.Sprintf(`{"name":"t_echo","arguments":{"order_id":%q,"limit":5}}`, marker)))
+	r.post(call(2, "tools/call", fmt.Sprintf(`{"name":"t_echo","arguments":{"limit":5,"order_id":%q}}`, marker)))
 	r.post(call(3, "tools/list", ""))
 
 	entries := r.logs.AllEntries()
@@ -283,7 +283,7 @@ func TestOneAuditLinePerCallWithTheArgumentsHashedNeverLogged(t *testing.T) {
 			assert.NotContains(t, fmt.Sprint(v), marker, "field %s carries an argument", k)
 		}
 	}
-	assert.Equal(t, "t.echo", entries[0].Data["tool"])
+	assert.Equal(t, "t_echo", entries[0].Data["tool"])
 	digest := entries[0].Data["args_sha256"].(string)
 	assert.Len(t, digest, 64)
 	assert.Equal(t, digest, entries[1].Data["args_sha256"], "the digest ignores key order")
@@ -305,6 +305,13 @@ func TestNewServerRejectsBadToolSets(t *testing.T) {
 	assert.Error(t, err, "no scope")
 	_, err = NewServer(Config{Scope: testScope}, Tool{Name: "b"})
 	assert.Error(t, err, "no Call or schema")
+	for _, name := range []string{"mes.job_consumption", "", "has space", strings.Repeat("a", 65)} {
+		bad := tool
+		bad.Name = name
+		_, err = NewServer(Config{Scope: testScope}, bad)
+		assert.Error(t, err, "tool name %q", name)
+	}
+	assert.True(t, ValidToolName("mes_job_consumption"))
 }
 
 func TestRequestArgumentHelpers(t *testing.T) {

@@ -104,7 +104,7 @@ yet; use the inventory adjust endpoint for stock).
 - `limit` 1–1000 (default 100).
 - Machine callers need `pravara-mes:read`, `pravara-mes:jobs` or
   `pravara-cogs:read` (the cost ledger's scope). The same read is the MCP
-  tool `mes.job_consumption` ([native-mcp.md](./native-mcp.md)).
+  tool `mes_job_consumption` ([native-mcp.md](./native-mcp.md)).
 - Response: `{data: [row], total, limit, offset}`; each row has `job_kind`,
   `job_id`, `dispatch_id`, `print_job_id`, `task_id`, `order_id`,
   `engagement_slug`, `machine_id`, `kind`, `material_code`, `material_lot`,

@@ -78,7 +78,7 @@ func (h *ConsumptionHandler) List(c *gin.Context) {
 
 // jobConsumptionParams are the query parameters of GET /v1/jobs/consumption,
 // in the order the OpenAPI document lists them. The MCP tool
-// mes.job_consumption takes exactly these arguments (mcp_tools.go;
+// mes_job_consumption takes exactly these arguments (mcp_tools.go;
 // TestMCPJobConsumptionSchemaMatchesOpenAPI).
 var jobConsumptionParams = []string{"from", "to", "task_id", "order_id", "engagement_slug", "limit", "offset"}
 

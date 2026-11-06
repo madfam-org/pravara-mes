@@ -109,15 +109,15 @@ func MCPCoverage() map[string]MCPRouteCoverage {
 		// Inventory (quantities only over MCP; cost fields stay on HTTP).
 		k(get, "/v1/inventory"):             covered(MCPToolInventoryLevels),
 		k(get, "/v1/inventory/:id"):         covered(MCPToolInventoryLevels),
-		k(get, "/v1/inventory/low-stock"):   exempt("reorder alerting, not a cost input; the same quantities come from mes.inventory_levels"),
+		k(get, "/v1/inventory/low-stock"):   exempt("reorder alerting, not a cost input; the same quantities come from mes_inventory_levels"),
 		k(post, "/v1/inventory"):            exempt("write: creates stock items; people only"),
 		k(patch, "/v1/inventory/:id"):       exempt("write: edits stock items and their cost fields; people only"),
 		k(post, "/v1/inventory/:id/adjust"): exempt("manual adjust: moves stock; people only"),
 		// Fabrication dispatch and machine control.
 		k(post, "/v1/match"):                exempt("dispatch planning (a dry run), not a cost input"),
 		k(post, "/v1/dispatches"):           exempt("dispatch: ends in start_job on a printer (machine control, irreversible)"),
-		k(get, "/v1/dispatches"):            exempt("dispatch control plane; the consumption it produces is mes.job_consumption"),
-		k(get, "/v1/dispatches/:id"):        exempt("dispatch control plane; the consumption it produces is mes.job_consumption"),
+		k(get, "/v1/dispatches"):            exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
+		k(get, "/v1/dispatches/:id"):        exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
 		k(post, "/v1/machines/:id/command"): exempt("machine control: moves equipment; people only"),
 		// Inbound webhook.
 		k(post, "/v1/webhooks/forgesight"): exempt("inbound webhook from ForgeSight, not a read"),

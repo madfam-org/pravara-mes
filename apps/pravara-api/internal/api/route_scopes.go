@@ -90,7 +90,7 @@ func MachineRouteScopes() mw.RouteScopes {
 
 		// Job consumption reads for downstream cost ledgers (quantities only).
 		// pravara-cogs:read is the cost ledger's scope (RFC 0051 M2): the
-		// same read the MCP tool mes.job_consumption serves, so a COGS client
+		// same read the MCP tool mes_job_consumption serves, so a COGS client
 		// sees engagement slugs over HTTP exactly as over MCP.
 		// POST /v1/tasks/:id/consumption is deliberately absent: it moves
 		// stock, so it is people-only like the inventory writes.

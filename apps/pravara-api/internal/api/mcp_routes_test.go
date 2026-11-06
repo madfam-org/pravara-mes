@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,7 +174,13 @@ func TestMCPToolsListIsTheReadOnlyCatalog(t *testing.T) {
 		assert.Equal(t, false, tool["annotations"].(map[string]any)["destructiveHint"], tool["name"])
 		assert.Equal(t, false, tool["inputSchema"].(map[string]any)["additionalProperties"], tool["name"])
 	}
-	assert.Equal(t, []string{MCPToolJobConsumption, MCPToolInventoryLevels}, names)
+	assert.Equal(t, []string{"mes_job_consumption", "mes_inventory_levels"}, names)
+	rfcNames := map[string]string{"mes_job_consumption": "mes.job_consumption", "mes_inventory_levels": "mes.inventory_levels"}
+	for _, tool := range reply.Result.Tools {
+		name := tool["name"].(string)
+		assert.Regexp(t, `^[a-zA-Z0-9_-]{1,64}$`, name, "Claude rejects any other tool name")
+		assert.True(t, strings.HasPrefix(tool["title"].(string), rfcNames[name]+" "), "%s title carries the RFC 0051 name", name)
+	}
 }
 
 var consumptionCols = []string{"id", "tenant_id", "job_kind", "job_id", "dispatch_id", "print_job_id", "task_id",
