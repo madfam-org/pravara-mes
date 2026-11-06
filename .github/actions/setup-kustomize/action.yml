@@ -1,0 +1,38 @@
+name: Setup kustomize (pinned)
+description: >-
+  Install a pinned kustomize release and verify its SHA-256 before use.
+  It downloads the release asset directly and makes no GitHub API call, so the
+  unauthenticated API rate limit that broke kustomize's install_kustomize.sh
+  (Build and Deploy 2026-11-04, K8s Validation 2026-11-06) cannot fail it.
+  To upgrade: change KUSTOMIZE_VERSION and both checksums, taken from that
+  release's checksums.txt.
+
+runs:
+  using: composite
+  steps:
+    - name: Install kustomize
+      shell: bash
+      env:
+        KUSTOMIZE_VERSION: v5.8.3
+        RUNNER_ARCH: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_ARCH" in
+          X64)   arch=amd64; sum=cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61 ;;
+          ARM64) arch=arm64; sum=9867b76482cfc6d25b546abc1d2b5a32bd137505aba640649b4b378f64f6d68f ;;
+          *) echo "::error::No pinned kustomize checksum for runner arch $RUNNER_ARCH"; exit 1 ;;
+        esac
+        tarball="kustomize_${KUSTOMIZE_VERSION}_linux_${arch}.tar.gz"
+        dir="$RUNNER_TEMP/kustomize-${KUSTOMIZE_VERSION}"
+        mkdir -p "$dir"
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$dir/$tarball" \
+          "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/${tarball}"
+        echo "$sum  $dir/$tarball" | sha256sum -c -
+        tar -xzf "$dir/$tarball" -C "$dir" kustomize
+        sudo install -m 0755 "$dir/kustomize" /usr/local/bin/kustomize
+        installed="$(kustomize version)"
+        if [ "$installed" != "$KUSTOMIZE_VERSION" ]; then
+          echo "::error::kustomize reports $installed, expected $KUSTOMIZE_VERSION"
+          exit 1
+        fi
+        echo "kustomize $installed installed"
