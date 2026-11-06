@@ -62,55 +62,10 @@ func badRequest(c *gin.Context, code, msg string) {
 // @Security BearerAuth
 // @Router /jobs/consumption [get]
 func (h *ConsumptionHandler) List(c *gin.Context) {
-	f := repositories.JobConsumptionFilter{Limit: consumptionDefaultLimit}
-	for _, p := range []struct {
-		name string
-		dst  **time.Time
-	}{{"from", &f.From}, {"to", &f.To}} {
-		if raw := c.Query(p.name); raw != "" {
-			t, err := time.Parse(time.RFC3339Nano, raw)
-			if err != nil {
-				badRequest(c, "invalid_"+p.name, p.name+" must be an RFC3339 timestamp")
-				return
-			}
-			*p.dst = &t
-		}
-	}
-	for _, p := range []struct {
-		name string
-		dst  **uuid.UUID
-	}{{"task_id", &f.TaskID}, {"order_id", &f.OrderID}} {
-		if raw := c.Query(p.name); raw != "" {
-			id, err := uuid.Parse(raw)
-			if err != nil {
-				badRequest(c, "invalid_"+p.name, p.name+" is not a UUID")
-				return
-			}
-			*p.dst = &id
-		}
-	}
-	if raw, ok := c.GetQuery("engagement_slug"); ok {
-		if !types.ValidEngagementSlug(raw) {
-			badRequest(c, "invalid_engagement_slug", "engagement_slug must match "+types.EngagementSlugPattern)
-			return
-		}
-		f.EngagementSlug = &raw
-	}
-	if raw := c.Query("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 || n > consumptionMaxLimit {
-			badRequest(c, "invalid_limit", "limit must be 1-1000")
-			return
-		}
-		f.Limit = n
-	}
-	if raw := c.Query("offset"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 {
-			badRequest(c, "invalid_offset", "offset must be >= 0")
-			return
-		}
-		f.Offset = n
+	f, ferr := parseJobConsumptionFilter(c.GetQuery)
+	if ferr != nil {
+		badRequest(c, ferr.Code, ferr.Message)
+		return
 	}
 	rows, total, err := h.repo.List(c.Request.Context(), f)
 	if err != nil {
@@ -119,6 +74,76 @@ func (h *ConsumptionHandler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, ListResponse{Data: rows, Total: total, Limit: f.Limit, Offset: f.Offset})
+}
+
+// jobConsumptionParams are the query parameters of GET /v1/jobs/consumption,
+// in the order the OpenAPI document lists them. The MCP tool
+// mes_job_consumption takes exactly these arguments (mcp_tools.go;
+// TestMCPJobConsumptionSchemaMatchesOpenAPI).
+var jobConsumptionParams = []string{"from", "to", "task_id", "order_id", "engagement_slug", "limit", "offset"}
+
+// filterError is an invalid job consumption filter: Code is the HTTP error
+// code ("invalid_from", ...).
+type filterError struct {
+	Code    string
+	Message string
+}
+
+// parseJobConsumptionFilter reads the job consumption filter through get
+// (the HTTP query, or the MCP tool's arguments), so both surfaces validate
+// identically. An empty value counts as absent, except engagement_slug,
+// which is validated whenever it is present.
+func parseJobConsumptionFilter(get func(name string) (string, bool)) (repositories.JobConsumptionFilter, *filterError) {
+	f := repositories.JobConsumptionFilter{Limit: consumptionDefaultLimit}
+	value := func(name string) string {
+		raw, _ := get(name)
+		return raw
+	}
+	for _, p := range []struct {
+		name string
+		dst  **time.Time
+	}{{"from", &f.From}, {"to", &f.To}} {
+		if raw := value(p.name); raw != "" {
+			t, err := time.Parse(time.RFC3339Nano, raw)
+			if err != nil {
+				return f, &filterError{"invalid_" + p.name, p.name + " must be an RFC3339 timestamp"}
+			}
+			*p.dst = &t
+		}
+	}
+	for _, p := range []struct {
+		name string
+		dst  **uuid.UUID
+	}{{"task_id", &f.TaskID}, {"order_id", &f.OrderID}} {
+		if raw := value(p.name); raw != "" {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				return f, &filterError{"invalid_" + p.name, p.name + " is not a UUID"}
+			}
+			*p.dst = &id
+		}
+	}
+	if raw, ok := get("engagement_slug"); ok {
+		if !types.ValidEngagementSlug(raw) {
+			return f, &filterError{"invalid_engagement_slug", "engagement_slug must match " + types.EngagementSlugPattern}
+		}
+		f.EngagementSlug = &raw
+	}
+	if raw := value("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > consumptionMaxLimit {
+			return f, &filterError{"invalid_limit", "limit must be 1-1000"}
+		}
+		f.Limit = n
+	}
+	if raw := value("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			return f, &filterError{"invalid_offset", "offset must be >= 0"}
+		}
+		f.Offset = n
+	}
+	return f, nil
 }
 
 // ConsumptionReportRequest is an operator-reported actual for a task.

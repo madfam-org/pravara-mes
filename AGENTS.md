@@ -92,6 +92,16 @@ Regenerate or repair these files with
   to have drifted: Cotiza → Pravara dispatch and the Pravara → PhyndCRM
   signature header. Do not "fix" one side without the owner's decision on
   which side is canonical.
+- **Native MCP.** `POST /mcp` on the API host (RFC 0051), for agents
+  reading the cost ledger's inputs: read tools `mes_job_consumption` and
+  `mes_inventory_levels`, quantities only, no write tools. Janua machine
+  tokens (`client_credentials`, audience `pravara-api`, org-bound) with
+  scope `pravara-cogs:read`; tenant from the token, as on HTTP. Off unless
+  `PRAVARA_MCP_ENABLED=true`, and **only the owner turns it on**: agents
+  never set it. Keep `MCPCoverage()` (`internal/api/mcp_routes.go`) current:
+  a new route under jobs, inventory, dispatch or machine control fails CI
+  until it is COVERED or EXEMPTED. Gates, tools and owner enablement:
+  `docs/operations/native-mcp.md`; follow-ups: ROADMAP item 23.
 - **Pending work.** The one canonical list is ROADMAP.md
   [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
   Don't start a second list here, in README or in the llms files.

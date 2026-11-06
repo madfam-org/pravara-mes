@@ -21,6 +21,10 @@ physical jobs (orders, tasks, machines, telemetry, quality).
 - `docs/operations/job-consumption.md` — per-job consumption (material and
   machine minutes, actual or estimate; quantities only, no cost), stock
   relief, `orders.engagement_slug` and `GET /v1/jobs/consumption`.
+- `docs/operations/native-mcp.md` — native MCP `POST /mcp` (off unless
+  `PRAVARA_MCP_ENABLED=true`, owner-run): read tools `mes_job_consumption`
+  and `mes_inventory_levels`, Janua machine tokens with `pravara-cogs:read`,
+  quantities only.
 
 ## Deployed vs not deployed
 

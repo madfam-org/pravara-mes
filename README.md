@@ -149,6 +149,11 @@ PRAVARA_MQTT_PASSWORD=replace-with-local-mqtt-password
 # Redis
 PRAVARA_REDIS_HOST=localhost
 PRAVARA_REDIS_PORT=6379
+
+# Native MCP (POST /mcp): off by default; only the owner turns it on
+PRAVARA_MCP_ENABLED=false
+PRAVARA_MCP_RATE_PER_MINUTE=60
+PRAVARA_MCP_BURST=10
 ```
 
 ## Services
@@ -366,6 +371,17 @@ Quantities only, no cost. Rules: [docs/operations/job-consumption.md](docs/opera
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
+
+### Native MCP (agents)
+
+`POST /mcp` on the API host is a native MCP endpoint (Streamable HTTP, JSON-RPC 2.0, stateless) for agents reading the cost ledger's inputs. Quantities only, never money. **Off by default:** `PRAVARA_MCP_ENABLED` unset → 404; the owner turns it on. Janua machine tokens only (`client_credentials`, audience `pravara-api`, org-bound so the token carries `tenant_id`), scope **`pravara-cogs:read`**; tools run in the token's tenant exactly like HTTP requests. Details, gates, coverage contract and owner enablement: [docs/operations/native-mcp.md](docs/operations/native-mcp.md).
+
+| Tool | Same read as | Returns |
+|------|--------------|---------|
+| `mes_job_consumption(from, to, task_id?, order_id?, engagement_slug?, limit?, offset?)` | `GET /v1/jobs/consumption` | Per-job material and machine-minute quantities with the order's engagement slug (no `recorded_by`) |
+| `mes_inventory_levels(material_code?, limit?, offset?)` | `GET /v1/inventory` | On hand, reserved, available and reorder point per SKU (no unit cost or currency) |
+
+Tool names use underscores (Claude accepts only `^[a-zA-Z0-9_-]{1,64}$`); each title carries the RFC 0051 name (`mes.job_consumption`, `mes.inventory_levels`). No write tools. One `mcp.call` audit line per request (client, tool, outcome, latency, `args_sha256`; never the arguments); per-client rate limit `PRAVARA_MCP_RATE_PER_MINUTE` (60) / `PRAVARA_MCP_BURST` (10).
 
 #### Kanban-Machine Automation
 

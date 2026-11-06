@@ -442,13 +442,13 @@ func (r *InventoryRepository) ListTransactions(ctx context.Context, itemID uuid.
 
 func (r *InventoryRepository) scanInventoryItem(rows *sql.Rows) (*InventoryItem, error) {
 	var item InventoryItem
-	var description sql.NullString
+	var category, description sql.NullString // category is nullable (021)
 	var forgeSightID sql.NullString
 	var unitCost sql.NullFloat64
 	var metadataJSON []byte
 
 	err := rows.Scan(
-		&item.ID, &item.TenantID, &item.SKU, &item.Name, &item.Category,
+		&item.ID, &item.TenantID, &item.SKU, &item.Name, &category,
 		&description, &item.Unit, &item.QuantityOnHand, &item.QuantityReserved,
 		&item.QuantityAvailable, &item.ReorderPoint, &item.ReorderQuantity,
 		&forgeSightID, &unitCost, &item.Currency, &metadataJSON,
@@ -458,6 +458,7 @@ func (r *InventoryRepository) scanInventoryItem(rows *sql.Rows) (*InventoryItem,
 		return nil, fmt.Errorf("failed to scan inventory item: %w", err)
 	}
 
+	item.Category = category.String
 	if description.Valid {
 		item.Description = description.String
 	}
@@ -476,13 +477,13 @@ func (r *InventoryRepository) scanInventoryItem(rows *sql.Rows) (*InventoryItem,
 
 func (r *InventoryRepository) scanInventoryItemRow(row *sql.Row) (*InventoryItem, error) {
 	var item InventoryItem
-	var description sql.NullString
+	var category, description sql.NullString // category is nullable (021)
 	var forgeSightID sql.NullString
 	var unitCost sql.NullFloat64
 	var metadataJSON []byte
 
 	err := row.Scan(
-		&item.ID, &item.TenantID, &item.SKU, &item.Name, &item.Category,
+		&item.ID, &item.TenantID, &item.SKU, &item.Name, &category,
 		&description, &item.Unit, &item.QuantityOnHand, &item.QuantityReserved,
 		&item.QuantityAvailable, &item.ReorderPoint, &item.ReorderQuantity,
 		&forgeSightID, &unitCost, &item.Currency, &metadataJSON,
@@ -492,6 +493,7 @@ func (r *InventoryRepository) scanInventoryItemRow(row *sql.Row) (*InventoryItem
 		return nil, err
 	}
 
+	item.Category = category.String
 	if description.Valid {
 		item.Description = description.String
 	}

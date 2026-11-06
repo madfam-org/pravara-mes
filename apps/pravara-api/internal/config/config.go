@@ -32,6 +32,8 @@ type Config struct {
 	// --- end fabrication dispatch ---
 	// Edge: Sparkplug edge-node registry and broker auth (edge.go).
 	Edge EdgeConfig `mapstructure:"edge"`
+	// MCP: the native MCP endpoint, POST /mcp (mcp.go). Off by default.
+	MCP MCPConfig `mapstructure:"mcp"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -153,6 +155,7 @@ func Load() (*Config, error) {
 	setCommandChannelDefaults(v)
 	setDispatchDefaults(v) // fabrication dispatch
 	setEdgeDefaults(v)
+	setMCPDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -164,6 +167,7 @@ func Load() (*Config, error) {
 	bindCommandChannelEnv(v)
 	bindDispatchEnv(v) // fabrication dispatch
 	bindEdgeEnv(v)
+	bindMCPEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")
