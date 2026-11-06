@@ -18,6 +18,9 @@ physical jobs (orders, tasks, machines, telemetry, quality).
 - `docs/operations/fabrication-dispatch.md` — matchmaking (`POST /v1/match`),
   dispatch (`/v1/dispatches`: render → slice → start_job) and the passport
   updater; off unless `DISPATCH_ENABLED=true`.
+- `docs/operations/job-consumption.md` — per-job consumption (material and
+  machine minutes, actual or estimate; quantities only, no cost), stock
+  relief, `orders.engagement_slug` and `GET /v1/jobs/consumption`.
 
 ## Deployed vs not deployed
 

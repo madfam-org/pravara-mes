@@ -283,9 +283,9 @@ pravara-mes/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/v1/orders` | List orders with pagination |
-| POST | `/v1/orders` | Create new order |
+| POST | `/v1/orders` | Create new order (optional `engagement_slug`) |
 | GET | `/v1/orders/:id` | Get order by ID |
-| PATCH | `/v1/orders/:id` | Update order |
+| PATCH | `/v1/orders/:id` | Update order (`engagement_slug`: set, or `""` to clear) |
 | DELETE | `/v1/orders/:id` | Delete order |
 | GET | `/v1/orders/:id/items` | List order items |
 | POST | `/v1/orders/:id/items` | Add item to order |
@@ -357,6 +357,15 @@ HMAC-SHA256 signature header.
 | POST | `/v1/tasks/:id/assign` | Assign task to user |
 | DELETE | `/v1/tasks/:id` | Delete task |
 | GET | `/v1/tasks/:id/commands` | Get command history for task |
+| POST | `/v1/tasks/:id/consumption` | Report actual material or machine minutes (people only; relieves stock) |
+
+### Job Consumption API
+
+Quantities only, no cost. Rules: [docs/operations/job-consumption.md](docs/operations/job-consumption.md).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
 
 #### Kanban-Machine Automation
 

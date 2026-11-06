@@ -44,6 +44,50 @@ definitions:
       product_definition:
         $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ProductDefinition'
     type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.JobConsumption:
+    properties:
+      basis:
+        type: string
+      created_at:
+        type: string
+      dispatch_id:
+        type: string
+      engagement_slug:
+        description: EngagementSlug is read from the order at query time (List only).
+        type: string
+      id:
+        type: string
+      job_id:
+        type: string
+      job_kind:
+        type: string
+      kind:
+        type: string
+      machine_id:
+        type: string
+      material_code:
+        type: string
+      material_lot:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      order_id:
+        type: string
+      print_job_id:
+        type: string
+      quantity:
+        type: number
+      recorded_by:
+        type: string
+      source:
+        type: string
+      task_id:
+        type: string
+      unit:
+        type: string
+    type: object
   github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaintenanceSchedule:
     properties:
       assigned_to:
@@ -323,6 +367,24 @@ definitions:
       user:
         type: string
     type: object
+  internal_api.ConsumptionReportRequest:
+    properties:
+      material_code:
+        description: |-
+          MaterialCode is required for material (unit g, mm, ml or sheet): the
+          inventory SKU when the material is stocked. Omit it for machine time
+          (unit min).
+        type: string
+      material_lot:
+        type: string
+      quantity:
+        type: number
+      unit:
+        type: string
+    required:
+    - quantity
+    - unit
+    type: object
   internal_api.CotizaItemData:
     properties:
       cad_file_url:
@@ -591,6 +653,11 @@ definitions:
       customer_name:
         type: string
       due_date:
+        type: string
+      engagement_slug:
+        description: |-
+          EngagementSlug attributes the order to an engagement
+          (^[a-z0-9][a-z0-9-]{0,62}$). Optional.
         type: string
       external_id:
         type: string
@@ -1035,6 +1102,11 @@ definitions:
         type: string
       due_date:
         type: string
+      engagement_slug:
+        description: |-
+          EngagementSlug sets the order's engagement when present; "" clears it
+          and an absent field leaves it unchanged.
+        type: string
       metadata:
         additionalProperties: {}
         type: object
@@ -1320,6 +1392,12 @@ definitions:
       customer_name:
         type: string
       due_date:
+        type: string
+      engagement_slug:
+        description: |-
+          EngagementSlug attributes the order to an engagement (one slug shared
+          across the ecosystem). Empty when unattributed. Backed by
+          orders.engagement_slug (migration 033); see ValidEngagementSlug.
         type: string
       external_id:
         type: string
@@ -2190,6 +2268,81 @@ paths:
       summary: Kubernetes readiness probe
       tags:
       - health
+  /jobs/consumption:
+    get:
+      description: 'Per-job consumption rows, quantities only (no cost): material
+        (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate)
+        and source (printer, operator or slicer). engagement_slug is the order''s
+        current engagement. Rows are ordered by occurred_at (the job''s completion);
+        from is inclusive and to exclusive.'
+      parameters:
+      - description: occurred_at >= from (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: occurred_at < to (RFC3339)
+        in: query
+        name: to
+        type: string
+      - description: Filter by task (UUID)
+        in: query
+        name: task_id
+        type: string
+      - description: Filter by order (UUID)
+        in: query
+        name: order_id
+        type: string
+      - description: Filter by the order's engagement slug
+        in: query
+        name: engagement_slug
+        type: string
+      - default: 100
+        description: Page size (max 1000)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated consumption rows
+          schema:
+            allOf:
+            - $ref: '#/definitions/internal_api.ListResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.JobConsumption'
+                  type: array
+              type: object
+        "400":
+          description: Invalid filter
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List job consumption
+      tags:
+      - jobs
   /machines:
     get:
       description: Returns a paginated list of machines with optional filtering by
@@ -3113,7 +3266,8 @@ paths:
         each becomes an order item, and when orders.auto_decompose is enabled every
         item also spawns a production task (with capability-based machine auto-assignment
         when orders.auto_assign is enabled). Without items the response is the bare
-        order; with items it is {order, items, tasks_created}.
+        order; with items it is {order, items, tasks_created}. engagement_slug, when
+        given, must match ^[a-z0-9][a-z0-9-]{0,62}$ (400 invalid_engagement_slug otherwise).
       parameters:
       - description: Order creation data (optionally with inline items and shipping_address)
         in: body
@@ -3238,7 +3392,9 @@ paths:
         enum values (received, validated, scheduled, in_progress, completed, shipped,
         cancelled); legacy aliases (confirmed, processing, in_production, quality_check,
         ready, delivered) are normalized onto them. Unknown statuses are rejected
-        with 400. A status change publishes order.status_changed.
+        with 400. A status change publishes order.status_changed. engagement_slug
+        sets the engagement ("" clears it; omitted leaves it unchanged) and must match
+        ^[a-z0-9][a-z0-9-]{0,62}$.
       parameters:
       - description: Order ID (UUID)
         in: path
@@ -3259,7 +3415,7 @@ paths:
           schema:
             $ref: '#/definitions/types.Order'
         "400":
-          description: Validation error or invalid status
+          description: Validation error, invalid status or invalid engagement_slug
           schema:
             additionalProperties:
               type: string
@@ -4709,6 +4865,59 @@ paths:
       security:
       - BearerAuth: []
       summary: Assign task to user/machine
+      tags:
+      - tasks
+  /tasks/{id}/consumption:
+    post:
+      consumes:
+      - application/json
+      description: 'Records an operator-reported actual (basis actual, source operator)
+        for a task: material with material_code and unit g, mm, ml or sheet, or machine
+        time with unit min. It belongs to the task''s latest completed dispatch when
+        there is one. When material_code is the SKU of an inventory item in the same
+        unit, stock relieved for the job is brought to this actual (an adjustment
+        against the slicer estimate already relieved). The same actual can be reported
+        once per job and material (409 already_recorded).'
+      parameters:
+      - description: Task ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Actual consumption
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ConsumptionReportRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: '{consumption, stock_movements}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid report
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Task not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Already recorded {error, consumption}
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Report a task's actual consumption
       tags:
       - tasks
   /tasks/{id}/move:
