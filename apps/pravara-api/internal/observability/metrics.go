@@ -148,6 +148,27 @@ var (
 		[]string{"result"},
 	)
 
+	// SSEConnectionsActive tracks the number of active SSE connections.
+	SSEConnectionsActive = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "sse_connections_active",
+			Help:      "Number of active SSE connections",
+		},
+	)
+
+	// HealthComponentStatus tracks the status of each system component (1=operational, 0.5=degraded, 0=outage).
+	HealthComponentStatus = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "health_component_status",
+			Help:      "Health status of system components (1=operational, 0.5=degraded, 0=outage)",
+		},
+		[]string{"component"},
+	)
+
 	// MCPCallsTotal counts POST /mcp requests (RFC 0051) by JSON-RPC method,
 	// tool and outcome. Unknown methods are labelled "other" and unknown
 	// tools "unknown", so the labels stay bounded.
@@ -171,26 +192,5 @@ var (
 			Buckets:   []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
 		},
 		[]string{"method", "tool"},
-	)
-
-	// SSEConnectionsActive tracks the number of active SSE connections.
-	SSEConnectionsActive = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "sse_connections_active",
-			Help:      "Number of active SSE connections",
-		},
-	)
-
-	// HealthComponentStatus tracks the status of each system component (1=operational, 0.5=degraded, 0=outage).
-	HealthComponentStatus = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "health_component_status",
-			Help:      "Health status of system components (1=operational, 0.5=degraded, 0=outage)",
-		},
-		[]string{"component"},
 	)
 )

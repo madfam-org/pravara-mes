@@ -235,6 +235,7 @@ is not built.
     - operator corrections of a reported actual (today: 409, then the
       inventory adjust endpoint);
     - the ForgeSight webhook's writes to inventory (unchanged here).
+
 23. **Native MCP follow-ups.** *Owner and platform steps, then engineering.*
     `POST /mcp` ships off
     ([docs/operations/native-mcp.md](docs/operations/native-mcp.md)). Open:
