@@ -235,6 +235,21 @@ is not built.
     - operator corrections of a reported actual (today: 409, then the
       inventory adjust endpoint);
     - the ForgeSight webhook's writes to inventory (unchanged here).
+23. **Native MCP follow-ups.** *Owner and platform steps, then engineering.*
+    `POST /mcp` ships off
+    ([docs/operations/native-mcp.md](docs/operations/native-mcp.md)). Open:
+    - reserve `pravara-cogs:read` among Janua's Pravara machine scopes;
+    - declare one org-bound consumer client per consumer (Selva's agent
+      fleet, the ops agents) in enclii `config/ecosystem-oidc-provision.yaml`
+      (audience `pravara-api`, scope `pravara-cogs:read`), delivered by
+      `enclii secrets intake`;
+    - the owner sets `PRAVARA_MCP_ENABLED=true`, then smoke-tests with an
+      agent;
+    - list the endpoint in the ecosystem product registry (its `mcp` field);
+    - Phase B, people through Claude connectors: a protected resource
+      `https://<api-host>/mcp` in Janua with RFC 9728 metadata served here
+      and a people scope, once Janua supports it for production (tracked
+      privately).
 
 ### Roadmap ahead (feature work)
 

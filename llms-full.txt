@@ -39,7 +39,13 @@ gap or incident link.
   or an `X-API-Key`. Hosts the order→task decomposition, capability-based
   assignment, event outbox and outbound webhook dispatcher
   (`X-Pravara-Signature: sha256=<hex>`), plus inbound webhooks for Cotiza,
-  Dhanam, ForgeSight and Tezca.
+  Dhanam, ForgeSight and Tezca. Native MCP `POST /mcp`
+  (`internal/mcp`, `internal/api/mcp_*.go`): off unless
+  `PRAVARA_MCP_ENABLED=true` (the owner turns it on); Janua machine tokens
+  with `pravara-cogs:read` only; read tools `mes.job_consumption` and
+  `mes.inventory_levels` (quantities only, no money), each the same read as
+  its HTTP route; coverage contract `MCPCoverage()` with a CI drift guard.
+  See `docs/operations/native-mcp.md`.
 - `apps/telemetry-worker` (Go): MQTT telemetry ingest and machine command
   dispatch.
 - `apps/pravara-ui` (Next 15.5), `apps/pravara-landing` (Next 15.5, public
