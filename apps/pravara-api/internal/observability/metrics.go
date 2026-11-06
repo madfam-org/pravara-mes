@@ -148,6 +148,31 @@ var (
 		[]string{"result"},
 	)
 
+	// MCPCallsTotal counts POST /mcp requests (RFC 0051) by JSON-RPC method,
+	// tool and outcome. Unknown methods are labelled "other" and unknown
+	// tools "unknown", so the labels stay bounded.
+	MCPCallsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "mcp_calls_total",
+			Help:      "Native MCP requests by JSON-RPC method, tool and outcome",
+		},
+		[]string{"method", "tool", "outcome"},
+	)
+
+	// MCPCallDuration tracks POST /mcp latency by JSON-RPC method and tool.
+	MCPCallDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "mcp_call_duration_seconds",
+			Help:      "Native MCP request duration in seconds",
+			Buckets:   []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+		},
+		[]string{"method", "tool"},
+	)
+
 	// SSEConnectionsActive tracks the number of active SSE connections.
 	SSEConnectionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{

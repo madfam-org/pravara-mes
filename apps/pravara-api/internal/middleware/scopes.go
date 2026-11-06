@@ -21,6 +21,9 @@ const (
 	ScopePassports = "pravara-mes:passports" // #nosec G101 -- OAuth scope name ("passports" = product passports), not a credential
 	// ScopeRead: read-only access to the machine-facing resources.
 	ScopeRead = "pravara-mes:read"
+	// ScopeCogsRead: the cost ledger's reads (RFC 0051 M2): job consumption
+	// quantities over HTTP and the native MCP's read tools (POST /mcp).
+	ScopeCogsRead = "pravara-cogs:read"
 
 	// ScopeWildcard grants every scope. API keys only: it is never honoured
 	// on a Janua token.
@@ -34,7 +37,7 @@ const (
 )
 
 // MachineScopes are the scopes a Janua machine token may carry for this API.
-var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead}
+var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead, ScopeCogsRead}
 
 // APIKeyScopes are the scopes an API key may be issued with.
 var APIKeyScopes = []string{
@@ -75,6 +78,11 @@ func (r ScopeRequirement) WithLegacy(scopes ...string) ScopeRequirement {
 // String lists the accepted scopes for error messages and logs.
 func (r ScopeRequirement) String() string {
 	return strings.Join(r.AnyOf, " or ")
+}
+
+// Allows reports whether the caller satisfies the requirement (see allows).
+func (r ScopeRequirement) Allows(caller Caller) bool {
+	return r.allows(caller)
 }
 
 // allows reports whether the caller satisfies the requirement. Users always

@@ -202,6 +202,12 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	}
 
 	// =========================================================================
+	// Native MCP (RFC 0051): POST /mcp, off unless PRAVARA_MCP_ENABLED is set
+	// (mcp_routes.go). Janua machine tokens with pravara-cogs:read only.
+	// =========================================================================
+	registerMCPRoutes(router, database, verifier, cfg, log, consumptionRepo, inventoryRepo)
+
+	// =========================================================================
 	// Determine auth middleware: dual API key + JWT if apikey repo available
 	// =========================================================================
 	var authMiddleware gin.HandlerFunc
