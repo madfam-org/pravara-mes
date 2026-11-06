@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -361,5 +362,33 @@ func TestUser_JSONSerialization(t *testing.T) {
 	}
 	if decoded.Role != user.Role {
 		t.Errorf("Role: got %q, want %q", decoded.Role, user.Role)
+	}
+}
+
+func TestValidEngagementSlug(t *testing.T) {
+	long := strings.Repeat("a", 63)
+	for _, s := range []string{"a", "0", "acme-2026", "eng-01-fab", long} {
+		if !ValidEngagementSlug(s) {
+			t.Errorf("ValidEngagementSlug(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"", "-acme", "Acme", "acme_2026", "acme 2026", "acmé", long + "a", "eng:acme", "acme\n"} {
+		if ValidEngagementSlug(s) {
+			t.Errorf("ValidEngagementSlug(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestOrder_EngagementSlugJSON(t *testing.T) {
+	data, err := json.Marshal(Order{CustomerName: "c", EngagementSlug: "acme-2026"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"engagement_slug":"acme-2026"`) {
+		t.Errorf("engagement_slug not serialized: %s", data)
+	}
+	data, _ = json.Marshal(Order{CustomerName: "c"})
+	if strings.Contains(string(data), "engagement_slug") {
+		t.Errorf("empty engagement_slug should be omitted: %s", data)
 	}
 }

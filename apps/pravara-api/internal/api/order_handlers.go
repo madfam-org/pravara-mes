@@ -56,7 +56,10 @@ func NewOrderHandler(repo *repositories.OrderRepository, orderItemRepo *reposito
 // Items may be supplied inline; each becomes an order item and — when
 // auto-decomposition is enabled — a production task.
 type CreateOrderRequest struct {
-	ExternalID      string                   `json:"external_id"`
+	ExternalID string `json:"external_id"`
+	// EngagementSlug attributes the order to an engagement
+	// (^[a-z0-9][a-z0-9-]{0,62}$). Optional.
+	EngagementSlug  string                   `json:"engagement_slug"`
 	CustomerName    string                   `json:"customer_name" binding:"required"`
 	CustomerEmail   string                   `json:"customer_email"`
 	Priority        int                      `json:"priority"`
@@ -73,6 +76,9 @@ type CreateOrderRequest struct {
 // aliases (confirmed, in_production, quality_check, ready, delivered);
 // aliases are normalized before the write.
 type UpdateOrderRequest struct {
+	// EngagementSlug sets the order's engagement when present; "" clears it
+	// and an absent field leaves it unchanged.
+	EngagementSlug  *string        `json:"engagement_slug"`
 	CustomerName    string         `json:"customer_name"`
 	CustomerEmail   string         `json:"customer_email"`
 	Status          string         `json:"status"`
@@ -82,6 +88,18 @@ type UpdateOrderRequest struct {
 	Currency        string         `json:"currency"`
 	ShippingAddress map[string]any `json:"shipping_address"`
 	Metadata        map[string]any `json:"metadata"`
+}
+
+// invalidEngagementSlug answers 400 when slug is set and malformed.
+func invalidEngagementSlug(c *gin.Context, slug string) bool {
+	if slug == "" || types.ValidEngagementSlug(slug) {
+		return false
+	}
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error":   "invalid_engagement_slug",
+		"message": "engagement_slug must match " + types.EngagementSlugPattern,
+	})
+	return true
 }
 
 // ListResponse represents a paginated list response.
@@ -206,7 +224,7 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 
 // Create creates a new order.
 // @Summary Create a new order
-// @Description Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}.
+// @Description Creates a new order in received status. Items may be supplied inline; each becomes an order item, and when orders.auto_decompose is enabled every item also spawns a production task (with capability-based machine auto-assignment when orders.auto_assign is enabled). Without items the response is the bare order; with items it is {order, items, tasks_created}. engagement_slug, when given, must match ^[a-z0-9][a-z0-9-]{0,62}$ (400 invalid_engagement_slug otherwise).
 // @Tags orders
 // @Accept json
 // @Produce json
@@ -227,6 +245,10 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if invalidEngagementSlug(c, req.EngagementSlug) {
+		return
+	}
+
 	// Get tenant ID from context
 	tenantID, ok := middleware.GetTenantID(c)
 	if !ok {
@@ -242,6 +264,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	order := &types.Order{
 		TenantID:        tenantUUID,
 		ExternalID:      req.ExternalID,
+		EngagementSlug:  req.EngagementSlug,
 		CustomerName:    req.CustomerName,
 		CustomerEmail:   req.CustomerEmail,
 		Status:          types.OrderStatusReceived,
@@ -350,14 +373,14 @@ func (h *OrderHandler) Create(c *gin.Context) {
 
 // Update modifies an existing order.
 // @Summary Update an order
-// @Description Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed.
+// @Description Updates order fields including status. Status accepts the canonical enum values (received, validated, scheduled, in_progress, completed, shipped, cancelled); legacy aliases (confirmed, processing, in_production, quality_check, ready, delivered) are normalized onto them. Unknown statuses are rejected with 400. A status change publishes order.status_changed. engagement_slug sets the engagement ("" clears it; omitted leaves it unchanged) and must match ^[a-z0-9][a-z0-9-]{0,62}$.
 // @Tags orders
 // @Accept json
 // @Produce json
 // @Param id path string true "Order ID (UUID)"
 // @Param body body UpdateOrderRequest true "Order update data"
 // @Success 200 {object} types.Order "Updated order"
-// @Failure 400 {object} map[string]string "Validation error or invalid status"
+// @Failure 400 {object} map[string]string "Validation error, invalid status or invalid engagement_slug"
 // @Failure 404 {object} map[string]string "Order not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
@@ -400,9 +423,16 @@ func (h *OrderHandler) Update(c *gin.Context) {
 		return
 	}
 
+	if req.EngagementSlug != nil && invalidEngagementSlug(c, *req.EngagementSlug) {
+		return
+	}
+
 	oldStatus := order.Status
 
 	// Update fields
+	if req.EngagementSlug != nil {
+		order.EngagementSlug = *req.EngagementSlug
+	}
 	if req.CustomerName != "" {
 		order.CustomerName = req.CustomerName
 	}
