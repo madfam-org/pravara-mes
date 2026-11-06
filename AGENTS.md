@@ -66,7 +66,9 @@ Regenerate or repair these files with
   `.github/workflows/deploy-admin.yml` builds pravara-admin (`apps/admin`).
   Both sign with cosign and commit digests to
   `infra/k8s/production/kustomization.yaml`, which Argo CD auto-syncs.
-  `**.md` and `docs/**` changes trigger no build. visualization-engine,
+  `**.md` and `docs/**` changes trigger no build. **Migrations are not
+  applied by the deploy**: an operator applies them before the merge whose
+  code needs them (`docs/operations/applying-migrations.md`). visualization-engine,
   video-streaming, ml-orchestrator, luban-bridge, octoprint-connector and
   machine-adapter are **not built or deployed** by any workflow. See
   README.md «Deployment». machine-adapter runs on site boxes as the
