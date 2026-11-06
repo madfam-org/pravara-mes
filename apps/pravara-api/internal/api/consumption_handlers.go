@@ -55,7 +55,7 @@ func badRequest(c *gin.Context, code, msg string) {
 // @Param engagement_slug query string false "Filter by the order's engagement slug"
 // @Param limit query int false "Page size (max 1000)" default(100)
 // @Param offset query int false "Offset" default(0)
-// @Success 200 {object} ListResponse "data: []repositories.JobConsumption"
+// @Success 200 {object} ListResponse{data=[]repositories.JobConsumption} "Paginated consumption rows"
 // @Failure 400 {object} map[string]string "Invalid filter"
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Failure 500 {object} map[string]string "Internal server error"

@@ -137,6 +137,12 @@ func effective(facts []repositories.JobConsumption) *repositories.JobConsumption
 }
 
 func (s *ConsumptionService) settle(ctx context.Context, job JobRef, k materialKey) (*repositories.InventoryTransaction, error) {
+	// Lock the item first: the facts and the relieved quantity read after
+	// the lock include whatever a concurrent settle for this job committed.
+	item, err := s.repo.LockStockItem(ctx, k.code, k.unit)
+	if err != nil {
+		return nil, err
+	}
 	facts, err := s.repo.MaterialFacts(ctx, job.Kind, job.ID, k.code, k.unit)
 	if err != nil {
 		return nil, err
@@ -144,10 +150,6 @@ func (s *ConsumptionService) settle(ctx context.Context, job JobRef, k materialK
 	eff := effective(facts)
 	if eff == nil {
 		return nil, nil
-	}
-	item, err := s.repo.LockStockItem(ctx, k.code, k.unit)
-	if err != nil {
-		return nil, err
 	}
 	var mv *repositories.InventoryTransaction
 	if item != nil {

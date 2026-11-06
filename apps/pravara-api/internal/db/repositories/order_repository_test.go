@@ -553,7 +553,7 @@ func TestOrderRepository_EngagementSlugWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mock: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := NewOrderRepository(db)
 	a := sqlmock.AnyArg()
 
