@@ -234,7 +234,11 @@ is not built.
       today);
     - operator corrections of a reported actual (today: 409, then the
       inventory adjust endpoint);
-    - the ForgeSight webhook's writes to inventory (unchanged here).
+    - ~~the ForgeSight webhook's writes to inventory~~: done. ForgeSight prices
+      are market benchmarks, not cost, and the cost ledger values consumption;
+      the webhook still authenticates and verifies its signature, then logs
+      and counts each item as reference and never writes inventory cost or
+      stock.
 
 ### Roadmap ahead (feature work)
 
@@ -488,7 +492,7 @@ Core MES capabilities aligned with MESA International standards.
 - [x] Inventory items with quantity tracking
 - [x] Stock adjustment with transaction logging
 - [x] Low-stock alerts with configurable reorder points
-- [x] ForgeSight webhook integration for external inventory sync
+- [x] ForgeSight webhook accepted as reference data only (benchmarks are logged and counted; inventory cost and stock are never written from it)
 
 ---
 
@@ -665,7 +669,7 @@ Advanced intelligent manufacturing operations building on the ml-orchestrator fo
 | **Dhanam Billing** | 2.5 | ✅ Implemented |
 | **Snapmaker/Luban** | 2.5b | ✅ Implemented |
 | **OctoPrint** | 2.5b | ✅ Implemented |
-| **ForgeSight** | 2.5b | ✅ Implemented |
+| **ForgeSight** | 2.5b | ✅ Webhook accepted as reference only (no inventory writes) |
 | **Tezca Labs** | 3.0 | Law-change webhook implemented (`/v1/webhooks/tezca`); compliance-engine planned |
 | **Yantra4D** | — | ✅ Hyperobject import (`/v1/import/yantra4d`) |
 | **Forj** | — | ✅ Orders in via API key; `order.status_changed` out via webhook subscriptions |

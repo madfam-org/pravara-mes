@@ -26,7 +26,7 @@ The API provides endpoints for:
 - **Products** - Product catalog and bill of materials
 - **Genealogy** - Product traceability and digital birth certificates
 - **Work Instructions** - Step-by-step production procedures
-- **Inventory** - Stock tracking and ForgeSight integration
+- **Inventory** - Stock tracking; ForgeSight benchmarks accepted as reference only (never written to cost or stock)
 - **Yantra4D Import** - Import parametric hyperobjects as products with BOM and work instructions
 - **Tezca Integration** - Mexican law search, article lookup, and real-time compliance webhooks
 

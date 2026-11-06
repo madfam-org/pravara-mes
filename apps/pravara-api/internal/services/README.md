@@ -132,11 +132,12 @@ Statistical Process Control with Western Electric rules:
 
 ## InventoryService
 
-Stock management with low-stock alerting and ForgeSight integration:
+Stock management with low-stock alerting:
 
 - Adjusts quantity on hand with transaction logging
 - Triggers `inventory.low_stock` events when quantity falls below reorder point
-- Accepts ForgeSight webhook payloads for external inventory sync
+- ForgeSight webhook data never reaches it: the webhook is reference only and
+  does not write inventory cost or stock
 
 ## Files
 

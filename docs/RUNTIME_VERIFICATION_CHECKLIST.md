@@ -229,8 +229,9 @@ steps added.
       `POST /v1/inventory/:id/adjust` changes stock and logs a transaction.
 - [ ] Set a reorder point above current stock and confirm the item appears
       in `GET /v1/inventory/low-stock` (and a low-stock alert fires).
-- [ ] `POST $API/v1/webhooks/forgesight` with a test payload syncs external
-      inventory.
+- [ ] `POST $API/v1/webhooks/forgesight` with a test payload answers 200 with
+      `"reference_only": true` and leaves the referenced item's `unit_cost`
+      and `quantity_on_hand` unchanged (ForgeSight data is reference only).
 
 ---
 

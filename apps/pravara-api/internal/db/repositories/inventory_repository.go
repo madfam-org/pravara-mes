@@ -248,55 +248,6 @@ func (r *InventoryRepository) UpdateItem(ctx context.Context, item *InventoryIte
 	return nil
 }
 
-// UpsertByForgeSightID inserts or updates an inventory item keyed by forgesight_id.
-func (r *InventoryRepository) UpsertByForgeSightID(ctx context.Context, item *InventoryItem) error {
-	query := `
-		INSERT INTO inventory_items (
-			id, tenant_id, sku, name, category, description, unit,
-			quantity_on_hand, quantity_reserved, quantity_available,
-			reorder_point, reorder_quantity, forgesight_id, unit_cost,
-			currency, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (forgesight_id) WHERE forgesight_id IS NOT NULL
-		DO UPDATE SET
-			name = EXCLUDED.name,
-			category = EXCLUDED.category,
-			description = EXCLUDED.description,
-			unit = EXCLUDED.unit,
-			quantity_on_hand = EXCLUDED.quantity_on_hand,
-			quantity_available = EXCLUDED.quantity_on_hand - inventory_items.quantity_reserved,
-			unit_cost = EXCLUDED.unit_cost,
-			currency = EXCLUDED.currency,
-			metadata = EXCLUDED.metadata,
-			updated_at = NOW()
-		RETURNING id, created_at, updated_at
-	`
-
-	if item.ID == uuid.Nil {
-		item.ID = uuid.New()
-	}
-
-	metadataJSON, _ := json.Marshal(item.Metadata)
-
-	var description sql.NullString
-	if item.Description != "" {
-		description = sql.NullString{String: item.Description, Valid: true}
-	}
-
-	err := r.db.QueryRowContext(ctx, query,
-		item.ID, item.TenantID, item.SKU, item.Name, item.Category,
-		description, item.Unit, item.QuantityOnHand, item.QuantityReserved,
-		item.QuantityAvailable, item.ReorderPoint, item.ReorderQuantity,
-		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON,
-	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
-
-	if err != nil {
-		return fmt.Errorf("failed to upsert inventory item by forgesight_id: %w", err)
-	}
-
-	return nil
-}
-
 // UpsertBySKU inserts or updates an inventory item keyed by (tenant_id, sku).
 func (r *InventoryRepository) UpsertBySKU(ctx context.Context, item *InventoryItem) error {
 	query := `
