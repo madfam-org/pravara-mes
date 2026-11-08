@@ -50,7 +50,7 @@ func TestCostEventsOutboxOnPostgres(t *testing.T) {
 	insertFact("dispatch", dispatchJob, nil, "12.25", "actual", "operator", completedAt) // dispatch row gone: kept
 
 	janua := dispatchfakes.NewJanua(t, dispatchfakes.Client{ID: "jnc_pravara_cost", Secret: "jns_test_only",
-		Scope: costevents.TokenScope, Audience: costevents.Audience})
+		Scope: costevents.WriteScope, Audience: costevents.Audience})
 	dhanam := costeventstest.NewDhanam(t)
 	log := logrus.New()
 	log.SetLevel(logrus.PanicLevel)
@@ -58,7 +58,7 @@ func TestCostEventsOutboxOnPostgres(t *testing.T) {
 	newEmitter := func() *costevents.Emitter {
 		tokens := machineclients.NewTokenSource(machineclients.Credentials{Name: "dhanam-cost-events",
 			TokenURL: janua.TokenURL(), ClientID: "jnc_pravara_cost", ClientSecret: "jns_test_only",
-			Scope: costevents.TokenScope, Audience: costevents.Audience}, nil)
+			Scope: costevents.WriteScope, Audience: costevents.Audience}, nil)
 		scope := func(ctx context.Context, fn func(ctx context.Context) error) error {
 			return db.RunInTenantTx(ctx, app, tenantID.String(), fn)
 		}

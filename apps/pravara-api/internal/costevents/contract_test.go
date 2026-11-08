@@ -94,7 +94,7 @@ func TestTopLevelKeysMatchDhanam(t *testing.T) {
 	assert.Equal(t, want, got)
 	assert.Equal(t, "1.1", costevents.ContractVersion)
 	assert.Equal(t, "pravara", costevents.Source)
-	assert.Equal(t, "dhanam-cost-events:write", costevents.TokenScope, "one colon: Janua registers namespace:action")
+	assert.Equal(t, "dhanam-cost-events:write", costevents.WriteScope, "one colon: Janua registers namespace:action")
 }
 
 // The Event type cannot carry money: none of its JSON fields is a money

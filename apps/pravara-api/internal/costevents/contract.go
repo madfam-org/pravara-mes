@@ -28,8 +28,8 @@ const (
 	StatusCancelled = "cancelled"
 	BasisActual     = "actual"
 	BasisEstimate   = "estimate"
-	// Scope and audience of the Janua client Dhanam's writer grant binds.
-	TokenScope = "dhanam-cost-events:write"
+	// WriteScope and Audience: the Janua client Dhanam's writer grant binds.
+	WriteScope = "dhanam-cost-events:write"
 	Audience   = "dhanam-api"
 	// MaxBatch is Dhanam's batch limit.
 	MaxBatch = 500

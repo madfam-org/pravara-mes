@@ -200,7 +200,7 @@ func newRig(t *testing.T) *rig {
 	log, hook := test.NewNullLogger()
 	r := &rig{store: newMemStore(), log: log, hook: hook, now: completed.Add(time.Hour), batch: 100,
 		janua: dispatchfakes.NewJanua(t, dispatchfakes.Client{ID: "jnc_pravara_cost", Secret: "jns_test_only",
-			Scope: costevents.TokenScope, Audience: costevents.Audience}),
+			Scope: costevents.WriteScope, Audience: costevents.Audience}),
 		dhanam: costeventstest.NewDhanam(t)}
 	return r
 }
@@ -210,7 +210,7 @@ func (r *rig) emitter(dryRun bool) *costevents.Emitter {
 	if !dryRun {
 		tokens := machineclients.NewTokenSource(machineclients.Credentials{Name: "dhanam-cost-events",
 			TokenURL: r.janua.TokenURL(), ClientID: "jnc_pravara_cost", ClientSecret: "jns_test_only",
-			Scope: costevents.TokenScope, Audience: costevents.Audience}, nil)
+			Scope: costevents.WriteScope, Audience: costevents.Audience}, nil)
 		poster = costevents.NewClient(r.dhanam.Endpoint(), tokens, nil)
 	}
 	e := costevents.NewEmitter(r.store, poster, nil, costevents.Settings{Options: opts,

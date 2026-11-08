@@ -46,7 +46,7 @@ func FromConfig(cfg *config.Config, pool *sql.DB, log *logrus.Logger) (*Emitter,
 		tokens := machineclients.NewTokenSource(machineclients.Credentials{
 			Name: "dhanam-cost-events", TokenURL: ce.EffectiveTokenURL(cfg.MachineClients.TokenURL),
 			ClientID: ce.ClientID, ClientSecret: ce.ClientSecret,
-			Scope: TokenScope, Audience: Audience,
+			Scope: WriteScope, Audience: Audience,
 		}, nil)
 		poster = NewClient(ce.Endpoint(), tokens, nil)
 	}
