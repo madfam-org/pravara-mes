@@ -34,6 +34,9 @@ type Config struct {
 	Edge EdgeConfig `mapstructure:"edge"`
 	// MCP: the native MCP endpoint, POST /mcp (mcp.go). Off by default.
 	MCP MCPConfig `mapstructure:"mcp"`
+	// CostEvents: job consumption to Dhanam as quantity-only cost events
+	// (cost_events.go). Off by default.
+	CostEvents CostEventsConfig `mapstructure:"cost_events"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -156,6 +159,7 @@ func Load() (*Config, error) {
 	setDispatchDefaults(v) // fabrication dispatch
 	setEdgeDefaults(v)
 	setMCPDefaults(v)
+	setCostEventsDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -168,6 +172,7 @@ func Load() (*Config, error) {
 	bindDispatchEnv(v) // fabrication dispatch
 	bindEdgeEnv(v)
 	bindMCPEnv(v)
+	bindCostEventsEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")

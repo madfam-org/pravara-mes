@@ -102,6 +102,15 @@ Regenerate or repair these files with
   a new route under jobs, inventory, dispatch or machine control fails CI
   until it is COVERED or EXEMPTED. Gates, tools and owner enablement:
   `docs/operations/native-mcp.md`; follow-ups: ROADMAP item 23.
+- **Cost events.** `internal/costevents` pushes job consumption to Dhanam
+  (`POST /v1/cost-events`, source `pravara`) as quantity-only `consumption`
+  events: never `amount_minor`, `currency`, `fx` or `unit_value_minor`
+  (Pravara never values consumption, ruling C12). Durable outbox
+  `cost_event_outbox` (migration 034, not applied by the deploy). Off unless
+  `PRAVARA_COST_EVENTS_ENABLED=true`, and **only the owner turns it on**.
+  The wire rules are pinned to Dhanam contract v1.1 in
+  `internal/costevents/contract.go`; change them only with Dhanam's contract.
+  Owner steps: `docs/operations/cost-events.md`; follow-ups: ROADMAP item 24.
 - **Pending work.** The one canonical list is ROADMAP.md
   [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).
   Don't start a second list here, in README or in the llms files.

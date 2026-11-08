@@ -59,6 +59,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/api"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/billing"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/costevents"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
@@ -253,6 +254,10 @@ func main() {
 		offlineSweeper.UseTenantScopes(database.DB)
 		offlineSweeper.Start(ctx)
 	}
+
+	// Background: job consumption to Dhanam as quantity-only cost events
+	// (no-op unless PRAVARA_COST_EVENTS_ENABLED; docs/operations/cost-events.md).
+	costevents.StartFromConfig(ctx, cfg, database.DB, log)
 
 	// --- fabrication dispatch: runner (no-op unless DISPATCH_ENABLED) ---
 	dispatchService.Start(ctx)

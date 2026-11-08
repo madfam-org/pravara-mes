@@ -225,8 +225,8 @@ is not built.
     Still open, each needing a ruling first:
     - who owns the material-code registry (today: batch-lot product code,
       else material class; print jobs use the profile's material type);
-    - emitting consumption to the cost ledger (an event outbox) instead of
-      only serving `GET /v1/jobs/consumption`; Pravara stays quantities-only;
+    - ~~emitting consumption to the cost ledger (an event outbox)~~: built,
+      switch off (item 24); Pravara stays quantities-only;
     - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is
       set by hand today), together with item 1;
     - a print-job completion path that calls
@@ -255,6 +255,17 @@ is not built.
       `https://<api-host>/mcp` in Janua with RFC 9728 metadata served here
       and a people scope, once Janua supports it for production (tracked
       privately).
+
+24. **Cost events to Dhanam.** *Owner steps, then rulings.* The emitter ships
+    off ([docs/operations/cost-events.md](docs/operations/cost-events.md)).
+    Owner steps in order: Dhanam contract v1.1 merged and deployed; a Janua
+    client (audience `dhanam-api`, scope `dhanam-cost-events:write`); a
+    Dhanam `CostEventWriterGrant` for source `pravara`; the secret through
+    Enclii intake; migration 034; the settings; optional dry run; the switch.
+    Open rulings: whether machine minutes become events (needs a valuation
+    rule and an item code); whether a failed or cancelled job's material is
+    scrap cost rather than a withdrawn consumption; the material-code
+    registry (item 22).
 
 ### Roadmap ahead (feature work)
 

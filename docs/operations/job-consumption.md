@@ -98,6 +98,10 @@ yet; use the inventory adjust endpoint for stock).
 
 ## Read for cost ledgers
 
+Pravara also **pushes** each job's material consumption to Dhanam as
+quantity-only cost events, behind `PRAVARA_COST_EVENTS_ENABLED` (off by
+default): [cost-events.md](./cost-events.md).
+
 `GET /v1/jobs/consumption?from=&to=&task_id=&order_id=&engagement_slug=&limit=&offset=`
 
 - `from` inclusive, `to` exclusive, RFC 3339, on `occurred_at`.
