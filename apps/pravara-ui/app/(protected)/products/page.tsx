@@ -12,7 +12,6 @@ import {
   Trash2,
   Edit,
   MoreVertical,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,12 +42,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SearchInput } from "@/components/search-input";
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
-import {
-  productsAPI,
-  type ProductDefinition,
-  type BOMItem,
-  type ListResponse,
-} from "@/lib/api";
+import { QueryErrorState } from "@/components/query-error-state";
+import { BOMSection } from "@/components/products/bom-section";
+import { useToast } from "@/components/ui/use-toast";
+import { productsAPI, type ProductDefinition } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 type ProductCategory = ProductDefinition["category"];
@@ -101,26 +98,6 @@ const defaultFormData: ProductFormData = {
   is_active: true,
 };
 
-interface BOMFormData {
-  material_name: string;
-  material_code: string;
-  quantity: number;
-  unit: string;
-  estimated_cost: number;
-  currency: string;
-  supplier: string;
-}
-
-const defaultBOMFormData: BOMFormData = {
-  material_name: "",
-  material_code: "",
-  quantity: 1,
-  unit: "pcs",
-  estimated_cost: 0,
-  currency: "MXN",
-  supplier: "",
-};
-
 export default function ProductsPage() {
   const { data: session } = usePravaraSession();
   const token = (session?.user as any)?.accessToken;
@@ -139,25 +116,17 @@ export default function ProductsPage() {
     ProductDefinition | undefined
   >();
   const [formData, setFormData] = useState<ProductFormData>(defaultFormData);
-  const [bomFormData, setBomFormData] =
-    useState<BOMFormData>(defaultBOMFormData);
-  const [showBomForm, setShowBomForm] = useState(false);
+  const { toast } = useToast();
 
   // Fetch products
-  const { data, isLoading } = useQuery({
+  const productsQuery = useQuery({
     queryKey: ["products"],
     queryFn: () => productsAPI.list(token),
     enabled: !!token,
   });
+  const { data, isLoading } = productsQuery;
 
-  const products = data?.data || [];
-
-  // Fetch BOM for expanded product
-  const { data: bomItems } = useQuery({
-    queryKey: ["products", expandedProductId, "bom"],
-    queryFn: () => productsAPI.getBOM(token, expandedProductId!),
-    enabled: !!token && !!expandedProductId,
-  });
+  const products = useMemo(() => data?.data ?? [], [data]);
 
   // Mutations
   const createMutation = useMutation({
@@ -191,38 +160,6 @@ export default function ProductsPage() {
     },
   });
 
-  const addBomItemMutation = useMutation({
-    mutationFn: ({
-      productId,
-      data,
-    }: {
-      productId: string;
-      data: Partial<BOMItem>;
-    }) => productsAPI.addBOMItem(token, productId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["products", expandedProductId, "bom"],
-      });
-      setBomFormData(defaultBOMFormData);
-      setShowBomForm(false);
-    },
-  });
-
-  const deleteBomItemMutation = useMutation({
-    mutationFn: ({
-      productId,
-      itemId,
-    }: {
-      productId: string;
-      itemId: string;
-    }) => productsAPI.deleteBOMItem(token, productId, itemId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["products", expandedProductId, "bom"],
-      });
-    },
-  });
-
   // Filter products
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
@@ -237,6 +174,8 @@ export default function ProductsPage() {
   const handleNewProduct = () => {
     setSelectedProduct(undefined);
     setFormData(defaultFormData);
+    createMutation.reset();
+    updateMutation.reset();
     setDialogOpen(true);
   };
 
@@ -251,6 +190,8 @@ export default function ProductsPage() {
       cad_file_url: product.cad_file_url || "",
       is_active: product.is_active,
     });
+    createMutation.reset();
+    updateMutation.reset();
     setDialogOpen(true);
   };
 
@@ -261,7 +202,17 @@ export default function ProductsPage() {
 
   const handleDeleteConfirm = async () => {
     if (!token || !productToDelete) return;
-    await deleteMutation.mutateAsync(productToDelete.id);
+    try {
+      await deleteMutation.mutateAsync(productToDelete.id);
+    } catch (error) {
+      toast({
+        title: "Couldn't delete product",
+        description: `${
+          error instanceof Error && error.message ? `${error.message}. ` : ""
+        }${productToDelete.name} was not deleted; try again.`,
+        variant: "destructive",
+      });
+    }
     setProductToDelete(undefined);
   };
 
@@ -273,39 +224,28 @@ export default function ProductsPage() {
       cad_file_url: formData.cad_file_url || undefined,
     };
 
-    if (selectedProduct) {
-      await updateMutation.mutateAsync({
-        id: selectedProduct.id,
-        data: payload,
-      });
-    } else {
-      await createMutation.mutateAsync(payload);
+    try {
+      if (selectedProduct) {
+        await updateMutation.mutateAsync({
+          id: selectedProduct.id,
+          data: payload,
+        });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+    } catch {
+      // Shown in the dialog through the mutation's error state.
     }
   };
 
   const handleToggleExpand = (productId: string) => {
     setExpandedProductId((prev) => (prev === productId ? null : productId));
-    setShowBomForm(false);
-    setBomFormData(defaultBOMFormData);
-  };
-
-  const handleAddBomItem = async () => {
-    if (!expandedProductId || !token) return;
-    await addBomItemMutation.mutateAsync({
-      productId: expandedProductId,
-      data: {
-        material_name: bomFormData.material_name,
-        material_code: bomFormData.material_code || undefined,
-        quantity: bomFormData.quantity,
-        unit: bomFormData.unit,
-        estimated_cost: bomFormData.estimated_cost || undefined,
-        currency: bomFormData.currency,
-        supplier: bomFormData.supplier || undefined,
-      },
-    });
   };
 
   const isDialogLoading = createMutation.isPending || updateMutation.isPending;
+  const dialogError = selectedProduct
+    ? updateMutation.error
+    : createMutation.error;
 
   return (
     <div className="space-y-6">
@@ -348,6 +288,13 @@ export default function ProductsPage() {
             </Card>
           ))}
         </div>
+      ) : productsQuery.isError ? (
+        <QueryErrorState
+          what="products"
+          error={productsQuery.error}
+          onRetry={() => productsQuery.refetch()}
+          isRetrying={productsQuery.isFetching}
+        />
       ) : filteredProducts.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -493,238 +440,7 @@ export default function ProductsPage() {
 
                     {/* BOM Section (expanded) */}
                     {isExpanded && (
-                      <div className="mt-6 border-t pt-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-base font-semibold">
-                            Bill of Materials
-                          </h3>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setShowBomForm(!showBomForm)}
-                          >
-                            {showBomForm ? (
-                              <>
-                                <X className="mr-2 h-4 w-4" />
-                                Cancel
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add BOM Item
-                              </>
-                            )}
-                          </Button>
-                        </div>
-
-                        {/* BOM Table */}
-                        {bomItems && bomItems.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b text-left">
-                                  <th className="pb-2 font-medium text-muted-foreground">
-                                    Material
-                                  </th>
-                                  <th className="pb-2 font-medium text-muted-foreground">
-                                    Code
-                                  </th>
-                                  <th className="pb-2 font-medium text-muted-foreground text-right">
-                                    Qty
-                                  </th>
-                                  <th className="pb-2 font-medium text-muted-foreground">
-                                    Unit
-                                  </th>
-                                  <th className="pb-2 font-medium text-muted-foreground text-right">
-                                    Est. Cost
-                                  </th>
-                                  <th className="pb-2 font-medium text-muted-foreground">
-                                    Supplier
-                                  </th>
-                                  <th className="pb-2 w-10" />
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {bomItems.map((item) => (
-                                  <tr
-                                    key={item.id}
-                                    className="border-b last:border-0"
-                                  >
-                                    <td className="py-2 font-medium">
-                                      {item.material_name}
-                                    </td>
-                                    <td className="py-2 font-mono text-xs text-muted-foreground">
-                                      {item.material_code || "-"}
-                                    </td>
-                                    <td className="py-2 text-right">
-                                      {item.quantity}
-                                    </td>
-                                    <td className="py-2">{item.unit}</td>
-                                    <td className="py-2 text-right">
-                                      {item.estimated_cost != null
-                                        ? new Intl.NumberFormat("en-US", {
-                                            style: "currency",
-                                            currency: item.currency || "MXN",
-                                          }).format(item.estimated_cost)
-                                        : "-"}
-                                    </td>
-                                    <td className="py-2 text-muted-foreground">
-                                      {item.supplier || "-"}
-                                    </td>
-                                    <td className="py-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() =>
-                                          deleteBomItemMutation.mutate({
-                                            productId: product.id,
-                                            itemId: item.id,
-                                          })
-                                        }
-                                        aria-label={`Remove ${item.material_name}`}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                                      </Button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          !showBomForm && (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No BOM items yet. Add materials to define the bill
-                              of materials.
-                            </p>
-                          )
-                        )}
-
-                        {/* Inline Add BOM Form */}
-                        {showBomForm && (
-                          <div className="mt-4 rounded-lg border p-4 space-y-4 bg-muted/30">
-                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                              <div className="col-span-2 sm:col-span-1">
-                                <Label htmlFor="bom-material-name">
-                                  Material Name
-                                </Label>
-                                <Input
-                                  id="bom-material-name"
-                                  placeholder="PLA Filament"
-                                  value={bomFormData.material_name}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      material_name: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="bom-material-code">Code</Label>
-                                <Input
-                                  id="bom-material-code"
-                                  placeholder="MAT-001"
-                                  value={bomFormData.material_code}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      material_code: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="bom-quantity">Quantity</Label>
-                                <Input
-                                  id="bom-quantity"
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={bomFormData.quantity}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      quantity: e.target.valueAsNumber || 0,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="bom-unit">Unit</Label>
-                                <Input
-                                  id="bom-unit"
-                                  placeholder="pcs"
-                                  value={bomFormData.unit}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      unit: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="bom-cost">Est. Cost</Label>
-                                <Input
-                                  id="bom-cost"
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={bomFormData.estimated_cost || ""}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      estimated_cost:
-                                        e.target.valueAsNumber || 0,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="bom-supplier">Supplier</Label>
-                                <Input
-                                  id="bom-supplier"
-                                  placeholder="Supplier name"
-                                  value={bomFormData.supplier}
-                                  onChange={(e) =>
-                                    setBomFormData({
-                                      ...bomFormData,
-                                      supplier: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setShowBomForm(false);
-                                  setBomFormData(defaultBOMFormData);
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={handleAddBomItem}
-                                disabled={
-                                  !bomFormData.material_name ||
-                                  addBomItemMutation.isPending
-                                }
-                              >
-                                {addBomItemMutation.isPending
-                                  ? "Adding..."
-                                  : "Add Item"}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      <BOMSection product={product} token={token} />
                     )}
                   </CardContent>
                 </Card>
@@ -833,6 +549,16 @@ export default function ProductsPage() {
               </div>
             </div>
           </div>
+
+          {dialogError && (
+            <p role="alert" className="text-sm text-destructive">
+              Couldn&apos;t save the product
+              {dialogError instanceof Error && dialogError.message
+                ? `: ${dialogError.message}`
+                : "."}{" "}
+              Your changes are kept; try again.
+            </p>
+          )}
 
           <DialogFooter>
             <Button
