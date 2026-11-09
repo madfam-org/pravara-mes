@@ -65,6 +65,9 @@ Merging to `main` is the deploy. `.github/workflows/build-deploy.yml`
 (path-filtered) and `.github/workflows/deploy-admin.yml` build and sign the
 images and commit their digests to `infra/k8s/production/kustomization.yaml`.
 Argo CD auto-syncs that overlay. Docs-only changes trigger no build.
+Migrations are not applied by the deploy: an operator applies them through
+the database pod before merging code that needs them
+(`docs/operations/applying-migrations.md`).
 
 ## Tests
 
