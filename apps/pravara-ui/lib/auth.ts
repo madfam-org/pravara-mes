@@ -16,8 +16,31 @@ export interface PravaraUser {
   email?: string | null;
   image?: string | null;
   role: string;
+  /**
+   * Every role the identity token names: the `roles` claim (what pravara-api
+   * checks for role-gated routes) plus the single `role` claim. Empty when
+   * the token carries neither; then rolesKnown is false.
+   */
+  roles: string[];
+  rolesKnown: boolean;
   tenantId: string;
   accessToken?: string;
+}
+
+/** The roles named by Janua user claims (`roles` array and `role`). */
+export function rolesFromClaims(claims: Record<string, unknown>): {
+  roles: string[];
+  known: boolean;
+} {
+  const roles = new Set<string>();
+  if (Array.isArray(claims.roles)) {
+    for (const r of claims.roles) if (typeof r === "string" && r) roles.add(r);
+  }
+  if (typeof claims.role === "string" && claims.role) roles.add(claims.role);
+  return {
+    roles: [...roles],
+    known: Array.isArray(claims.roles) || typeof claims.role === "string",
+  };
 }
 
 export interface PravaraSession {
@@ -48,6 +71,7 @@ export function usePravaraSession(): {
 
   const accessToken = String(janua.client?.getAccessToken?.() ?? "");
   const claims = januaUser as unknown as Record<string, unknown>;
+  const { roles, known: rolesKnown } = rolesFromClaims(claims);
 
   const session: PravaraSession = {
     user: {
@@ -56,6 +80,8 @@ export function usePravaraSession(): {
       email: januaUser.email || "",
       image: (claims.picture as string) || (claims.avatar as string) || null,
       role: (claims.role as string) || "operator",
+      roles,
+      rolesKnown,
       tenantId: (claims.tenant_id as string) || "",
       accessToken,
     },
