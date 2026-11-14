@@ -1,7 +1,13 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { usePravaraSession } from "@/lib/auth";
+import { machinesAPI } from "@/lib/api";
+import { machinesNeedingAttention, summarizeMachines } from "@/lib/factory-summary";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -35,24 +41,56 @@ const FactoryFloor3D = dynamic(
   }
 );
 
-// Mock data for demonstration
-const mockStats = {
-  totalMachines: 12,
-  activeMachines: 8,
-  idleMachines: 3,
-  maintenanceMachines: 1,
-  totalProduction: 1847,
-  efficiency: 87.3,
-  uptime: 94.2,
-};
+/** One page of machines is enough for the header; the total comes from the API. */
+const MACHINE_PAGE_SIZE = 200;
 
-const mockAlerts = [
-  { id: "1", type: "warning", message: "Machine CNC-003 vibration levels elevated", time: "5m ago" },
-  { id: "2", type: "info", message: "3D Printer #2 filament change required soon", time: "12m ago" },
-  { id: "3", type: "success", message: "Laser cutter maintenance completed", time: "1h ago" },
-];
+function StatCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | null;
+  tone?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold tabular-nums ${tone ?? ""}`}>
+          {value === null ? (
+            <span className="text-muted-foreground" aria-label="Not loaded">
+              —
+            </span>
+          ) : (
+            value
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function FactoryPage() {
+  const { data: session } = usePravaraSession();
+  const token = session?.accessToken ?? "";
+
+  const machinesQuery = useQuery({
+    queryKey: ["machines", "factory-floor"],
+    queryFn: () =>
+      machinesAPI.list(token, new URLSearchParams({ limit: String(MACHINE_PAGE_SIZE) })),
+    enabled: !!token,
+  });
+
+  const machines = useMemo(() => machinesQuery.data?.data ?? [], [machinesQuery.data]);
+  const loaded = machinesQuery.isSuccess;
+  const summary = useMemo(() => summarizeMachines(machines), [machines]);
+  const attention = useMemo(() => machinesNeedingAttention(machines), [machines]);
+  const total = machinesQuery.data?.total ?? machines.length;
+  const partial = loaded && total > summary.counted;
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -79,65 +117,43 @@ export default function FactoryPage() {
         </div>
       </div>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Machines</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalMachines}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{mockStats.activeMachines}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Idle</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{mockStats.idleMachines}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Maintenance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{mockStats.maintenanceMachines}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Production</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalProduction}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Efficiency</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.efficiency}%</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Uptime</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.uptime}%</div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Machine counts, from the machines list. */}
+      {machinesQuery.isError ? (
+        <QueryErrorState
+          what="the machines"
+          error={machinesQuery.error}
+          onRetry={() => machinesQuery.refetch()}
+          isRetrying={machinesQuery.isFetching}
+        />
+      ) : (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+            <StatCard label="Machines" value={loaded ? total : null} />
+            <StatCard
+              label="Running"
+              value={loaded ? summary.running : null}
+              tone="text-green-600 dark:text-green-400"
+            />
+            <StatCard label="Ready" value={loaded ? summary.ready : null} />
+            <StatCard
+              label="Maintenance"
+              value={loaded ? summary.maintenance : null}
+              tone="text-orange-600 dark:text-orange-400"
+            />
+            <StatCard
+              label="Error"
+              value={loaded ? summary.error : null}
+              tone={summary.error > 0 ? "text-red-600 dark:text-red-400" : undefined}
+            />
+            <StatCard label="Offline" value={loaded ? summary.offline : null} />
+          </div>
+          {partial && (
+            <p className="text-sm text-muted-foreground">
+              Status counts cover the first {summary.counted} of {total} machines.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -176,37 +192,55 @@ export default function FactoryPage() {
 
         {/* Side Panel (1/4 width) */}
         <div className="space-y-6">
-          {/* Alerts */}
+          {/* Machines in error or maintenance, from the machines list. */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
-                <CardTitle className="text-base">Alerts</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base">Needs attention</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {mockAlerts.map((alert) => (
-                <div key={alert.id} className="space-y-1">
-                  <div className="flex items-start gap-2">
-                    <Badge
-                      variant={
-                        alert.type === "warning"
-                          ? "destructive"
-                          : alert.type === "success"
-                          ? "default"
-                          : "secondary"
-                      }
-                      className="mt-0.5"
-                    >
-                      {alert.type}
-                    </Badge>
-                    <div className="flex-1">
-                      <p className="text-sm">{alert.message}</p>
-                      <p className="text-xs text-muted-foreground">{alert.time}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {machinesQuery.isError ? (
+                <p className="text-sm text-muted-foreground">
+                  Machines could not be loaded, so nothing can be listed here.
+                </p>
+              ) : !loaded ? (
+                <p className="text-sm text-muted-foreground">Loading machines…</p>
+              ) : total === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No machines registered yet.{" "}
+                  <Link href="/machines" className="font-medium text-foreground underline underline-offset-4">
+                    Register a machine
+                  </Link>
+                </p>
+              ) : attention.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No machine is in error or maintenance.
+                </p>
+              ) : (
+                <ul role="list" className="space-y-3">
+                  {attention.map((machine) => (
+                    <li key={machine.id} className="flex items-start gap-2">
+                      <Badge
+                        variant={machine.status === "error" ? "destructive" : "secondary"}
+                        className="mt-0.5"
+                      >
+                        {machine.status === "error" ? "Error" : "Maintenance"}
+                      </Badge>
+                      <Link
+                        href={`/machines/${machine.id}`}
+                        className="min-w-0 flex-1 text-sm underline-offset-4 hover:underline"
+                      >
+                        <span className="block truncate font-medium">{machine.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {machine.code}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
