@@ -9,8 +9,9 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock next-auth
+const signOut = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/auth', () => ({
-  pravaraSignOut: vi.fn(),
+  usePravaraSignOut: () => signOut,
 }))
 
 // Mock next/link
@@ -129,5 +130,18 @@ describe('Sidebar', () => {
   it('applies extra classes to the root element', () => {
     render(<Sidebar className="hidden md:flex" />)
     expect(screen.getByRole('navigation', { name: 'Main navigation' }).className).toContain('hidden md:flex')
+  })
+
+  it('signs out through the session client and shows it is in progress', () => {
+    signOut.mockClear()
+    render(<Sidebar />)
+    const button = screen.getByLabelText('Sign out of your account')
+    fireEvent.click(button)
+    expect(signOut).toHaveBeenCalledWith({ callbackUrl: '/login' })
+    expect(button).toBeDisabled()
+    expect(screen.getByText('Signing out…')).toBeInTheDocument()
+    // A second press while signing out does nothing.
+    fireEvent.click(button)
+    expect(signOut).toHaveBeenCalledTimes(1)
   })
 })

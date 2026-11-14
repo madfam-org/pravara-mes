@@ -8,7 +8,7 @@
  * import { usePravaraSession } from "@/lib/auth" just works.
  */
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useJanua, useUser, useAuth as useJanuaAuth } from "@janua/nextjs";
 
 export interface PravaraUser {
@@ -211,25 +211,56 @@ export function usePravaraSession(): {
   return { data: session, status: "authenticated" };
 }
 
+/** Where the SDK keeps the session (see currentAccessToken). */
+const SESSION_STORAGE_KEYS = [
+  ACCESS_TOKEN_STORAGE_KEY,
+  "janua_refresh_token",
+  "janua_token_expires_at",
+];
+
+interface SignOutClient {
+  signOut?: () => Promise<unknown>;
+}
+
 /**
- * Sign in via Janua SDK.
+ * End the session, then go to `callbackUrl` (default "/login").
+ *
+ * The SDK's signOut posts to Janua's logout route, which retires the session
+ * server-side, and clears the stored tokens whatever the answer. The keys are
+ * removed here as well, so a failure inside the SDK cannot leave a person
+ * signed in on a shared machine. Never throws: signing out must always end
+ * on the sign-in page.
  */
-export function pravaraSignIn(callbackUrl?: string) {
+export async function signOutOfPravara(
+  client: SignOutClient | null | undefined,
+  options?: { callbackUrl?: string }
+): Promise<void> {
+  try {
+    await client?.signOut?.();
+  } catch {
+    // The local session is cleared below regardless.
+  }
+  try {
+    for (const key of SESSION_STORAGE_KEYS) globalThis.localStorage?.removeItem(key);
+  } catch {
+    // Storage can be unavailable (private mode, blocked site data).
+  }
   if (typeof window !== "undefined") {
-    if (callbackUrl) {
-      localStorage.setItem("auth_return_url", callbackUrl);
-    }
-    const baseURL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
-    window.location.href = `${baseURL}/authorize?redirect_uri=${encodeURIComponent(window.location.origin)}`;
+    window.location.assign(options?.callbackUrl || "/login");
   }
 }
 
 /**
- * Sign out via Janua SDK.
+ * Sign-out bound to the Janua client of the current provider.
+ *
+ * This replaces a helper that navigated to `${JANUA_URL}/sign-out`, a path
+ * Janua does not serve (404), so the button left people on an error page
+ * with their session intact.
  */
-export async function pravaraSignOut(options?: { callbackUrl?: string }) {
-  if (typeof window !== "undefined") {
-    const baseURL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
-    window.location.href = `${baseURL}/sign-out?redirect_uri=${encodeURIComponent(options?.callbackUrl || window.location.origin + "/login")}`;
-  }
+export function usePravaraSignOut(): (options?: { callbackUrl?: string }) => Promise<void> {
+  const janua = useJanua();
+  return useCallback(
+    (options) => signOutOfPravara(janua.client as SignOutClient | null | undefined, options),
+    [janua.client]
+  );
 }
