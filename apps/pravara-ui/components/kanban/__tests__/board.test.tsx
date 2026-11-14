@@ -8,6 +8,7 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: any) => <div data-testid="dnd-context">{children}</div>,
   DragOverlay: ({ children }: any) => <div data-testid="drag-overlay">{children}</div>,
   PointerSensor: class {},
+  KeyboardSensor: class {},
   useSensor: () => ({}),
   useSensors: () => [],
 }))
@@ -15,6 +16,7 @@ vi.mock('@dnd-kit/core', () => ({
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: ({ children }: any) => <div>{children}</div>,
   verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
 }))
 
 // Mock child components
