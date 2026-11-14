@@ -86,7 +86,8 @@ export function Sidebar({ user }: SidebarProps) {
       <nav className="flex-1 space-y-1 p-2" aria-label="Primary navigation">
         <ul role="list" className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href || pathname?.startsWith(`${item.href}/`);
             return (
               <li key={item.name}>
                 <Link
