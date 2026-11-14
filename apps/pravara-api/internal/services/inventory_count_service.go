@@ -230,10 +230,19 @@ func (s *CountService) applyLine(ctx context.Context, c *repositories.Count, l *
 		}
 		return s.counts.SetLineResult(ctx, l)
 	}
+	// Expected: stock on hand at counted_at, plus count adjustments posted
+	// after it by counts counted at or before it (they correct a moment this
+	// count already saw). A count counted after it is refused instead
+	// (NewerCount): see docs/operations/inventory.md «Physical counts».
 	expected, err := s.stock.BalanceAt(ctx, item.ID, l.CountedAt)
 	if err != nil {
 		return err
 	}
+	late, err := s.counts.LateCountAdjustments(ctx, item.ID, l.CountedAt)
+	if err != nil {
+		return err
+	}
+	expected += late
 	moved, movedQty, err := s.stock.MovementsSince(ctx, item.ID, l.CountedAt)
 	if err != nil {
 		return err
