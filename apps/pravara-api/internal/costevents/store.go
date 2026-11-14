@@ -81,7 +81,10 @@ func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, err
 		WITH keyed AS (
 			SELECT c.*, COALESCE((SELECT m.code FROM material_registry m
 			                      WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), '') AS registry_code
-			FROM job_consumption c WHERE c.kind = 'material' AND c.tenant_id = `+tenant+`
+			FROM job_consumption_facts c WHERE c.kind = 'material' AND c.tenant_id = `+tenant+`
+			  -- a row a correction superseded never counts (migration 036)
+			  AND NOT EXISTS (SELECT 1 FROM job_consumption_corrections s
+			                  WHERE s.supersedes_id = c.id AND s.tenant_id = c.tenant_id)
 		), recent AS (
 			SELECT DISTINCT job_kind, job_id, COALESCE(NULLIF(registry_code, ''), material_code) AS line_key
 			FROM keyed WHERE created_at >= $1
@@ -158,7 +161,7 @@ func (s *PGStore) JobLineKeys(ctx context.Context, jobKind string, jobID uuid.UU
 	rows, err := s.q.QueryContext(ctx, `
 		SELECT DISTINCT COALESCE((SELECT m.code FROM material_registry m
 		                          WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), c.material_code)
-		FROM job_consumption c
+		FROM job_consumption_facts c
 		WHERE c.kind = 'material' AND c.job_kind = $1 AND c.job_id = $2 AND c.tenant_id = `+tenant, jobKind, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("read job line keys: %w", err)

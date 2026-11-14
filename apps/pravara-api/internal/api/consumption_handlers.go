@@ -193,11 +193,13 @@ type ConsumptionReportRequest struct {
 	MaterialLot  string   `json:"material_lot"`
 	Quantity     *float64 `json:"quantity" binding:"required"`
 	Unit         string   `json:"unit" binding:"required"`
+	// Disposition is good (default), scrap or failed_print (ruling I5).
+	Disposition string `json:"disposition"`
 }
 
 // Report is POST /v1/tasks/:id/consumption.
 // @Summary Report a task's actual consumption
-// @Description Records an operator-reported actual (basis actual, source operator) for a task: material with material_code and unit g, mm, ml or sheet, or machine time with unit min. It belongs to the task's latest completed dispatch when there is one. When material_code is the SKU of an inventory item in the same unit, stock relieved for the job is brought to this actual (an adjustment against the slicer estimate already relieved). The same actual can be reported once per job and material (409 already_recorded).
+// @Description Records an operator-reported actual (basis actual, source operator) for a task: material with material_code and unit g, mm, ml or sheet, or machine time with unit min. It belongs to the task's latest completed dispatch when there is one. When material_code is the SKU of an inventory item in the same unit, stock relieved for the job is brought to this actual (an adjustment against the slicer estimate already relieved). The same actual can be reported once per job and material: a second report is 409 already_recorded, whose correct_with names the route that corrects the stored row (POST /v1/jobs/consumption/{id}/corrections). disposition (good, scrap, failed_print; default good) is kept in Pravara.
 // @Tags tasks
 // @Accept json
 // @Produce json
@@ -231,7 +233,7 @@ func (h *ConsumptionHandler) Report(c *gin.Context) {
 		return
 	}
 	report := services.OperatorReport{MaterialCode: req.MaterialCode, MaterialLot: req.MaterialLot,
-		Quantity: *req.Quantity, Unit: req.Unit}
+		Quantity: *req.Quantity, Unit: req.Unit, Disposition: req.Disposition}
 	if actor := middleware.ActorUUID(c); actor != uuid.Nil {
 		report.ReportedBy = &actor
 	}
@@ -250,7 +252,8 @@ func (h *ConsumptionHandler) Report(c *gin.Context) {
 	}
 	if !created {
 		c.JSON(http.StatusConflict, gin.H{"error": "already_recorded",
-			"message": "an operator actual for this job and material is already recorded", "consumption": fact})
+			"message":     "an operator actual for this job and material is already recorded; correct it instead",
+			"consumption": fact, "correct_with": correctionPath(h.correctionTarget(c, fact))})
 		return
 	}
 	if moves == nil {
