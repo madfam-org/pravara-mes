@@ -245,6 +245,10 @@ is not built.
       Janua yet: only admins today). Still ungated, for the owner to rule:
       `POST /v1/inventory`, `PATCH /v1/inventory/:id` (except linking a
       material), `POST /v1/inventory/:id/adjust`;
+    - open for the owner: unlinking a stock item (or re-linking its
+      material) returns old jobs' relief to it when they are next settled,
+      so its stock rises although the material was consumed
+      (docs/operations/inventory.md «Known behaviour»);
     - ~~emitting consumption to the cost ledger (an event outbox)~~: built,
       switch off (item 24); Pravara stays quantities-only;
     - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is

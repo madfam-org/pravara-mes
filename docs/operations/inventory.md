@@ -79,6 +79,18 @@ relieves that item today, and the new spelling would silently re-point it.
 Register the code with `inventory_item_id` set to that item to register and
 link it in one transaction.
 
+### Known behaviour: unlinking returns old relief
+
+Unlinking a stock item from its material (`PATCH /v1/inventory/{id}` with
+`material_id: ""`), or linking the material to another item, changes the
+item a code names. The next time any old job of that material is settled
+(a new fact, a correction, a conversion arriving), its relief is returned
+to the old item and taken from the new one, or, when the material has no
+item any more, only returned: the old item's stock rises although the
+material was consumed from it. This is deliberate for now (relief lives
+where the code points when last settled) and is an open question for the
+owner (ROADMAP item 22).
+
 ## HTTP contract
 
 All routes are under `/v1`, need a signed-in person (Janua) or an API key,
@@ -242,11 +254,15 @@ gets a conversion. `stock_movement` is the `inventory_transactions` row
     a newer count of the material closed; it never moves stock.
 - **Closing is idempotent**: closing a closed count returns it with
   `already_closed: true` and moves nothing.
-- **An older count never closes over a newer one.** When another count
-  already closed with a line for the same material counted after this
-  count's line, closing is 409 `newer_count_exists` (applying the older
-  difference on top of the newer count would count it twice). Recount the
-  material in a new count instead.
+- **Which count wins: the one counted last.** The expected quantity of a
+  line is the stock on hand at its `counted_at`, **plus** every count
+  adjustment posted after `counted_at` by a line counted at or before it
+  (an earlier count that closed late corrected a moment this count already
+  saw). When another count already closed with a line for the same material
+  counted **after** this line, closing is 409 `newer_count_exists` (applying
+  the older difference on top would count it twice); recount the material in
+  a new count instead. Applying a line once its conversion arrives follows
+  the same rule (a line overtaken by a later count becomes `superseded`).
 - Each applied line reports `movements_since_counted` and
   `quantity_since_counted`: the stock movements recorded between
   `counted_at` and the close (a receipt that may already have been on the

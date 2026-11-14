@@ -194,3 +194,49 @@ func TestInverseConversionPairIsOneFactor(t *testing.T) {
 	assert.Error(t, err, "an inconsistent inverse pair cannot be stored")
 	_ = uuid.Nil
 }
+
+// Review pass 2, finding B: an earlier-counted count closed late posts its
+// adjustment after a later count's counted_at. Closing the later count (or
+// applying its line once a conversion arrives) must count that adjustment
+// in its expected balance, or stock ends off by it. The opposite ordering
+// (a later-counted count already closed) is TestOlderCountCannotCloseAfterNewerCount.
+func TestCountIncludesAnEarlierCountsLateAdjustment(t *testing.T) {
+	r := newDispatchRig(t)
+	admin := r.userToken(t, "admin")
+	plaID, pla := r.newStockedMaterial(t, admin, "FIL-PLA-LATE", "filament", "g", 1000)
+	resinID, resin := r.newStockedMaterial(t, admin, "RES-LATE", "resin", "ml", 1000)
+	t0 := time.Now().UTC().Add(-10 * time.Minute)
+	t1 := time.Now().UTC().Add(-5 * time.Minute)
+
+	earlier := r.call(t, admin, http.MethodPost, "/v1/inventory/counts", nil, http.StatusCreated)["id"].(string)
+	later := r.call(t, admin, http.MethodPost, "/v1/inventory/counts", nil, http.StatusCreated)["id"].(string)
+	for _, l := range []struct {
+		count, material string
+		qty             float64
+		unit            string
+		at              time.Time
+	}{
+		{earlier, plaID, 900, "g", t0}, {later, plaID, 880, "g", t1},
+		{earlier, resinID, 900, "ml", t0}, {later, resinID, 0.88, "bottle", t1}, // no conversion yet
+	} {
+		r.call(t, admin, http.MethodPost, "/v1/inventory/counts/"+l.count+"/lines", map[string]any{"material_id": l.material,
+			"counted_quantity": l.qty, "unit": l.unit, "counted_at": l.at}, http.StatusCreated)
+	}
+	r.call(t, admin, http.MethodPost, "/v1/inventory/counts/"+earlier+"/close", nil, http.StatusOK)
+	assert.Equal(t, 900.0, r.onHand(t, pla))
+	assert.Equal(t, 900.0, r.onHand(t, resin))
+
+	closed := r.call(t, admin, http.MethodPost, "/v1/inventory/counts/"+later+"/close", nil, http.StatusOK)
+	assert.Equal(t, 880.0, r.onHand(t, pla), "the later count is the truth: 880, not 780")
+	for _, l := range closed["count"].(map[string]any)["lines"].([]any) {
+		if m := l.(map[string]any); m["material_code"] == "FIL-PLA-LATE" {
+			assert.EqualValues(t, 900, m["expected_quantity"], "the earlier count's late adjustment is expected")
+			assert.EqualValues(t, -20, m["difference"])
+		}
+	}
+
+	// The same rule when the later line is applied by a conversion.
+	r.call(t, admin, http.MethodPost, "/v1/inventory/materials/"+resinID+"/conversions",
+		map[string]any{"from_unit": "bottle", "to_unit": "ml", "factor": 1000}, http.StatusCreated)
+	assert.Equal(t, 880.0, r.onHand(t, resin), "resolve line follows the same rule as close")
+}

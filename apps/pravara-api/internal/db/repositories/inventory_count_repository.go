@@ -260,3 +260,20 @@ func (r *CountRepository) NewerCount(ctx context.Context, materialID uuid.UUID, 
 	}
 	return &id, nil
 }
+
+// LateCountAdjustments is the net of count adjustments posted to an item
+// after at by count lines counted at or before at: corrections of stock as
+// of a moment a count at at already saw, recorded later only because their
+// count closed later.
+func (r *CountRepository) LateCountAdjustments(ctx context.Context, itemID uuid.UUID, at time.Time) (float64, error) {
+	var q float64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(t.quantity), 0) FROM inventory_transactions t
+		JOIN inventory_count_lines l ON l.id = t.reference_id AND `+tenantMatchOn("l")+`
+		WHERE t.reference_type = '`+StockReferenceCount+`' AND t.inventory_item_id = $1
+		  AND t.created_at > $2 AND l.counted_at <= $2 AND `+tenantMatchOn("t"), itemID, at).Scan(&q)
+	if err != nil {
+		return 0, fmt.Errorf("late count adjustments: %w", err)
+	}
+	return Round4(q), nil
+}

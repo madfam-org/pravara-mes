@@ -57,6 +57,18 @@ func (s *memStore) RecentLines(_ context.Context, since time.Time) ([]costevents
 	return out, nil
 }
 
+func (s *memStore) JobLineKeys(_ context.Context, jobKind string, jobID uuid.UUID) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, l := range s.lines {
+		if l.JobKind == jobKind && l.JobID == jobID {
+			out = append(out, l.MaterialCode)
+		}
+	}
+	return out, nil
+}
+
 func (s *memStore) JobEvents(_ context.Context, jobKind string, jobID uuid.UUID) ([]costevents.StoredEvent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -202,6 +214,18 @@ func (s *memStore) addLine(l costevents.Line) {
 		}
 	}
 	s.lines = append(s.lines, l)
+}
+
+// removeLine drops a job's line (its facts now belong to another key).
+func (s *memStore) removeLine(jobID uuid.UUID, code string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.lines {
+		if s.lines[i].JobID == jobID && s.lines[i].MaterialCode == code {
+			s.lines = append(s.lines[:i], s.lines[i+1:]...)
+			return
+		}
+	}
 }
 
 // rig wires an emitter to the fake Janua and Dhanam with a controllable clock.
@@ -458,4 +482,60 @@ func TestSwitchOnButIncompleteDoesNotStart(t *testing.T) {
 	assert.Equal(t, logrus.ErrorLevel, last.Level)
 	raw, _ := json.Marshal(last.Data)
 	assert.NotContains(t, string(raw), "jns_must_not_leak")
+}
+
+func keyedLine(code string, facts ...costevents.Fact) costevents.Line {
+	for i := range facts {
+		facts[i].MaterialCode = code
+	}
+	l := line(facts...)
+	l.MaterialCode = code
+	return l
+}
+
+// Review pass 2, finding A: a job's sibling line outside the lookback is
+// not an orphan. Only a key the job no longer has is cancelled.
+func TestOrphanCancelSparesSiblingLinesOutsideTheLookback(t *testing.T) {
+	r := newRig(t)
+	pla := keyedLine("FIL-PLA", fact("actual", "10", "g", completed))
+	petg := keyedLine("FIL-PETG", fact("actual", "20", "g", completed))
+	r.store.addLine(pla)
+	r.store.addLine(petg)
+	e := r.emitter(false)
+	assert.Equal(t, 2, r.run(t, e).Delivered)
+
+	// Past the lookback, only PLA gets a new fact (an operator correction).
+	r.now = completed.Add(90 * 24 * time.Hour)
+	r.store.addLine(keyedLine("FIL-PLA", fact("actual", "10", "g", completed), fact("actual", "12", "g", r.now)))
+	r.run(t, e)
+	assert.Equal(t, "active", r.store.status(idOf(petg)), "PETG still belongs to the job")
+	assert.Equal(t, "12", r.store.quantity(idOf(pla)))
+
+	// The legitimate orphan: a line re-keyed from an alias to the registry
+	// code cancels the old key.
+	alias := keyedLine("pla-class", fact("actual", "5", "g", r.now))
+	r.store.addLine(alias)
+	r.run(t, e)
+	require.Equal(t, "active", r.store.status(idOf(alias)))
+	r.store.removeLine(jobA, "pla-class")
+	r.now = r.now.Add(time.Hour)
+	r.store.addLine(keyedLine("FIL-PLA", fact("actual", "10", "g", completed), fact("actual", "12", "g", completed.Add(90*24*time.Hour)),
+		fact("actual", "5", "g", r.now)))
+	r.run(t, e)
+	assert.Equal(t, "cancelled", r.store.status(idOf(alias)))
+	assert.Equal(t, "active", r.store.status(idOf(petg)))
+}
+
+func (s *memStore) status(id string) string { return s.event(id).Status }
+
+func (s *memStore) quantity(id string) string { return s.event(id).Quantity }
+
+func (s *memStore) event(id string) costevents.Event {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var e costevents.Event
+	if r, ok := s.rows[id]; ok {
+		_ = json.Unmarshal(r.body, &e)
+	}
+	return e
 }
