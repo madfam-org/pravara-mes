@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -22,7 +23,28 @@ type OIDCConfig struct {
 	Issuer   string
 	JWKSURL  string
 	Audience string
+	// SessionAudiences are further audiences accepted for HUMAN session
+	// tokens only. Janua signs the access token of a first-party sign-in
+	// (email and password in the app) with its own audience, `janua.dev`,
+	// not with this API's. A token that matches only one of these must be a
+	// human access token: `type: "access"` and no machine marker. Machine
+	// (client_credentials) tokens are accepted on Audience alone. Empty by
+	// default, so nothing but Audience is accepted unless it is configured.
+	SessionAudiences []string
+	// SessionRoleApp is this application's slug in Janua's application
+	// roles ("pravara-mes"). A session token is issued for every product of
+	// the ecosystem at once, so on its own it says nothing about this one:
+	// it is accepted only when it holds at least one "<app>:<role>" role,
+	// and those, with the prefix removed, become its roles here. Every
+	// other role it carries (another product's, or a bare name such as an
+	// organization-account "admin") is dropped. Required when
+	// SessionAudiences is set; with it empty no session token is accepted.
+	SessionRoleApp string
 }
+
+// ErrNoApplicationRole means the token is a valid session token of the
+// ecosystem whose holder has been granted no role in this application.
+var ErrNoApplicationRole = errors.New("token holds no role for this application")
 
 // OIDCVerifier verifies JWT tokens from Janua SSO.
 type OIDCVerifier struct {
@@ -57,6 +79,10 @@ type Claims struct {
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
 
+	// Type is Janua's token kind on session tokens: "access" or "refresh".
+	// Tokens minted for this API's own audience do not carry it.
+	Type string `json:"type,omitempty"`
+
 	// Machine-token claims (Janua client_credentials grant). Human tokens
 	// carry none of them; see machine_claims.go.
 	Scope     ScopeClaim `json:"scope,omitempty"`
@@ -85,10 +111,13 @@ func (v *OIDCVerifier) VerifyToken(ctx context.Context, tokenString string) (*Cl
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		// Get the key ID
+		// A key ID selects one published key. Janua's session tokens carry
+		// none; those are checked against every published RSA signing key.
+		// Either way the signature must verify against a key from the
+		// issuer's JWKS.
 		kid, ok := token.Header["kid"].(string)
-		if !ok {
-			return nil, fmt.Errorf("missing key ID in token header")
+		if !ok || kid == "" {
+			return v.signingKeySet(ctx)
 		}
 
 		// Get the public key
@@ -110,12 +139,55 @@ func (v *OIDCVerifier) VerifyToken(ctx context.Context, tokenString string) (*Cl
 	}
 
 	// Verify audience
-	if !v.verifyAudience(claims.Audience) {
+	if v.verifyAudience(claims.Audience) {
+		return claims, nil
+	}
+	if !v.verifySessionAudience(claims.Audience) {
 		return nil, fmt.Errorf("invalid audience")
+	}
+
+	// Accepted on a session audience only: it must be a human access token.
+	// A refresh token carries the same audience and signature, and a machine
+	// token must name this API as its audience.
+	if claims.IsMachineToken() {
+		return nil, fmt.Errorf("invalid audience: machine tokens must be issued for %s", v.config.Audience)
+	}
+	if claims.Type != SessionTokenTypeAccess {
+		return nil, fmt.Errorf("invalid token type for a session audience: %q", claims.Type)
+	}
+
+	// The roles this application granted, and nothing else.
+	claims.Roles = applicationRoles(claims.Roles, v.config.SessionRoleApp)
+	if len(claims.Roles) == 0 {
+		return nil, ErrNoApplicationRole
 	}
 
 	return claims, nil
 }
+
+// applicationRoles returns the roles named "<app>:<role>" with the prefix
+// removed, in order and without repeats. An empty app matches nothing.
+func applicationRoles(roles []string, app string) []string {
+	app = strings.TrimSpace(app)
+	if app == "" {
+		return nil
+	}
+	prefix := app + ":"
+	var out []string
+	seen := map[string]bool{}
+	for _, role := range roles {
+		name, ok := strings.CutPrefix(role, prefix)
+		if !ok || name == "" || strings.Contains(name, ":") || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+// SessionTokenTypeAccess is the `type` claim of a Janua session access token.
+const SessionTokenTypeAccess = "access"
 
 // verifyAudience checks if the token audience matches the expected audience.
 func (v *OIDCVerifier) verifyAudience(audiences []string) bool {
@@ -125,6 +197,69 @@ func (v *OIDCVerifier) verifyAudience(audiences []string) bool {
 		}
 	}
 	return false
+}
+
+// verifySessionAudience checks the token audience against the configured
+// session audiences. Blank entries never match.
+func (v *OIDCVerifier) verifySessionAudience(audiences []string) bool {
+	for _, aud := range audiences {
+		if aud == "" {
+			continue
+		}
+		for _, accepted := range v.config.SessionAudiences {
+			if aud == strings.TrimSpace(accepted) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// currentJWKS returns the cached key set, refreshing it when it is missing or
+// older than an hour. A failed refresh falls back to the cached keys.
+func (v *OIDCVerifier) currentJWKS(ctx context.Context) (*JWKS, error) {
+	v.jwksMutex.RLock()
+	jwks := v.jwks
+	v.jwksMutex.RUnlock()
+
+	if jwks == nil || time.Since(jwks.FetchedAt) > time.Hour {
+		if err := v.refreshJWKS(ctx); err != nil {
+			if jwks == nil {
+				return nil, fmt.Errorf("failed to fetch JWKS: %w", err)
+			}
+			v.log.WithError(err).Warn("Failed to refresh JWKS, using cached keys")
+		}
+	}
+
+	v.jwksMutex.RLock()
+	defer v.jwksMutex.RUnlock()
+	return v.jwks, nil
+}
+
+// signingKeySet returns every published RSA signing key, for a token whose
+// header names no key ID. Keys published for another use are left out.
+func (v *OIDCVerifier) signingKeySet(ctx context.Context) (interface{}, error) {
+	jwks, err := v.currentJWKS(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	set := jwt.VerificationKeySet{}
+	for i := range jwks.Keys {
+		key := jwks.Keys[i]
+		if key.Kty != "RSA" || (key.Use != "" && key.Use != "sig") {
+			continue
+		}
+		publicKey, err := key.ToPublicKey()
+		if err != nil {
+			continue
+		}
+		set.Keys = append(set.Keys, publicKey)
+	}
+	if len(set.Keys) == 0 {
+		return nil, fmt.Errorf("no RSA signing key published")
+	}
+	return set, nil
 }
 
 // getPublicKey retrieves the public key for the given key ID.

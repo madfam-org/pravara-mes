@@ -135,6 +135,36 @@ func TestOIDCConfig_Defaults(t *testing.T) {
 	}
 }
 
+func TestOIDCConfig_SessionAudiences(t *testing.T) {
+	t.Run("none by default", func(t *testing.T) {
+		os.Unsetenv("OIDC_SESSION_AUDIENCES")
+		os.Unsetenv("OIDC_SESSION_ROLE_APP")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+		if len(cfg.OIDC.SessionAudiences) != 0 {
+			t.Errorf("OIDC.SessionAudiences: got %v, want none", cfg.OIDC.SessionAudiences)
+		}
+		if cfg.OIDC.SessionRoleApp != "pravara-mes" {
+			t.Errorf("OIDC.SessionRoleApp: got %q, want %q", cfg.OIDC.SessionRoleApp, "pravara-mes")
+		}
+	})
+
+	t.Run("comma-separated from the environment", func(t *testing.T) {
+		t.Setenv("OIDC_SESSION_AUDIENCES", "janua.dev,other.example")
+		t.Setenv("OIDC_SESSION_ROLE_APP", "pravara-mes")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+		got := cfg.OIDC.SessionAudiences
+		if len(got) != 2 || got[0] != "janua.dev" || got[1] != "other.example" {
+			t.Errorf("OIDC.SessionAudiences: got %v, want [janua.dev other.example]", got)
+		}
+	})
+}
+
 func TestServerConfig_Defaults(t *testing.T) {
 	cfg, err := Load()
 	if err != nil {

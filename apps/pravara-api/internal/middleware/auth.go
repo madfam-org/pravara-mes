@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,16 @@ func AuthMiddleware(verifier *auth.OIDCVerifier, database *db.DB, log *logrus.Lo
 		// Verify token
 		claims, err := verifier.VerifyToken(c.Request.Context(), token)
 		if err != nil {
+			if errors.Is(err, auth.ErrNoApplicationRole) {
+				// Signed in to the ecosystem, but not granted anything here.
+				log.Debug("Session token holds no role for this application")
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error":   "forbidden",
+					"code":    "no_application_role",
+					"message": "This account has not been granted a role in Pravara MES",
+				})
+				return
+			}
 			log.WithError(err).Debug("Failed to verify token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "unauthorized",
