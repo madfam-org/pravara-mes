@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { SignIn } from "@janua/nextjs";
+import { usePravaraSession } from "@/lib/auth";
 
 /**
  * Login — Janua SSO via the SDK's <SignIn> card.
@@ -24,6 +27,14 @@ import { SignIn } from "@janua/nextjs";
  * minimum.
  */
 export default function LoginPage() {
+  const { status } = usePravaraSession();
+  const router = useRouter();
+
+  // Someone already signed in has no use for this page.
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/dashboard");
+  }, [status, router]);
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted/50 p-4 [&_input]:bg-background">
       <SignIn
