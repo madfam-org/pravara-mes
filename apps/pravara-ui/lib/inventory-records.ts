@@ -132,7 +132,15 @@ const ERROR_MEANINGS: Record<string, string> = {
   already_superseded:
     "Ese registro ya fue corregido. Corrige la corrección más reciente (aparece arriba en el historial).",
   print_job_not_found: "No existe una impresión con ese identificador en tu organización.",
+  not_effective:
+    "Ese registro ya no es el que cuenta para este trabajo: hay uno más reciente. Corrige el registro vigente (el que muestra «Corregir»).",
   print_job_closed: "Esa impresión está cancelada o marcada como fallida; no se puede marcar como terminada.",
+  print_job_not_started:
+    "Esa impresión sigue en cola (pendiente o en preparación): no ha impreso. Márcala cuando termine.",
+  disposition_differs:
+    "Esa impresión ya está terminada con otro resultado. Para cambiarlo, corrige su consumo en la lista «Consumo registrado».",
+  already_recorded:
+    "Esa impresión ya tiene registrada otra cantidad real. Para cambiarla, corrige su consumo en la lista «Consumo registrado».",
   validation_error: "El servidor rechazó un dato.",
   forbidden: "No tienes permiso para esta acción.",
   network_error: "No se pudo contactar al servidor. Revisa la conexión.",

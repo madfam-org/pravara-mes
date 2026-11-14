@@ -28,6 +28,14 @@ describe('explainError', () => {
     expect(e.serverMessage).toBe('code taken')
   })
 
+  it('explains the refusals of the final consumption contract', () => {
+    expect(explainError(new ApiError(409, 'print_job_not_started', 'queued')).meaning).toMatch(/sigue en cola/)
+    expect(explainError(new ApiError(409, 'not_effective', 'x')).meaning).toMatch(/registro vigente/)
+    expect(explainError(new ApiError(409, 'disposition_differs', 'x')).meaning).toMatch(/corrige su consumo/)
+    expect(explainError(new ApiError(409, 'idempotency_key_reused', 'x')).meaning).toMatch(/otros datos/)
+    expect(explainError(new ApiError(409, 'newer_count_exists', 'x')).meaning).toMatch(/más reciente/)
+  })
+
   it('falls back by status for an unknown code', () => {
     expect(explainError(new ApiError(503, 'http_503', 'HTTP error 503')).meaning).toBe('El servidor tuvo un error.')
     expect(explainError(new ApiError(403, 'forbidden', 'no')).meaning).toMatch(/permiso/)
