@@ -157,6 +157,10 @@ jobs:
           - service: pravara-ui
             context: apps/pravara-ui
             dockerfile: apps/pravara-ui/Dockerfile
+            # The UI image refuses to build without its API address.
+            build_args: |
+              NEXT_PUBLIC_API_URL=https://mes-api.madfam.io
+              NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
           - service: pravara-landing
             context: apps/pravara-landing
             dockerfile: apps/pravara-landing/Dockerfile
@@ -181,6 +185,7 @@ jobs:
           push: false
           load: true
           tags: ${{ matrix.service }}:scan
+          build-args: ${{ matrix.build_args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
