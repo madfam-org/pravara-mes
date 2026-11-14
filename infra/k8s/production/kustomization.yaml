@@ -94,7 +94,7 @@ images:
 - digest: sha256:2a0abefbf3208a2b882f1bd610ac00f78a3a9ceb2e1c2b36bccd5d565bded826
   name: pravara-landing
   newName: ghcr.io/madfam-org/pravara-landing
-- digest: sha256:3648cba69007c991d6066cfffa7e9e9835d6380c4b8cce10e394568a748a5c19
+- digest: sha256:8f09ec59ee1787f729aaec13a27cb142d4939180c382afe82f0d206df0cdd5f2
   name: pravara-ui
   newName: ghcr.io/madfam-org/pravara-ui
 - name: redis
