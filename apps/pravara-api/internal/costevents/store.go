@@ -37,6 +37,9 @@ type Store interface {
 	// after since, each with ALL its facts. A line is one job and material:
 	// facts whose codes resolve to the same registry code are one line.
 	RecentLines(ctx context.Context, since time.Time) ([]Line, error)
+	// JobLineKeys returns every line key a job has now, whatever the age of
+	// its facts (the lookback only selects which lines are rebuilt).
+	JobLineKeys(ctx context.Context, jobKind string, jobID uuid.UUID) ([]string, error)
 	// JobEvents returns the events stored for one job.
 	JobEvents(ctx context.Context, jobKind string, jobID uuid.UUID) ([]StoredEvent, error)
 	// Stored returns the events last stored for ids.
@@ -148,6 +151,28 @@ type StoredEvent struct {
 	EventID      string
 	MaterialCode string
 	Event        Event
+}
+
+// JobLineKeys implements Store.
+func (s *PGStore) JobLineKeys(ctx context.Context, jobKind string, jobID uuid.UUID) ([]string, error) {
+	rows, err := s.q.QueryContext(ctx, `
+		SELECT DISTINCT COALESCE((SELECT m.code FROM material_registry m
+		                          WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), c.material_code)
+		FROM job_consumption c
+		WHERE c.kind = 'material' AND c.job_kind = $1 AND c.job_id = $2 AND c.tenant_id = `+tenant, jobKind, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("read job line keys: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, fmt.Errorf("scan job line key: %w", err)
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
 }
 
 // JobEvents implements Store.

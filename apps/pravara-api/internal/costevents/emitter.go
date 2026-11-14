@@ -151,19 +151,19 @@ func (e *Emitter) Sweep(ctx context.Context) (SweepReport, error) {
 }
 
 // orphans cancels events stored for a job under a line key the job no
-// longer has: its code now resolves to another material's line (a code
-// registered or aliased after the event was stored), so that consumption is
-// sent once, under the line it belongs to.
+// longer has at all (whatever the age of its facts): its code now resolves
+// to another material's line (a code registered or aliased after the event
+// was stored), so that consumption is sent once, under the line it belongs
+// to. A sibling line outside the lookback is still one of the job's keys
+// and is left alone.
 func (e *Emitter) orphans(ctx context.Context, lines []Line) ([]Built, error) {
 	type job struct {
 		kind string
 		id   uuid.UUID
 	}
-	current := map[string]bool{}
 	var jobs []job
 	seen := map[job]bool{}
 	for _, l := range lines {
-		current[EventID(l.JobKind, l.JobID, l.MaterialCode)] = true
 		if j := (job{l.JobKind, l.JobID}); !seen[j] {
 			seen[j] = true
 			jobs = append(jobs, j)
@@ -171,6 +171,14 @@ func (e *Emitter) orphans(ctx context.Context, lines []Line) ([]Built, error) {
 	}
 	var out []Built
 	for _, j := range jobs {
+		keys, err := e.store.JobLineKeys(ctx, j.kind, j.id)
+		if err != nil {
+			return nil, err
+		}
+		current := map[string]bool{}
+		for _, k := range keys {
+			current[EventID(j.kind, j.id, k)] = true
+		}
 		stored, err := e.store.JobEvents(ctx, j.kind, j.id)
 		if err != nil {
 			return nil, err

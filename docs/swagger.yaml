@@ -2814,11 +2814,12 @@ paths:
         a conversion gap is listed and posted once the conversion exists) or not_stocked
         (the material has no stock item). Count differences are never folded into
         a job. Idempotent: closing a closed count returns it with already_closed true
-        and moves nothing. An older count never closes over a newer one: when another
-        closed count has a line for the same material counted later, 409 newer_count_exists
-        lists the materials. Each applied line reports movements_since_counted and
-        quantity_since_counted (movements between counted_at and the close). Needs
-        the admin or inventory_manager role.'
+        and moves nothing. Expected is the stock at counted_at plus count adjustments
+        posted after it by lines counted at or before it. An older count never closes
+        over a newer one: when another closed count has a line for the same material
+        counted later, 409 newer_count_exists lists the materials. Each applied line
+        reports movements_since_counted and quantity_since_counted (movements between
+        counted_at and the close). Needs the admin or inventory_manager role.'
       parameters:
       - description: Count ID (UUID)
         in: path
