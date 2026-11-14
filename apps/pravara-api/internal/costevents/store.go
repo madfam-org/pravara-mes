@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
@@ -33,8 +34,11 @@ type Claimed struct {
 // line rebuilt while its POST was in flight stays pending.
 type Store interface {
 	// RecentLines returns every material line with a fact recorded at or
-	// after since, each with ALL its facts.
+	// after since, each with ALL its facts. A line is one job and material:
+	// facts whose codes resolve to the same registry code are one line.
 	RecentLines(ctx context.Context, since time.Time) ([]Line, error)
+	// JobEvents returns the events stored for one job.
+	JobEvents(ctx context.Context, jobKind string, jobID uuid.UUID) ([]StoredEvent, error)
 	// Stored returns the events last stored for ids.
 	Stored(ctx context.Context, ids []string) (map[string]Event, error)
 	// Upsert stores a built event. A new or changed body becomes due at now
@@ -71,24 +75,28 @@ const tenant = "NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
 // RecentLines implements Store.
 func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, error) {
 	rows, err := s.q.QueryContext(ctx, `
-		WITH recent AS (
-			SELECT DISTINCT job_kind, job_id, material_code FROM job_consumption
-			WHERE kind = 'material' AND created_at >= $1 AND tenant_id = `+tenant+`
+		WITH keyed AS (
+			SELECT c.*, COALESCE((SELECT m.code FROM material_registry m
+			                      WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), '') AS registry_code
+			FROM job_consumption_facts c WHERE c.kind = 'material' AND c.tenant_id = `+tenant+`
+			  -- a row a correction superseded never counts (migration 036)
+			  AND NOT EXISTS (SELECT 1 FROM job_consumption_corrections s
+			                  WHERE s.supersedes_id = c.id AND s.tenant_id = c.tenant_id)
+		), recent AS (
+			SELECT DISTINCT job_kind, job_id, COALESCE(NULLIF(registry_code, ''), material_code) AS line_key
+			FROM keyed WHERE created_at >= $1
 		)
-		SELECT c.id, c.job_kind, c.job_id, c.material_code, c.quantity::text, c.unit, c.basis,
-		       c.occurred_at, c.created_at, COALESCE(o.engagement_slug, ''),
-		       COALESCE((SELECT m.code FROM material_registry m
-		                 WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), ''),
+		SELECT c.id, c.job_kind, c.job_id, r.line_key, c.material_code, c.quantity::text, c.unit, c.basis,
+		       c.occurred_at, c.created_at, COALESCE(o.engagement_slug, ''), c.registry_code,
 		       COALESCE(CASE c.job_kind WHEN 'dispatch' THEN d.status WHEN 'print_job' THEN p.status END, '')
-		FROM job_consumption c
-		JOIN recent r ON r.job_kind = c.job_kind AND r.job_id = c.job_id AND r.material_code = c.material_code
+		FROM keyed c
+		JOIN recent r ON r.job_kind = c.job_kind AND r.job_id = c.job_id
+		 AND r.line_key = COALESCE(NULLIF(c.registry_code, ''), c.material_code)
 		LEFT JOIN orders o ON o.id = c.order_id AND o.tenant_id = c.tenant_id
 		LEFT JOIN dispatch_jobs d ON c.job_kind = 'dispatch' AND d.id = c.job_id AND d.tenant_id = c.tenant_id
 		LEFT JOIN print_jobs p ON c.job_kind = 'print_job' AND p.id = c.job_id AND p.tenant_id = c.tenant_id
 		WHERE c.kind = 'material' AND c.tenant_id = `+tenant+`
-		  -- a row a correction superseded never counts (migration 036)
-		  AND NOT EXISTS (SELECT 1 FROM job_consumption s WHERE s.supersedes_id = c.id AND s.tenant_id = c.tenant_id)
-		ORDER BY c.job_kind, c.job_id, c.material_code, c.created_at, c.id`, since)
+		ORDER BY c.job_kind, c.job_id, r.line_key, c.created_at, c.id`, since)
 	if err != nil {
 		return nil, fmt.Errorf("list consumption lines: %w", err)
 	}
@@ -96,13 +104,14 @@ func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, err
 	var out []Line
 	for rows.Next() {
 		var f Fact
-		if err := rows.Scan(&f.ID, &f.JobKind, &f.JobID, &f.MaterialCode, &f.Quantity, &f.Unit, &f.Basis,
+		var key string
+		if err := rows.Scan(&f.ID, &f.JobKind, &f.JobID, &key, &f.MaterialCode, &f.Quantity, &f.Unit, &f.Basis,
 			&f.OccurredAt, &f.CreatedAt, &f.EngagementSlug, &f.RegistryCode, &f.JobStatus); err != nil {
 			return nil, fmt.Errorf("scan consumption fact: %w", err)
 		}
 		n := len(out)
-		if n == 0 || out[n-1].JobKind != f.JobKind || out[n-1].JobID != f.JobID || out[n-1].MaterialCode != f.MaterialCode {
-			out = append(out, Line{JobKind: f.JobKind, JobID: f.JobID, MaterialCode: f.MaterialCode})
+		if n == 0 || out[n-1].JobKind != f.JobKind || out[n-1].JobID != f.JobID || out[n-1].MaterialCode != key {
+			out = append(out, Line{JobKind: f.JobKind, JobID: f.JobID, MaterialCode: key})
 			n++
 		}
 		out[n-1].Facts = append(out[n-1].Facts, f)
@@ -133,6 +142,36 @@ func (s *PGStore) Stored(ctx context.Context, ids []string) (map[string]Event, e
 			return nil, fmt.Errorf("decode stored cost event %s: %w", id, err)
 		}
 		out[id] = e
+	}
+	return out, rows.Err()
+}
+
+// StoredEvent is an event stored for a job, with its line key.
+type StoredEvent struct {
+	EventID      string
+	MaterialCode string
+	Event        Event
+}
+
+// JobEvents implements Store.
+func (s *PGStore) JobEvents(ctx context.Context, jobKind string, jobID uuid.UUID) ([]StoredEvent, error) {
+	rows, err := s.q.QueryContext(ctx, `SELECT event_id, material_code, body FROM cost_event_outbox
+		WHERE job_kind = $1 AND job_id = $2 AND tenant_id = `+tenant+` ORDER BY event_id`, jobKind, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("read job cost events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []StoredEvent
+	for rows.Next() {
+		var se StoredEvent
+		var body []byte
+		if err := rows.Scan(&se.EventID, &se.MaterialCode, &body); err != nil {
+			return nil, fmt.Errorf("scan job cost event: %w", err)
+		}
+		if err := json.Unmarshal(body, &se.Event); err != nil {
+			return nil, fmt.Errorf("decode job cost event %s: %w", se.EventID, err)
+		}
+		out = append(out, se)
 	}
 	return out, rows.Err()
 }

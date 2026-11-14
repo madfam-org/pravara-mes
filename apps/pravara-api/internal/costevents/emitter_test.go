@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
@@ -53,6 +54,24 @@ func (s *memStore) RecentLines(_ context.Context, since time.Time) ([]costevents
 			}
 		}
 	}
+	return out, nil
+}
+
+func (s *memStore) JobEvents(_ context.Context, jobKind string, jobID uuid.UUID) ([]costevents.StoredEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []costevents.StoredEvent
+	for id, r := range s.rows {
+		if r.built.JobKind != jobKind || r.built.JobID != jobID {
+			continue
+		}
+		var e costevents.Event
+		if err := json.Unmarshal(r.body, &e); err != nil {
+			return nil, err
+		}
+		out = append(out, costevents.StoredEvent{EventID: id, MaterialCode: r.built.MaterialCode, Event: e})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].EventID < out[j].EventID })
 	return out, nil
 }
 

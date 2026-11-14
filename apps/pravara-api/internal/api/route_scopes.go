@@ -171,5 +171,15 @@ func HumanOnlyRoutes() []string {
 	return []string{
 		mw.RouteKey(http.MethodPost, "/v1/edge/enrollments/approve"),
 		mw.RouteKey(http.MethodPost, "/v1/edge/nodes/:id/disable"),
+		// RFC 0058 inventory record writes (and an inventory role:
+		// middleware.RequireInventoryWriter).
+		mw.RouteKey(http.MethodPost, "/v1/inventory/materials"),
+		mw.RouteKey(http.MethodPatch, "/v1/inventory/materials/:id"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/materials/:id/aliases"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/materials/:id/conversions"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/receipts"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/counts"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/counts/:id/lines"),
+		mw.RouteKey(http.MethodPost, "/v1/inventory/counts/:id/close"),
 	}
 }

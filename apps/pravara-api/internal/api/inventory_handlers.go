@@ -245,6 +245,10 @@ func (h *InventoryHandler) CreateItem(c *gin.Context) {
 		Metadata:        req.Metadata,
 	}
 	if req.MaterialID != nil {
+		if !middleware.IsInventoryWriter(c) {
+			forbidLink(c)
+			return
+		}
 		if !h.materialExists(c, *req.MaterialID) {
 			return
 		}
@@ -339,6 +343,10 @@ func (h *InventoryHandler) UpdateItem(c *gin.Context) {
 		item.Metadata = req.Metadata
 	}
 	if req.MaterialID != nil {
+		if !middleware.IsInventoryWriter(c) {
+			forbidLink(c)
+			return
+		}
 		item.MaterialID = nil
 		if *req.MaterialID != "" {
 			mid, err := uuid.Parse(*req.MaterialID)

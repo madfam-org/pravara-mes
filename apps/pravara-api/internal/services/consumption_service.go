@@ -110,29 +110,63 @@ func (s *ConsumptionService) Record(ctx context.Context, job JobRef, facts []rep
 			touched = append(touched, c.MaterialCode)
 		}
 	}
+	if len(touched) > 0 {
+		ids, err := s.JobLockSet(ctx, job.Kind, job.ID, touched)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.stock.LockItems(ctx, ids); err != nil {
+			return nil, err
+		}
+	}
 	settled := map[uuid.UUID]bool{}
 	for _, code := range touched {
-		// Lock the item first: the facts and the relieved quantity read
-		// after the lock include whatever a concurrent settle committed.
 		item, err := s.stock.ResolveStockItem(ctx, code)
 		if err != nil {
 			return nil, err
 		}
-		if item != nil && !settled[item.ID] {
+		var moves []repositories.InventoryTransaction
+		switch {
+		case item == nil:
+			moves, err = s.withdrawRelief(ctx, job.Kind, job.ID, code)
+		case !settled[item.ID]:
 			settled[item.ID] = true
-			mv, err := s.settleItem(ctx, job.Kind, job.ID, item)
-			if err != nil {
-				return nil, err
-			}
-			if mv != nil {
-				res.Movements = append(res.Movements, *mv)
-			}
+			moves, err = s.settleItem(ctx, job.Kind, job.ID, item)
 		}
+		if err != nil {
+			return nil, err
+		}
+		res.Movements = append(res.Movements, moves...)
 		if err := s.linkGenealogy(ctx, job, code, item); err != nil {
 			return nil, err
 		}
 	}
 	return res, nil
+}
+
+// JobLockSet is every stock item settling a job may move: the items the
+// given codes name now, and every item the job's movements already touched
+// (relief that may have to move to where a code points now). The caller
+// locks them with StockRepository.LockItems before settling.
+func (s *ConsumptionService) JobLockSet(ctx context.Context, jobKind string, jobID uuid.UUID, codes []string) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	for _, code := range codes {
+		id, err := s.stock.ResolveStockItemID(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil {
+			ids = append(ids, *id)
+		}
+	}
+	relief, err := s.repo.JobRelief(ctx, jobKind, jobID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range relief {
+		ids = append(ids, r.ItemID)
+	}
+	return ids, nil
 }
 
 // effective is the latest actual, else the latest estimate, among the rows
@@ -162,10 +196,13 @@ func effective(facts []repositories.JobConsumption) *repositories.JobConsumption
 	return estimate
 }
 
-// settleItem brings the stock relieved from item for one job to the job's
-// effective quantity in the item's unit. The caller holds the item lock.
-// Without a conversion it records a gap and moves nothing.
-func (s *ConsumptionService) settleItem(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) (*repositories.InventoryTransaction, error) {
+// settleItem brings a job's stock relief for the codes that name item to
+// the job's effective quantity, in the item's unit, taken from item alone.
+// Relief those codes took from another item (the code named another item
+// when it was settled) is reversed there first, so a job is never relieved
+// twice. Without a conversion it records a gap and moves nothing on item.
+// The caller holds the locks (JobLockSet).
+func (s *ConsumptionService) settleItem(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) ([]repositories.InventoryTransaction, error) {
 	facts, err := s.repo.ItemFacts(ctx, jobKind, jobID, item)
 	if err != nil {
 		return nil, err
@@ -174,27 +211,31 @@ func (s *ConsumptionService) settleItem(ctx context.Context, jobKind string, job
 	if eff == nil {
 		return nil, nil
 	}
+	codes := map[string]bool{}
+	for _, f := range facts {
+		codes[f.MaterialCode] = true
+	}
+	moves, relieved, err := s.moveStrayRelief(ctx, jobKind, jobID, codes, &item.ID, eff)
+	if err != nil {
+		return nil, err
+	}
 	factor, ok, err := stockFactor(ctx, s.stock, item, eff.Unit)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		job := jobID
-		return nil, s.stock.OpenGap(ctx, repositories.ConversionGap{InventoryItemID: item.ID, MaterialID: item.MaterialID,
+		return moves, s.stock.OpenGap(ctx, repositories.ConversionGap{InventoryItemID: item.ID, MaterialID: item.MaterialID,
 			SourceType: repositories.GapSourceJobConsumption, SourceID: eff.ID, JobKind: jobKind, JobID: &job,
 			Quantity: eff.Quantity, FromUnit: eff.Unit, ToUnit: item.Unit})
 	}
 	if err := s.stock.CloseJobGaps(ctx, item.ID, jobKind, jobID); err != nil {
 		return nil, err
 	}
-	relieved, err := s.repo.RelievedQuantity(ctx, item.ID, jobKind, jobID)
-	if err != nil {
-		return nil, err
-	}
 	target := repositories.Round4(eff.Quantity * factor)
 	delta := repositories.Round4(target - relieved)
 	if delta == 0 {
-		return nil, nil
+		return moves, nil
 	}
 	typ := "adjustment"
 	if relieved == 0 && delta > 0 {
@@ -205,14 +246,72 @@ func (s *ConsumptionService) settleItem(ctx context.Context, jobKind string, job
 	if factor != 1 {
 		note += fmt.Sprintf(" = %s %s", formatQuantity(target), item.Unit)
 	}
-	return s.stock.PostMovement(ctx, repositories.Movement{ItemID: item.ID, Type: typ, Quantity: -delta,
+	mv, err := s.stock.PostMovement(ctx, repositories.Movement{ItemID: item.ID, Type: typ, Quantity: -delta,
 		ReferenceType: repositories.StockReferenceJobConsumption, ReferenceID: eff.ID, Note: note})
+	if err != nil {
+		return nil, err
+	}
+	return append(moves, *mv), nil
+}
+
+// moveStrayRelief reverses, on every item other than keep (nil: every
+// item), the relief the job took under codes, and returns what stays
+// relieved on keep. Reversals reference ref, a fact under one of the
+// codes, so the per-code sums net to zero.
+func (s *ConsumptionService) moveStrayRelief(ctx context.Context, jobKind string, jobID uuid.UUID, codes map[string]bool,
+	keep *uuid.UUID, ref *repositories.JobConsumption) ([]repositories.InventoryTransaction, float64, error) {
+	relief, err := s.repo.JobRelief(ctx, jobKind, jobID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var kept float64
+	stray := map[uuid.UUID]float64{}
+	var order []uuid.UUID
+	for _, r := range relief {
+		if !codes[r.MaterialCode] {
+			continue
+		}
+		if keep != nil && r.ItemID == *keep {
+			kept += r.Quantity
+			continue
+		}
+		if _, ok := stray[r.ItemID]; !ok {
+			order = append(order, r.ItemID)
+		}
+		stray[r.ItemID] += r.Quantity
+	}
+	var moves []repositories.InventoryTransaction
+	for _, itemID := range order {
+		q := repositories.Round4(stray[itemID])
+		if q == 0 {
+			continue
+		}
+		note := fmt.Sprintf("%s %s: %s now names another stock item; relief returned here", jobKind, jobID, ref.MaterialCode)
+		mv, err := s.stock.PostMovement(ctx, repositories.Movement{ItemID: itemID, Type: "adjustment", Quantity: q,
+			ReferenceType: repositories.StockReferenceJobConsumption, ReferenceID: ref.ID, Note: note})
+		if err != nil {
+			return nil, 0, err
+		}
+		moves = append(moves, *mv)
+	}
+	return moves, repositories.Round4(kept), nil
+}
+
+// withdrawRelief returns every item's relief a job took under code when
+// the code names no stock item any more (its material lost its item).
+func (s *ConsumptionService) withdrawRelief(ctx context.Context, jobKind string, jobID uuid.UUID, code string) ([]repositories.InventoryTransaction, error) {
+	facts, err := s.repo.MaterialFacts(ctx, jobKind, jobID, code, "")
+	if err != nil || len(facts) == 0 {
+		return nil, err
+	}
+	moves, _, err := s.moveStrayRelief(ctx, jobKind, jobID, map[string]bool{code: true}, nil, &facts[len(facts)-1])
+	return moves, err
 }
 
 // ResettleJob settles one job's stock relief for item again (a conversion
-// gap waiting for a conversion that now exists). The caller holds the item
-// lock.
-func (s *ConsumptionService) ResettleJob(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) (*repositories.InventoryTransaction, error) {
+// gap waiting for a conversion that now exists). The caller holds the
+// locks of the job's lock set (JobLockSet).
+func (s *ConsumptionService) ResettleJob(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) ([]repositories.InventoryTransaction, error) {
 	return s.settleItem(ctx, jobKind, jobID, item)
 }
 

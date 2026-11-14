@@ -92,6 +92,11 @@ code and lists the unresolved codes (the wave 1 gate: none left).
   `reference_type = 'job_consumption'`, the consumption row as
   `reference_id`, and the running balance. Recording the same fact again
   relieves nothing.
+- **Re-pointed codes.** Relief is taken from the item a code names when the
+  job is settled. If the code named another item before (a material
+  re-linked, an item unlinked), that earlier relief is returned to the old
+  item in the same transaction, so a job is never relieved twice. Settling
+  locks every item involved in one ordered statement.
 - **No conversion, no guess.** When the effective quantity's unit has no
   conversion to the item's unit (a print job's actual kept in mm for an item
   stocked in g), nothing more is relieved: the job is listed in
@@ -125,11 +130,18 @@ that corrects the stored row.
 {"quantity": 30, "unit": "g", "disposition": "scrap", "reason": "support material weighed"}
 ```
 
-- **Append-only.** The correction is a new row of the same job, kind and
+- **Append-only.** The correction is a new row (stored in
+  `job_consumption_corrections`, migration 036, and read with the recorded
+  facts through the view `job_consumption_facts`) of the same job, kind and
   material (`basis: actual`, `source: operator`, `supersedes_id` = the
   corrected row, `occurred_at` = the corrected row's, so the period never
   moves); nothing recorded is updated. `unit` and `disposition` default to
   the corrected row's.
+- **Only the effective row.** The row corrected must be the job's effective
+  row of that material (the latest actual, else the latest estimate, across
+  every code naming the material): correcting a slicer estimate or an older
+  actual would override a later real actual. Otherwise 409 `not_effective`
+  with `effective_id` and `correct_with` (the route for the effective row).
 - It becomes the job's effective row: rows a correction superseded never
   count, for stock relief or for cost events. Stock relieved for the job
   moves by the difference (an `adjustment`, for example 25 g corrected to
@@ -137,7 +149,10 @@ that corrects the stored row.
 - A row is corrected once. Correcting it again is 409 `already_superseded`
   with `superseded_by`: correct the latest correction instead.
 - 201 `{consumption, superseded, stock_movements}`; 400 `invalid_id`,
-  `validation_error`; 404 `consumption_not_found`.
+  `validation_error`; 404 `consumption_not_found`; 409 `already_superseded`
+  (`superseded_by`), `not_effective` (`effective_id`, `correct_with`).
+- The 409 `already_recorded` of the operator report carries `correct_with`
+  for the job's effective row of that material.
 
 ## Print-job completion
 
@@ -154,16 +169,41 @@ operator's actual material:
 - Every field is optional. `material_code` defaults to the print profile's
   material type (required with `material_quantity` when the job has none).
   `disposition` applies to the material recorded.
-- Calling it again on a completed job records nothing new; a different
-  weighed quantity then goes through a correction.
+- A queued print job (`pending` or `preparing`) has not printed: 409
+  `print_job_not_started`.
+- Calling it again on a completed job with the same report records nothing
+  new. A report that differs is refused, never dropped: an explicit
+  `disposition` other than the recorded one is 409 `disposition_differs`;
+  a `material_quantity`/`material_unit` other than the operator actual
+  already recorded is 409 `already_recorded`. Both carry `effective_id` and
+  `correct_with`: change it through a correction.
 - 200 `{print_job_id, marked_completed, consumption, created,
   stock_movements, material_recorded}`; 404 `print_job_not_found`; 409
-  `print_job_closed` (cancelled or failed print jobs); 400
-  `validation_error`.
+  `print_job_closed` (cancelled or failed print jobs),
+  `print_job_not_started`, `disposition_differs`, `already_recorded`; 400
+  `validation_error` (including `material_unit` without
+  `material_quantity`).
 - A print that physically failed is recorded by completing it with
   `disposition: failed_print`: the cost-event emitter cancels the
   consumption of a print job whose status is not `completed`, and a failed
   print's material is COGS of the job (ruling I5).
+
+## Migrations 035 and 036: deploy order
+
+Production migrations are applied by hand; the deploy does not run them.
+
+1. Apply **035**, then deploy the code of RFC 0058 wave 1 part A. 035 is
+   additive: the code before it keeps working on it.
+2. Apply **036**, then deploy part B. 036 leaves the 033 fact key and its
+   unique index untouched (corrections live in their own table), so the
+   insert of part A (and of every earlier release) keeps working on it
+   (`TestMigration036KeepsTheOlderInsertWorking`).
+3. Applying both migrations first and then deploying is safe. Deploying
+   part A before 035, or part B before 036, is **not**: their reads select
+   the new column, function and view.
+4. Rolling the code back after a migration is safe; the older release does
+   not see corrections (it reads `job_consumption` only) and keeps settling
+   stock from the recorded facts.
 
 ## Read for cost ledgers
 
