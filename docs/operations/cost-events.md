@@ -51,6 +51,11 @@ line's material facts:
 | `cost_class` | `PRAVARA_COST_EVENTS_COST_CLASS` (default `cogs`). |
 | `status` | `active`; `cancelled` when the line's effective quantity became 0, or its dispatch / print job is no longer `completed` (its completion was withdrawn). A cancellation re-sends the last stored body with `status: cancelled` (Dhanam needs a non-zero quantity), and only for a line stored before; a line never stored is not sent. A task, or a job whose row was deleted, keeps its consumption: what was consumed was consumed. |
 
+Rows an operator correction superseded are not facts of the line (migration
+036): the line's effective quantity is the latest correction. Disposition
+(`good`, `scrap`, `failed_print`) is **not sent**: Dhanam's contract v1.1 has
+no field for it; it stays in Pravara (`GET /v1/jobs/consumption`).
+
 Never sent: `amount_minor`, `currency`, `fx`, `unit_value_minor`, `taxes`.
 The event type has no such fields, and the outbox table refuses a body that
 carries one (CHECK). Machine minutes (`machine_time` rows) are not sent:

@@ -123,3 +123,47 @@ func TestMigration035BackfillIsDeterministic(t *testing.T) {
 		run(f) // up again, then any later migration
 	}
 }
+
+// Migration 036 down deletes correction rows (the 033 fact key cannot hold
+// them) and removes the columns; up again restores them. Corrections must
+// supersede a row of the same job, kind and material.
+func TestMigration036CorrectionsDownAndUp(t *testing.T) {
+	scratch := newScratchDatabase(t)
+	tid, job := "33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"
+	_, err := scratch.Exec(`INSERT INTO tenants (id, name, slug) VALUES ($1, 'Synthetic three', 'syn-three')`, tid)
+	require.NoError(t, err)
+	var orig string
+	require.NoError(t, scratch.QueryRow(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
+		basis, source, occurred_at) VALUES ($1, 'task', $2, 'material', 'FIL-X', 5, 'g', 'actual', 'operator', NOW()) RETURNING id`,
+		tid, job).Scan(&orig))
+	_, err = scratch.Exec(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
+		basis, source, occurred_at, supersedes_id) VALUES ($1, 'task', $2, 'material', 'FIL-Y', 6, 'g', 'actual', 'operator', NOW(), $3)`,
+		tid, job, orig)
+	require.ErrorContains(t, err, "same tenant, job, kind and material")
+	_, err = scratch.Exec(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
+		basis, source, occurred_at, supersedes_id, disposition)
+		VALUES ($1, 'task', $2, 'material', 'FIL-X', 6, 'g', 'actual', 'operator', NOW(), $3, 'scrap')`, tid, job, orig)
+	require.NoError(t, err)
+
+	files, err := filepath.Glob("../db/migrations/036_*.sql")
+	require.NoError(t, err)
+	require.Len(t, files, 2)
+	sort.Strings(files) // down, up
+	exec := func(f string) {
+		body, err := os.ReadFile(f)
+		require.NoError(t, err)
+		_, err = scratch.Exec(string(body))
+		require.NoError(t, err, filepath.Base(f))
+	}
+	exec(files[0])
+	var n, cols int
+	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM job_consumption`).Scan(&n))
+	assert.Equal(t, 1, n, "the correction row is deleted, the original stays")
+	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_name = 'job_consumption'
+		AND column_name IN ('supersedes_id', 'disposition')`).Scan(&cols))
+	assert.Zero(t, cols)
+	exec(files[1])
+	var disposition string
+	require.NoError(t, scratch.QueryRow(`SELECT disposition FROM job_consumption WHERE id = $1`, orig).Scan(&disposition))
+	assert.Equal(t, "good", disposition)
+}

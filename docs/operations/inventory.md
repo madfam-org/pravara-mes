@@ -20,7 +20,7 @@ below). Rules for job consumption: [job-consumption.md](./job-consumption.md).
 | I1 | Quantities only; no money column or payload key anywhere in wave 1 |
 | I3 | Pravara owns the material code registry (`material_registry`); the cost ledger, quoting and benchmarks reference its codes |
 | I4 | Only registered materials are stock: receipts and counts take a registry entry; a stock item links to one entry |
-| I5 | Wave 1 records quantities only; scrap and failed-print disposition is wave 1 PR B (job-consumption.md) |
+| I5 | Each consumption row carries a disposition (`good`, `scrap`, `failed_print`), set at report, correction or print-job completion ([job-consumption.md](./job-consumption.md)); kept in Pravara, not sent to the cost ledger (its contract has no such field) |
 | I7 | Every receipt says whether it has an invoice: a CFDI UUID and line position, or an explicit `no_invoice`. One count can be the opening count |
 | I8 | Count differences are their own `adjustment` movement (`reference_type = 'inventory_count'`), never folded into a job |
 

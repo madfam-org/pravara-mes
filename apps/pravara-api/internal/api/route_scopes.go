@@ -92,8 +92,9 @@ func MachineRouteScopes() mw.RouteScopes {
 		// pravara-cogs:read is the cost ledger's scope (RFC 0051 M2): the
 		// same read the MCP tool mes_job_consumption serves, so a COGS client
 		// sees engagement slugs over HTTP exactly as over MCP.
-		// POST /v1/tasks/:id/consumption is deliberately absent: it moves
-		// stock, so it is people-only like the inventory writes.
+		// POST /v1/tasks/:id/consumption, POST /v1/jobs/consumption/:id/corrections
+		// and POST /v1/print-jobs/:id/complete are deliberately absent: they
+		// move stock, so they are people-only like the inventory writes.
 		k(get, "/v1/jobs/consumption"):          mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
 		k(get, "/v1/jobs/consumption/coverage"): mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
 

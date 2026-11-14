@@ -25,6 +25,10 @@ const (
 	BasisActual   = "actual"
 	BasisEstimate = "estimate"
 
+	DispositionGood        = "good"
+	DispositionScrap       = "scrap"
+	DispositionFailedPrint = "failed_print"
+
 	SourcePrinter  = "printer"
 	SourceOperator = "operator"
 	SourceSlicer   = "slicer"
@@ -40,6 +44,10 @@ const (
 	// job_consumption row the movement settles.
 	StockReferenceJobConsumption = "job_consumption"
 )
+
+// Dispositions are what became of the consumed material (ruling I5: scrap
+// and failed prints are distinguishable).
+var Dispositions = map[string]bool{DispositionGood: true, DispositionScrap: true, DispositionFailedPrint: true}
 
 // MaterialUnits are the units a material quantity may be recorded in.
 var MaterialUnits = map[string]bool{UnitGram: true, UnitMillimetre: true, UnitMillilitre: true, UnitSheet: true}
@@ -73,6 +81,13 @@ type JobConsumption struct {
 	RecordedBy   *uuid.UUID `json:"recorded_by,omitempty"`
 	OccurredAt   time.Time  `json:"occurred_at"`
 	CreatedAt    time.Time  `json:"created_at"`
+
+	// Disposition is good, scrap or failed_print (migration 036).
+	Disposition string `json:"disposition"`
+	// SupersedesID is the row this correction replaces; SupersededBy is the
+	// correction that replaced this row (read only: List and Get).
+	SupersedesID *uuid.UUID `json:"supersedes_id,omitempty"`
+	SupersededBy *uuid.UUID `json:"superseded_by,omitempty"`
 }
 
 // Validate checks c against the constraints of migration 033.
@@ -117,6 +132,12 @@ func (c *JobConsumption) Validate() error {
 	if c.OccurredAt.IsZero() {
 		return errors.New("occurred_at is required")
 	}
+	if c.Disposition != "" && !Dispositions[c.Disposition] {
+		return fmt.Errorf("disposition %q (want good, scrap or failed_print)", c.Disposition)
+	}
+	if c.SupersedesID != nil && (c.Basis != BasisActual || c.Source != SourceOperator) {
+		return errors.New("a correction is an operator actual")
+	}
 	return nil
 }
 
@@ -136,26 +157,35 @@ func NewJobConsumptionRepository(db DBTX) *JobConsumptionRepository {
 
 const jobConsumptionColumns = `c.id, c.tenant_id, c.job_kind, c.job_id, c.dispatch_id, c.print_job_id, c.task_id,
 	c.order_id, c.machine_id, c.kind, COALESCE(c.material_code, ''), COALESCE(c.material_lot, ''),
-	c.quantity, c.unit, c.basis, c.source, COALESCE(c.note, ''), c.recorded_by, c.occurred_at, c.created_at`
+	c.quantity, c.unit, c.basis, c.source, COALESCE(c.note, ''), c.recorded_by, c.occurred_at, c.created_at,
+	c.disposition, c.supersedes_id`
 
 func scanJobConsumption(row interface{ Scan(...any) error }, extra ...any) (*JobConsumption, error) {
 	var c JobConsumption
-	var dispatchID, printJobID, taskID, orderID, machineID, recordedBy uuid.NullUUID
+	var dispatchID, printJobID, taskID, orderID, machineID, recordedBy, supersedes uuid.NullUUID
 	dest := []any{&c.ID, &c.TenantID, &c.JobKind, &c.JobID, &dispatchID, &printJobID, &taskID,
 		&orderID, &machineID, &c.Kind, &c.MaterialCode, &c.MaterialLot,
-		&c.Quantity, &c.Unit, &c.Basis, &c.Source, &c.Note, &recordedBy, &c.OccurredAt, &c.CreatedAt}
+		&c.Quantity, &c.Unit, &c.Basis, &c.Source, &c.Note, &recordedBy, &c.OccurredAt, &c.CreatedAt,
+		&c.Disposition, &supersedes}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return nil, err
 	}
 	c.DispatchID, c.PrintJobID, c.TaskID = ptrUUID(dispatchID), ptrUUID(printJobID), ptrUUID(taskID)
 	c.OrderID, c.MachineID, c.RecordedBy = ptrUUID(orderID), ptrUUID(machineID), ptrUUID(recordedBy)
+	c.SupersedesID = ptrUUID(supersedes)
 	return &c, nil
 }
 
 // Insert stores c unless the same fact (job, kind, basis, source, material)
 // is already recorded. It reports whether c was created; when it was not, c
-// is overwritten with the stored fact.
+// is overwritten with the stored fact. Corrections use InsertCorrection.
 func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption) (bool, error) {
+	if c.SupersedesID != nil {
+		return false, errors.New("insert job consumption: a correction goes through InsertCorrection")
+	}
+	if c.Disposition == "" {
+		c.Disposition = DispositionGood
+	}
 	if err := c.Validate(); err != nil {
 		return false, fmt.Errorf("invalid job consumption: %w", err)
 	}
@@ -166,13 +196,14 @@ func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO job_consumption (id, tenant_id, job_kind, job_id, dispatch_id, print_job_id, task_id,
 			order_id, machine_id, kind, material_code, material_lot, quantity, unit, basis, source, note,
-			recorded_by, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-		ON CONFLICT (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, ''))) DO NOTHING
+			recorded_by, occurred_at, disposition)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		ON CONFLICT (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, '')))
+			WHERE supersedes_id IS NULL DO NOTHING
 		RETURNING created_at`,
 		c.ID, c.TenantID, c.JobKind, c.JobID, c.DispatchID, c.PrintJobID, c.TaskID,
 		c.OrderID, c.MachineID, c.Kind, nullableString(c.MaterialCode), nullableString(c.MaterialLot),
-		c.Quantity, c.Unit, c.Basis, c.Source, nullableString(c.Note), c.RecordedBy, c.OccurredAt,
+		c.Quantity, c.Unit, c.Basis, c.Source, nullableString(c.Note), c.RecordedBy, c.OccurredAt, c.Disposition,
 	).Scan(&c.CreatedAt)
 	if err == nil {
 		return true, nil
@@ -183,7 +214,7 @@ func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption
 	existing, err := scanJobConsumption(r.db.QueryRowContext(ctx, `
 		SELECT `+jobConsumptionColumns+` FROM job_consumption c
 		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = $3 AND c.basis = $4 AND c.source = $5
-		  AND COALESCE(c.material_code, '') = $6 AND `+tenantMatchOn("c"),
+		  AND COALESCE(c.material_code, '') = $6 AND c.supersedes_id IS NULL AND `+tenantMatchOn("c"),
 		c.JobKind, c.JobID, c.Kind, c.Basis, c.Source, c.MaterialCode))
 	if err != nil {
 		return false, fmt.Errorf("load recorded job consumption: %w", err)
@@ -349,7 +380,8 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	if err := r.db.QueryRowContext(ctx, "SELECT count(*)"+from+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count job consumption: %w", err)
 	}
-	query := "SELECT " + jobConsumptionColumns + ", COALESCE(o.engagement_slug, ''), " + registryCodeOf("c") + from + where +
+	query := "SELECT " + jobConsumptionColumns + ", COALESCE(o.engagement_slug, ''), " + registryCodeOf("c") + ", " +
+		supersededByOf("c") + from + where +
 		" ORDER BY c.occurred_at, c.id"
 	if f.Limit > 0 {
 		args = append(args, f.Limit)
@@ -367,11 +399,12 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	out := []JobConsumption{}
 	for rows.Next() {
 		var slug, registry string
-		c, err := scanJobConsumption(rows, &slug, &registry)
+		var supersededBy uuid.NullUUID
+		c, err := scanJobConsumption(rows, &slug, &registry, &supersededBy)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan job consumption: %w", err)
 		}
-		c.EngagementSlug, c.RegistryCode = slug, registry
+		c.EngagementSlug, c.RegistryCode, c.SupersededBy = slug, registry, ptrUUID(supersededBy)
 		out = append(out, *c)
 	}
 	return out, total, rows.Err()

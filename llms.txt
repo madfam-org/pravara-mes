@@ -20,7 +20,9 @@ physical jobs (orders, tasks, machines, telemetry, quality).
   updater; off unless `DISPATCH_ENABLED=true`.
 - `docs/operations/job-consumption.md` — per-job consumption (material and
   machine minutes, actual or estimate; quantities only, no cost), stock
-  relief, `orders.engagement_slug` and `GET /v1/jobs/consumption`.
+  relief, `orders.engagement_slug`, `GET /v1/jobs/consumption`, append-only
+  operator corrections with disposition (good, scrap, failed_print) and
+  operator print-job completion (a record; it reaches no machine).
 - `docs/operations/inventory.md` — RFC 0058 wave 1, quantities only: material
   code registry, aliases, unit conversions, receipts with invoice evidence,
   batch lots linked to stock, physical counts, conversion gaps (migration

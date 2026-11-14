@@ -185,7 +185,8 @@ func TestMCPToolsListIsTheReadOnlyCatalog(t *testing.T) {
 
 var consumptionCols = []string{"id", "tenant_id", "job_kind", "job_id", "dispatch_id", "print_job_id", "task_id",
 	"order_id", "machine_id", "kind", "material_code", "material_lot", "quantity", "unit", "basis", "source", "note",
-	"recorded_by", "occurred_at", "created_at", "engagement_slug", "registry_code"}
+	"recorded_by", "occurred_at", "created_at", "disposition", "supersedes_id", "engagement_slug", "registry_code",
+	"superseded_by"}
 
 func (r *mcpRig) expectTenantTx() {
 	r.mock.ExpectBegin()
@@ -205,7 +206,7 @@ func TestMCPJobConsumptionRunsTheHTTPReadInTheTokensTenant(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	r.mock.ExpectQuery(`FROM job_consumption c LEFT JOIN orders o .* ORDER BY c.occurred_at, c.id LIMIT`).
 		WillReturnRows(sqlmock.NewRows(consumptionCols).AddRow(rowID, r.tenantID, "task", jobID, nil, nil, nil,
-			orderID, nil, "material", "FIL-PLA-BLK", "", 12.5, "g", "actual", "operator", "", reporter, occurred, occurred, "eng-alpha", "FIL-PLA-BLK"))
+			orderID, nil, "material", "FIL-PLA-BLK", "", 12.5, "g", "actual", "operator", "", reporter, occurred, occurred, "good", nil, "eng-alpha", "FIL-PLA-BLK", nil))
 	r.mock.ExpectCommit()
 
 	reply := readReply(t, r.mcp(r.cogsToken(t), toolCall(1, MCPToolJobConsumption,

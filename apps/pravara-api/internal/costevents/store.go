@@ -86,6 +86,8 @@ func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, err
 		LEFT JOIN dispatch_jobs d ON c.job_kind = 'dispatch' AND d.id = c.job_id AND d.tenant_id = c.tenant_id
 		LEFT JOIN print_jobs p ON c.job_kind = 'print_job' AND p.id = c.job_id AND p.tenant_id = c.tenant_id
 		WHERE c.kind = 'material' AND c.tenant_id = `+tenant+`
+		  -- a row a correction superseded never counts (migration 036)
+		  AND NOT EXISTS (SELECT 1 FROM job_consumption s WHERE s.supersedes_id = c.id AND s.tenant_id = c.tenant_id)
 		ORDER BY c.job_kind, c.job_id, c.material_code, c.created_at, c.id`, since)
 	if err != nil {
 		return nil, fmt.Errorf("list consumption lines: %w", err)

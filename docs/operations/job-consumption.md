@@ -38,6 +38,8 @@ engagement after a job completed still attributes that job.
 | `note` | how the quantity was derived |
 | `registry_code` (read only) | the material registry code `material_code` resolves to, at read time ([inventory.md](./inventory.md)) |
 | `occurred_at` | the job's completion (period cut-off) |
+| `disposition` | `good`, `scrap` or `failed_print` (ruling I5; migration 036). Default `good` |
+| `supersedes_id` | on a correction: the row it replaces (migration 036) |
 
 A fact is keyed by job, kind, basis, source and material: recording the same
 fact again is a no-op, so replays never duplicate.
@@ -49,9 +51,12 @@ fact again is a no-op, so replays never duplicate.
 | Fabrication dispatch completion | fabrication-prep `filament_g` (g) and `print_time_s` (min) | machine time from the `start_job` acknowledgement to the completion report (`printer`). The Sparkplug completion carries no filament used, so actual material comes from an operator report. |
 | Print job (`ConsumptionService.RecordPrintJob`) | `estimated_filament_g`, else `estimated_filament_mm`; `estimated_time_seconds` | `actual_filament_mm` (`printer`), converted to g only when the material profile gives diameter **and** density, otherwise kept in mm with the note «kept in mm»; `actual_time_seconds`, else `completed_at − started_at` |
 | `POST /v1/tasks/:id/consumption` | — | operator-reported material or minutes (`operator`) |
+| `POST /v1/print-jobs/:id/complete` | as print job | as print job, plus the operator's weighed material when sent (`operator`) |
+| `POST /v1/jobs/consumption/:id/corrections` | — | an operator correction of any recorded row (`operator`) |
 
-The print-job recorder has no caller yet: no code path in pravara-api marks a
-print job completed today.
+The print-job recorder runs when an operator marks a print job finished
+(«Print-job completion» below). Nothing else in pravara-api marks a print
+job completed: no machine adapter writes `print_jobs`.
 
 Dispatch completion records consumption inside a savepoint of the completion
 transaction. A failure is logged (`dispatch: job consumption not recorded`)
@@ -102,15 +107,63 @@ code and lists the unresolved codes (the wave 1 gate: none left).
 stock):
 
 ```json
-{"material_code": "FIL-PLA-BLK", "material_lot": "LOT-0042", "quantity": 6, "unit": "g"}
+{"material_code": "FIL-PLA-BLK", "material_lot": "LOT-0042", "quantity": 6, "unit": "g", "disposition": "scrap"}
 {"quantity": 95, "unit": "min"}
 ```
 
 It belongs to the task's latest completed dispatch when there is one. The lot
 is inherited from earlier facts of the same job and material when omitted.
 201 returns `{consumption, stock_movements}`; the same actual for the same job
-and material returns 409 `already_recorded` (corrections are not supported
-yet; use the inventory adjust endpoint for stock).
+and material returns 409 `already_recorded` with `correct_with`, the route
+that corrects the stored row.
+
+## Corrections
+
+`POST /v1/jobs/consumption/:id/corrections` (people only; it moves stock):
+
+```json
+{"quantity": 30, "unit": "g", "disposition": "scrap", "reason": "support material weighed"}
+```
+
+- **Append-only.** The correction is a new row of the same job, kind and
+  material (`basis: actual`, `source: operator`, `supersedes_id` = the
+  corrected row, `occurred_at` = the corrected row's, so the period never
+  moves); nothing recorded is updated. `unit` and `disposition` default to
+  the corrected row's.
+- It becomes the job's effective row: rows a correction superseded never
+  count, for stock relief or for cost events. Stock relieved for the job
+  moves by the difference (an `adjustment`, for example 25 g corrected to
+  30 g: −5).
+- A row is corrected once. Correcting it again is 409 `already_superseded`
+  with `superseded_by`: correct the latest correction instead.
+- 201 `{consumption, superseded, stock_movements}`; 400 `invalid_id`,
+  `validation_error`; 404 `consumption_not_found`.
+
+## Print-job completion
+
+`POST /v1/print-jobs/:id/complete` (people only). An operator marks a print
+job finished: status `completed`, `progress_percent` 100, `completed_at` now
+unless already set. **A record only: nothing is sent to any machine.** Then
+its consumption is recorded as in «Sources per path», and, when sent, the
+operator's actual material:
+
+```json
+{"material_quantity": 9, "material_unit": "g", "material_code": "optional", "disposition": "failed_print"}
+```
+
+- Every field is optional. `material_code` defaults to the print profile's
+  material type (required with `material_quantity` when the job has none).
+  `disposition` applies to the material recorded.
+- Calling it again on a completed job records nothing new; a different
+  weighed quantity then goes through a correction.
+- 200 `{print_job_id, marked_completed, consumption, created,
+  stock_movements, material_recorded}`; 404 `print_job_not_found`; 409
+  `print_job_closed` (cancelled or failed print jobs); 400
+  `validation_error`.
+- A print that physically failed is recorded by completing it with
+  `disposition: failed_print`: the cost-event emitter cancels the
+  consumption of a print job whose status is not `completed`, and a failed
+  print's material is COGS of the job (ruling I5).
 
 ## Read for cost ledgers
 
@@ -129,5 +182,6 @@ default): [cost-events.md](./cost-events.md).
   `job_id`, `dispatch_id`, `print_job_id`, `task_id`, `order_id`,
   `engagement_slug`, `machine_id`, `kind`, `material_code`, `material_lot`,
   `quantity`, `unit`, `basis`, `source`, `note`, `occurred_at`, `created_at`,
-  and `registry_code` (omitted when the code is unregistered).
+  `disposition`, `supersedes_id` and `superseded_by` (corrections), and
+  `registry_code` (omitted when the code is unregistered).
   Machine minutes are the `machine_time` rows (`unit = min`).

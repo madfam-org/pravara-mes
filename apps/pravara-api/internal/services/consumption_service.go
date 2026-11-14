@@ -135,12 +135,20 @@ func (s *ConsumptionService) Record(ctx context.Context, job JobRef, facts []rep
 	return res, nil
 }
 
-// effective is the latest actual, else the latest estimate. facts are
-// ordered by created_at: a correction (always an actual, always newer than
-// the row it supersedes) is therefore the effective row.
+// effective is the latest actual, else the latest estimate, among the rows
+// no correction superseded. facts are ordered by created_at.
 func effective(facts []repositories.JobConsumption) *repositories.JobConsumption {
+	superseded := map[uuid.UUID]bool{}
+	for _, f := range facts {
+		if f.SupersedesID != nil {
+			superseded[*f.SupersedesID] = true
+		}
+	}
 	var actual, estimate *repositories.JobConsumption
 	for i := range facts {
+		if superseded[facts[i].ID] {
+			continue
+		}
 		switch facts[i].Basis {
 		case repositories.BasisActual:
 			actual = &facts[i]
@@ -299,6 +307,8 @@ type OperatorReport struct {
 	Quantity     float64
 	Unit         string
 	ReportedBy   *uuid.UUID
+	// Disposition is good (default), scrap or failed_print.
+	Disposition string
 }
 
 // RecordOperatorReport stores an operator's actual for a task. It belongs to
@@ -322,7 +332,7 @@ func (s *ConsumptionService) RecordOperatorReport(ctx context.Context, tenantID,
 	fact := repositories.JobConsumption{Kind: repositories.ConsumptionMaterial, MaterialCode: r.MaterialCode,
 		MaterialLot: r.MaterialLot, Quantity: r.Quantity, Unit: r.Unit, Basis: repositories.BasisActual,
 		Source: repositories.SourceOperator, Note: "reported by an operator", RecordedBy: r.ReportedBy,
-		OccurredAt: time.Now().UTC()}
+		OccurredAt: time.Now().UTC(), Disposition: r.Disposition}
 	if r.Unit == repositories.UnitMinute {
 		fact.Kind = repositories.ConsumptionMachineTime
 	}
@@ -415,6 +425,10 @@ func PrintJobFacts(p *repositories.PrintJobUsage, occurredAt time.Time) []reposi
 // RecordPrintJob records the consumption of a completed print job. It is
 // idempotent: calling it again records nothing new.
 func (s *ConsumptionService) RecordPrintJob(ctx context.Context, tenantID, printJobID uuid.UUID) (*ConsumptionResult, error) {
+	return s.recordPrintJob(ctx, tenantID, printJobID, repositories.DispositionGood)
+}
+
+func (s *ConsumptionService) recordPrintJob(ctx context.Context, tenantID, printJobID uuid.UUID, disposition string) (*ConsumptionResult, error) {
 	p, err := s.repo.PrintJobUsage(ctx, printJobID)
 	if err != nil {
 		return nil, err
@@ -434,5 +448,11 @@ func (s *ConsumptionService) RecordPrintJob(ctx context.Context, tenantID, print
 	}
 	job := JobRef{TenantID: tenantID, Kind: repositories.JobKindPrintJob, ID: printJobID,
 		TaskID: p.TaskID, OrderID: p.OrderID, MachineID: p.MachineID}
-	return s.Record(ctx, job, PrintJobFacts(p, occurred))
+	facts := PrintJobFacts(p, occurred)
+	for i := range facts {
+		if facts[i].Kind == repositories.ConsumptionMaterial {
+			facts[i].Disposition = disposition
+		}
+	}
+	return s.Record(ctx, job, facts)
 }
