@@ -59,6 +59,14 @@ spec:
           env:
             - name: USER
               value: "pravara"
+            # Accept the first-party session token of a sign-in in the app
+            # (Janua's own audience). A person's token on any audience needs a
+            # "pravara-mes:<role>" application role.
+            # See docs/operations/sign-in-tokens.md.
+            - name: OIDC_SESSION_AUDIENCES
+              value: "janua.dev"
+            - name: OIDC_SESSION_ROLE_APP
+              value: "pravara-mes"
           envFrom:
             - configMapRef:
                 name: pravara-config

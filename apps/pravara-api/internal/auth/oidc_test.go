@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,8 @@ func createTestJWT(t *testing.T, privateKey *rsa.PrivateKey, kid, issuer, audien
 			TenantID: "test-tenant",
 			Email:    "test@example.com",
 			Name:     "Test User",
-			Roles:    []string{"admin", "user"},
+			Type:     "access",
+			Roles:    []string{"pravara-mes:admin", "pravara-mes:user", "admin"},
 		}
 	}
 
@@ -98,9 +100,10 @@ func TestVerifyToken_ValidToken(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -140,9 +143,10 @@ func TestVerifyToken_InvalidSigningMethod(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -168,39 +172,298 @@ func TestVerifyToken_InvalidSigningMethod(t *testing.T) {
 	}
 }
 
-func TestVerifyToken_MissingKID(t *testing.T) {
-	privateKey, _ := generateTestRSAKey(t)
-	issuer := "https://test-issuer.com"
-	audience := "test-audience"
+// newSessionVerifier builds a verifier against a mock JWKS that publishes
+// publicKey as "published-key".
+func newSessionVerifier(t *testing.T, publicKey *rsa.PublicKey, sessionAudiences ...string) (*OIDCVerifier, func()) {
+	t.Helper()
+	server := createMockJWKSServer(t, publicKey, "published-key")
+	logger := logrus.New()
+	logger.SetLevel(logrus.ErrorLevel)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:           "https://test-issuer.com",
+		JWKSURL:          server.URL,
+		Audience:         "test-audience",
+		SessionAudiences: sessionAudiences,
+		SessionRoleApp:   "pravara-mes",
+	}, logger)
+	return verifier, server.Close
+}
 
-	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  "http://localhost:9999/jwks",
-		Audience: audience,
+// signWithoutKID signs claims the way Janua signs a session token: RS256
+// with no key ID in the header.
+func signWithoutKID(t *testing.T, privateKey *rsa.PrivateKey, claims *Claims) string {
+	t.Helper()
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tokenString, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
 	}
+	return tokenString
+}
+
+func sessionClaims(audience, tokenType string) *Claims {
+	return &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "https://test-issuer.com",
+			Audience:  []string{audience},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			Subject:   "7d2f4f3e-0000-4000-8000-000000000001",
+		},
+		TenantID: "test-tenant",
+		Type:     tokenType,
+		Roles:    []string{"pravara-mes:operator"},
+	}
+}
+
+func TestVerifyToken_MissingKID_VerifiesAgainstPublishedKeys(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey)
+	defer closeServer()
+
+	claims, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, privateKey, sessionClaims("test-audience", "access")))
+	if err != nil {
+		t.Fatalf("expected a token without kid, signed by the published key, to verify: %v", err)
+	}
+	if claims.TenantID != "test-tenant" {
+		t.Errorf("unexpected tenant: %q", claims.TenantID)
+	}
+}
+
+func TestVerifyToken_MissingKID_RejectsAnotherSigner(t *testing.T) {
+	_, publicKey := generateTestRSAKey(t)
+	otherPrivateKey, _ := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey)
+	defer closeServer()
+
+	_, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, otherPrivateKey, sessionClaims("test-audience", "")))
+	if err == nil {
+		t.Fatal("expected a token signed by an unpublished key to be rejected")
+	}
+}
+
+func TestVerifyToken_MissingKID_JWKSUnavailable(t *testing.T) {
+	privateKey, _ := generateTestRSAKey(t)
+	logger := logrus.New()
+	logger.SetLevel(logrus.ErrorLevel)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:   "https://test-issuer.com",
+		JWKSURL:  "http://127.0.0.1:1/jwks",
+		Audience: "test-audience",
+	}, logger)
+
+	_, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, privateKey, sessionClaims("test-audience", "")))
+	if err == nil {
+		t.Fatal("expected an error when no key can be fetched")
+	}
+	if !strings.Contains(err.Error(), "failed to fetch JWKS") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestVerifyToken_MissingKID_IgnoresNonSigningKeys(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	jwk := JWK{
+		Kty: "RSA",
+		Kid: "encryption-key",
+		Use: "enc",
+		Alg: "RSA-OAEP",
+		N:   base64.RawURLEncoding.EncodeToString(publicKey.N.Bytes()),
+		E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(publicKey.E)).Bytes()),
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(JWKS{Keys: []JWK{jwk}})
+	}))
+	defer server.Close()
 
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	verifier := NewOIDCVerifier(config, logger)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:   "https://test-issuer.com",
+		JWKSURL:  server.URL,
+		Audience: "test-audience",
+	}, logger)
 
-	// Create token without kid header
-	claims := &Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    issuer,
-			Audience:  []string{audience},
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	tokenString, _ := token.SignedString(privateKey)
-
-	_, err := verifier.VerifyToken(context.Background(), tokenString)
+	_, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, privateKey, sessionClaims("test-audience", "")))
 	if err == nil {
-		t.Fatal("expected error for missing kid, got nil")
+		t.Fatal("expected a key published for encryption not to verify a signature")
 	}
-	if !strings.Contains(err.Error(), "missing key ID in token header") {
+	if !strings.Contains(err.Error(), "no RSA signing key published") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestVerifyToken_SessionAudience(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+
+	with := func(audience, tokenType string, change func(*Claims)) *Claims {
+		c := sessionClaims(audience, tokenType)
+		if change != nil {
+			change(c)
+		}
+		return c
+	}
+	machine := func(c *Claims) { c.TokenUse = TokenUseClientCredentials }
+	serviceAccountSubject := func(c *Claims) { c.Subject = ServiceAccountSubjectPrefix + "some-client" }
+	oauthClient := func(c *Claims) { c.ClientID = "jnc_someone_elses_app"; c.Scope = ScopeClaim{"openid", "profile"} }
+	onlyClientID := func(c *Claims) { c.ClientID = "jnc_someone_elses_app" }
+	onlyScope := func(c *Claims) { c.Scope = ScopeClaim{"openid"} }
+	servicePrincipal := func(c *Claims) { c.IsServiceAccount = true }
+
+	cases := []struct {
+		name             string
+		sessionAudiences []string
+		claims           *Claims
+		wantErr          string
+	}{
+		{"first-party access token on a configured session audience", []string{"janua.dev"}, with("janua.dev", "access", nil), ""},
+		{"session audience with surrounding spaces in config", []string{" janua.dev "}, with("janua.dev", "access", nil), ""},
+		{"session audience not configured", nil, with("janua.dev", "access", nil), "invalid audience"},
+		{"refresh token", []string{"janua.dev"}, with("janua.dev", "refresh", nil), "invalid token type"},
+		{"no type claim", []string{"janua.dev"}, with("janua.dev", "", nil), "invalid token type"},
+		{"machine token by token_use", []string{"janua.dev"}, with("janua.dev", "access", machine), "machine tokens must be issued for test-audience"},
+		{"machine token by subject", []string{"janua.dev"}, with("janua.dev", "access", serviceAccountSubject), "machine tokens must be issued for test-audience"},
+		{"issued to an OAuth client sharing the audience", []string{"janua.dev"}, with("janua.dev", "access", oauthClient), "tokens issued to an OAuth client must name test-audience"},
+		{"client_id alone marks an OAuth client token", []string{"janua.dev"}, with("janua.dev", "access", onlyClientID), "tokens issued to an OAuth client must name test-audience"},
+		{"scope alone marks an OAuth client token", []string{"janua.dev"}, with("janua.dev", "access", onlyScope), "tokens issued to an OAuth client must name test-audience"},
+		{"service principal on a session audience", []string{"janua.dev"}, with("janua.dev", "access", servicePrincipal), "service principals are not people"},
+		{"unrelated audience", []string{"janua.dev"}, with("someone-else", "access", nil), "invalid audience"},
+		{"blank configured entry never matches", []string{""}, with("", "access", nil), "invalid audience"},
+
+		// The primary audience holds a person's token to the same rules,
+		// except that an OAuth client (this application's own) may issue it.
+		{"primary audience: access token from this application's OAuth client", []string{"janua.dev"}, with("test-audience", "access", oauthClient), ""},
+		{"primary audience: refresh token", []string{"janua.dev"}, with("test-audience", "refresh", nil), "invalid token type"},
+		{"primary audience: no type claim", []string{"janua.dev"}, with("test-audience", "", nil), "invalid token type"},
+		{"primary audience: service principal", []string{"janua.dev"}, with("test-audience", "access", servicePrincipal), "service principals are not people"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier, closeServer := newSessionVerifier(t, publicKey, tc.sessionAudiences...)
+			defer closeServer()
+
+			_, err := verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, tc.claims))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected the token to verify, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected an error containing %q, got none", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("expected an error containing %q, got: %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+// A machine token is returned as issued: scope is its authority, and the
+// application-role rules for people do not touch it.
+func TestVerifyToken_MachineTokenOnPrimaryAudienceIsUntouched(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey, "janua.dev")
+	defer closeServer()
+
+	c := sessionClaims("test-audience", "")
+	c.Subject = ServiceAccountSubjectPrefix + "dispatch-client"
+	c.TokenUse = TokenUseClientCredentials
+	c.ActorType = ActorTypeServiceAccount
+	c.ClientID = "dispatch-client"
+	c.Scope = ScopeClaim{"pravara:read"}
+	c.Roles = nil
+
+	claims, err := verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, c))
+	if err != nil {
+		t.Fatalf("expected the machine token to verify, got: %v", err)
+	}
+	if strings.Join(claims.Scope, " ") != "pravara:read" {
+		t.Errorf("scope = %v, want [pravara:read]", claims.Scope)
+	}
+}
+
+func TestVerifyToken_RequiresAnExpiry(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey, "janua.dev")
+	defer closeServer()
+
+	c := sessionClaims("janua.dev", "access")
+	c.ExpiresAt = nil
+	if _, err := verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, c)); err == nil {
+		t.Fatal("expected a token with no expiry to be rejected")
+	}
+}
+
+func TestVerifyToken_OnlyRS256(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey, "janua.dev")
+	defer closeServer()
+
+	for _, method := range []jwt.SigningMethod{jwt.SigningMethodRS384, jwt.SigningMethodRS512, jwt.SigningMethodPS256} {
+		token := jwt.NewWithClaims(method, sessionClaims("janua.dev", "access"))
+		signed, err := token.SignedString(privateKey)
+		if err != nil {
+			t.Fatalf("failed to sign with %s: %v", method.Alg(), err)
+		}
+		if _, err := verifier.VerifyToken(context.Background(), signed); err == nil {
+			t.Errorf("expected a %s token to be rejected", method.Alg())
+		}
+	}
+}
+
+func TestVerifyToken_KeyIDOfANonSigningKeyIsRejected(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	jwk := JWK{
+		Kty: "RSA",
+		Kid: "encryption-key",
+		Use: "enc",
+		N:   base64.RawURLEncoding.EncodeToString(publicKey.N.Bytes()),
+		E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(publicKey.E)).Bytes()),
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(JWKS{Keys: []JWK{jwk}})
+	}))
+	defer server.Close()
+
+	logger := logrus.New()
+	logger.SetLevel(logrus.ErrorLevel)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:         "https://test-issuer.com",
+		JWKSURL:        server.URL,
+		Audience:       "test-audience",
+		SessionRoleApp: "pravara-mes",
+	}, logger)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, sessionClaims("test-audience", "access"))
+	token.Header["kid"] = "encryption-key"
+	signed, _ := token.SignedString(privateKey)
+	if _, err := verifier.VerifyToken(context.Background(), signed); err == nil {
+		t.Fatal("expected a key published for encryption not to verify a signature, even when named by kid")
+	}
+}
+
+func TestVerifyToken_BlankPrimaryAudienceMatchesNothing(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	server := createMockJWKSServer(t, publicKey, "published-key")
+	defer server.Close()
+	logger := logrus.New()
+	logger.SetLevel(logrus.ErrorLevel)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:         "https://test-issuer.com",
+		JWKSURL:        server.URL,
+		SessionRoleApp: "pravara-mes",
+	}, logger)
+
+	if _, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, privateKey, sessionClaims("", "access"))); err == nil {
+		t.Fatal("expected a blank audience not to match a blank configuration")
 	}
 }
 
@@ -215,9 +478,10 @@ func TestVerifyToken_InvalidIssuer(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -252,9 +516,10 @@ func TestVerifyToken_InvalidAudience(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -487,9 +752,10 @@ func TestVerifyToken_ExpiredToken(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -524,9 +790,10 @@ func TestVerifyToken_MultipleAudiences(t *testing.T) {
 	defer server.Close()
 
 	config := OIDCConfig{
-		Issuer:   issuer,
-		JWKSURL:  server.URL,
-		Audience: audience,
+		Issuer:         issuer,
+		JWKSURL:        server.URL,
+		Audience:       audience,
+		SessionRoleApp: "pravara-mes",
 	}
 
 	logger := logrus.New()
@@ -540,6 +807,9 @@ func TestVerifyToken_MultipleAudiences(t *testing.T) {
 			Audience:  []string{"other-audience", audience, "another-audience"},
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
+		TenantID: "test-tenant",
+		Type:     "access",
+		Roles:    []string{"pravara-mes:operator"},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -549,5 +819,101 @@ func TestVerifyToken_MultipleAudiences(t *testing.T) {
 	_, err := verifier.VerifyToken(context.Background(), tokenString)
 	if err != nil {
 		t.Fatalf("expected valid token with multiple audiences to verify, got error: %v", err)
+	}
+}
+
+func TestVerifyToken_SessionAudience_ApplicationRoles(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+
+	withRoles := func(roles ...string) *Claims {
+		c := sessionClaims("janua.dev", "access")
+		c.Roles = roles
+		return c
+	}
+
+	cases := []struct {
+		name      string
+		claims    *Claims
+		wantRoles []string
+		wantNone  bool
+	}{
+		{"keeps this application's roles without the prefix",
+			withRoles("pravara-mes:admin", "pravara-mes:inventory_manager"), []string{"admin", "inventory_manager"}, false},
+		{"drops other products' roles and bare names",
+			withRoles("admin", "tulana:admin", "hcm:hr", "pravara-mes:operator"), []string{"operator"}, false},
+		{"a bare admin grants nothing", withRoles("admin"), nil, true},
+		{"another product's admin grants nothing", withRoles("tulana:admin", "nauta:platform-admin"), nil, true},
+		{"a look-alike prefix grants nothing", withRoles("pravara-mes-x:admin", "pravara:admin"), nil, true},
+		{"an empty or nested role name grants nothing", withRoles("pravara-mes:", "pravara-mes:a:b"), nil, true},
+		{"no roles at all", withRoles(), nil, true},
+		{"repeats collapse", withRoles("pravara-mes:admin", "pravara-mes:admin"), []string{"admin"}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier, closeServer := newSessionVerifier(t, publicKey, "janua.dev")
+			defer closeServer()
+
+			claims, err := verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, tc.claims))
+			if tc.wantNone {
+				if !errors.Is(err, ErrNoApplicationRole) {
+					t.Fatalf("expected ErrNoApplicationRole, got: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected the token to verify, got: %v", err)
+			}
+			if strings.Join(claims.Roles, ",") != strings.Join(tc.wantRoles, ",") {
+				t.Errorf("roles = %v, want %v", claims.Roles, tc.wantRoles)
+			}
+		})
+	}
+}
+
+func TestVerifyToken_SessionAudience_NeedsAnApplicationSlug(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	server := createMockJWKSServer(t, publicKey, "published-key")
+	defer server.Close()
+	logger := logrus.New()
+	logger.SetLevel(logrus.ErrorLevel)
+	verifier := NewOIDCVerifier(OIDCConfig{
+		Issuer:           "https://test-issuer.com",
+		JWKSURL:          server.URL,
+		Audience:         "test-audience",
+		SessionAudiences: []string{"janua.dev"},
+	}, logger)
+
+	_, err := verifier.VerifyToken(context.Background(),
+		signWithoutKID(t, privateKey, sessionClaims("janua.dev", "access")))
+	if !errors.Is(err, ErrNoApplicationRole) {
+		t.Fatalf("expected no session token to be accepted without an application slug, got: %v", err)
+	}
+}
+
+// Janua's roles claim mixes organization-account roles with application
+// roles on every token it issues to a person, so the primary audience gets
+// the same filter: a bare "admin" is an organization-account admin, not a
+// Pravara one.
+func TestVerifyToken_PrimaryAudienceRolesAreApplicationRolesToo(t *testing.T) {
+	privateKey, publicKey := generateTestRSAKey(t)
+	verifier, closeServer := newSessionVerifier(t, publicKey, "janua.dev")
+	defer closeServer()
+
+	c := sessionClaims("test-audience", "access")
+	c.Roles = []string{"admin", "owner", "pravara-mes:inventory_manager"}
+	claims, err := verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, c))
+	if err != nil {
+		t.Fatalf("expected the token to verify, got: %v", err)
+	}
+	if strings.Join(claims.Roles, ",") != "inventory_manager" {
+		t.Errorf("roles = %v, want [inventory_manager]", claims.Roles)
+	}
+
+	c = sessionClaims("test-audience", "access")
+	c.Roles = []string{"admin", "owner"}
+	_, err = verifier.VerifyToken(context.Background(), signWithoutKID(t, privateKey, c))
+	if !errors.Is(err, ErrNoApplicationRole) {
+		t.Fatalf("expected an organization-account admin with no application role to be refused, got: %v", err)
 	}
 }

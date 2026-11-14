@@ -59,6 +59,7 @@ func newMCPRig(t *testing.T, enabled bool) *mcpRig {
 
 	cfg := &config.Config{}
 	cfg.OIDC.Issuer, cfg.OIDC.JWKSURL, cfg.OIDC.Audience = testIssuer, jwks.URL, testAudience
+	cfg.OIDC.SessionRoleApp = testRoleApp
 	cfg.MCP = config.MCPConfig{Enabled: enabled, RatePerMinute: 600, Burst: 100}
 
 	gin.SetMode(gin.TestMode)

@@ -18,9 +18,9 @@ export interface PravaraUser {
   image?: string | null;
   role: string;
   /**
-   * Every role the identity token names: the `roles` claim (what pravara-api
-   * checks for role-gated routes) plus the single `role` claim. Empty when
-   * the token carries neither; then rolesKnown is false.
+   * The roles this application granted ("pravara-mes:<role>" entries of the
+   * `roles` claim, prefix removed): what pravara-api checks on role-gated
+   * routes. rolesKnown is false when the claims carry no `roles` array.
    */
   roles: string[];
   rolesKnown: boolean;
@@ -28,19 +28,34 @@ export interface PravaraUser {
   accessToken?: string;
 }
 
-/** The roles named by Janua user claims (`roles` array and `role`). */
+/**
+ * This application's slug in Janua application roles ("pravara-mes:admin").
+ * pravara-api reads only these (docs/operations/sign-in-tokens.md), so the UI
+ * does too: another product's role or a bare organization-account "admin"
+ * grants nothing here and must not make the UI offer a gated action.
+ */
+export const APPLICATION_ROLE_PREFIX = "pravara-mes:";
+
+/**
+ * The roles this application granted, with the prefix removed, from the
+ * Janua `roles` claim. `known` is false when the claims carry no `roles`
+ * array at all (the UI then offers gated actions and lets the API decide).
+ */
 export function rolesFromClaims(claims: Record<string, unknown>): {
   roles: string[];
   known: boolean;
 } {
   const roles = new Set<string>();
   if (Array.isArray(claims.roles)) {
-    for (const r of claims.roles) if (typeof r === "string" && r) roles.add(r);
+    for (const r of claims.roles) {
+      if (typeof r !== "string" || !r.startsWith(APPLICATION_ROLE_PREFIX)) continue;
+      const name = r.slice(APPLICATION_ROLE_PREFIX.length);
+      if (name && !name.includes(":")) roles.add(name);
+    }
   }
-  if (typeof claims.role === "string" && claims.role) roles.add(claims.role);
   return {
     roles: [...roles],
-    known: Array.isArray(claims.roles) || typeof claims.role === "string",
+    known: Array.isArray(claims.roles),
   };
 }
 

@@ -104,7 +104,12 @@ type OIDCConfig struct {
 	Issuer   string `mapstructure:"issuer"`
 	JWKSURL  string `mapstructure:"jwks_url"`
 	Audience string `mapstructure:"audience"`
-	ClientID string `mapstructure:"client_id"`
+	// SessionAudiences: further audiences accepted for human session tokens
+	// only (see auth.OIDCConfig). Comma-separated in OIDC_SESSION_AUDIENCES.
+	SessionAudiences []string `mapstructure:"session_audiences"`
+	// SessionRoleApp: this application's slug in Janua application roles.
+	SessionRoleApp string `mapstructure:"session_role_app"`
+	ClientID       string `mapstructure:"client_id"`
 }
 
 // R2Config holds Cloudflare R2 storage settings.
@@ -217,6 +222,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("oidc.issuer", "https://auth.madfam.io")
 	v.SetDefault("oidc.jwks_url", "https://auth.madfam.io/.well-known/jwks.json")
 	v.SetDefault("oidc.audience", "pravara-api")
+	v.SetDefault("oidc.session_role_app", "pravara-mes")
 
 	// Centrifugo defaults
 	v.SetDefault("centrifugo.token_ttl", 3600) // 1 hour
@@ -271,6 +277,8 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("oidc.issuer", "OIDC_ISSUER")
 	v.BindEnv("oidc.jwks_url", "OIDC_JWKS_URL")
 	v.BindEnv("oidc.audience", "OIDC_AUDIENCE")
+	v.BindEnv("oidc.session_audiences", "OIDC_SESSION_AUDIENCES")
+	v.BindEnv("oidc.session_role_app", "OIDC_SESSION_ROLE_APP")
 	v.BindEnv("oidc.client_id", "OIDC_CLIENT_ID")
 
 	v.BindEnv("r2.endpoint", "R2_ENDPOINT")

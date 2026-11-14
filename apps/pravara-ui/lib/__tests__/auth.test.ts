@@ -170,19 +170,29 @@ describe('currentAccessToken', () => {
 })
 
 describe('rolesFromClaims', () => {
-  it('joins the roles array claim with the single role claim', () => {
-    expect(rolesFromClaims({ roles: ['inventory_manager', 'operator'], role: 'operator' })).toEqual({
+  it("keeps this application's roles without the prefix", () => {
+    expect(rolesFromClaims({ roles: ['pravara-mes:inventory_manager', 'pravara-mes:operator'] })).toEqual({
       roles: ['inventory_manager', 'operator'],
       known: true,
     })
   })
 
-  it('says roles are unknown when the token names none', () => {
+  it("drops other products' roles and bare organization roles", () => {
+    expect(
+      rolesFromClaims({ roles: ['admin', 'tulana:admin', 'hcm:hr', 'pravara-mes:operator'], role: 'admin' }),
+    ).toEqual({ roles: ['operator'], known: true })
+  })
+
+  it('says roles are unknown when the claims carry no roles array', () => {
     expect(rolesFromClaims({ id: 'u' })).toEqual({ roles: [], known: false })
+    expect(rolesFromClaims({ role: 'admin' })).toEqual({ roles: [], known: false })
   })
 
   it('ignores values that are not role names', () => {
-    expect(rolesFromClaims({ roles: ['admin', 3, ''] })).toEqual({ roles: ['admin'], known: true })
+    expect(rolesFromClaims({ roles: ['pravara-mes:admin', 3, '', 'pravara-mes:', 'pravara-mes:a:b'] })).toEqual({
+      roles: ['admin'],
+      known: true,
+    })
   })
 })
 

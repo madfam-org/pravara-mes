@@ -52,9 +52,11 @@ func RegisterRoutesWithRecorder(router *gin.Engine, database *db.DB, cfg *config
 func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, log *logrus.Logger, publisher *pubsub.Publisher, usageRecorder billing.UsageRecorder, deps RoutesDeps) {
 	// Initialize OIDC verifier
 	oidcConfig := auth.OIDCConfig{
-		Issuer:   cfg.OIDC.Issuer,
-		JWKSURL:  cfg.OIDC.JWKSURL,
-		Audience: cfg.OIDC.Audience,
+		Issuer:           cfg.OIDC.Issuer,
+		JWKSURL:          cfg.OIDC.JWKSURL,
+		Audience:         cfg.OIDC.Audience,
+		SessionAudiences: cfg.OIDC.SessionAudiences,
+		SessionRoleApp:   cfg.OIDC.SessionRoleApp,
 	}
 	verifier := auth.NewOIDCVerifier(oidcConfig, log)
 
