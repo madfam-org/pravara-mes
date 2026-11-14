@@ -141,3 +141,32 @@ func TestNormalizeQuantity(t *testing.T) {
 		assert.Equal(t, want, costevents.NormalizeQuantity(in), in)
 	}
 }
+
+// The registry code (RFC 0058 ruling I3) is what reaches Dhanam as
+// item.material_code; the event id stays keyed by the recorded code, and
+// nothing outside Dhanam's contract is added.
+func TestBuildSendsRegistryCode(t *testing.T) {
+	f := fact("actual", "6", "g", completed)
+	f.MaterialCode = "pla" // a print profile's material type, aliased in the registry
+	f.RegistryCode = "FIL-PLA-BLK"
+	l := line(f)
+	l.MaterialCode = f.MaterialCode
+	b := costevents.Build(l, nil, opts)
+	require.Empty(t, b.Problems)
+	m := wire(t, b.Event)
+	assert.Equal(t, map[string]any{"material_code": "FIL-PLA-BLK"}, m["item"])
+	assert.Equal(t, costevents.EventID("dispatch", jobA, "pla"), b.EventID)
+	assert.Empty(t, costevents.ValidateWire(m))
+
+	// Unregistered: the recorded code, as before.
+	f.RegistryCode = ""
+	l = line(f)
+	l.MaterialCode = f.MaterialCode
+	assert.Equal(t, map[string]any{"material_code": "pla"}, wire(t, costevents.Build(l, nil, opts).Event)["item"])
+
+	// A recorded code too long for Dhanam (64) is sent as its registry code.
+	f.MaterialCode, f.RegistryCode = strings.Repeat("M", 70), "FIL-PLA-BLK"
+	l = line(f)
+	l.MaterialCode = f.MaterialCode
+	assert.Empty(t, costevents.Build(l, nil, opts).Problems)
+}

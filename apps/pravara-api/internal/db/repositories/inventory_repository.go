@@ -25,24 +25,31 @@ func NewInventoryRepository(db DBTX) *InventoryRepository {
 
 // InventoryItem represents an inventory item tracked in the system.
 type InventoryItem struct {
-	ID                uuid.UUID      `json:"id"`
-	TenantID          uuid.UUID      `json:"tenant_id"`
-	SKU               string         `json:"sku"`
-	Name              string         `json:"name"`
-	Category          string         `json:"category"`
-	Description       string         `json:"description"`
-	Unit              string         `json:"unit"`
-	QuantityOnHand    float64        `json:"quantity_on_hand"`
-	QuantityReserved  float64        `json:"quantity_reserved"`
-	QuantityAvailable float64        `json:"quantity_available"`
-	ReorderPoint      float64        `json:"reorder_point"`
-	ReorderQuantity   float64        `json:"reorder_quantity"`
-	ForgeSightID      *string        `json:"forgesight_id,omitempty"`
-	UnitCost          *float64       `json:"unit_cost,omitempty"`
-	Currency          string         `json:"currency"`
-	Metadata          map[string]any `json:"metadata,omitempty"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
+	ID                uuid.UUID `json:"id"`
+	TenantID          uuid.UUID `json:"tenant_id"`
+	SKU               string    `json:"sku"`
+	Name              string    `json:"name"`
+	Category          string    `json:"category"`
+	Description       string    `json:"description"`
+	Unit              string    `json:"unit"`
+	QuantityOnHand    float64   `json:"quantity_on_hand"`
+	QuantityReserved  float64   `json:"quantity_reserved"`
+	QuantityAvailable float64   `json:"quantity_available"`
+	ReorderPoint      float64   `json:"reorder_point"`
+	ReorderQuantity   float64   `json:"reorder_quantity"`
+	ForgeSightID      *string   `json:"forgesight_id,omitempty"`
+
+	// MaterialID is the registry entry the item holds (migration 035);
+	// MaterialCode is its code. Only registered materials are stock for the
+	// cost ledger (ruling I4).
+	MaterialID   *uuid.UUID `json:"material_id,omitempty"`
+	MaterialCode string     `json:"material_code,omitempty"`
+
+	UnitCost  *float64       `json:"unit_cost,omitempty"`
+	Currency  string         `json:"currency"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // InventoryTransaction represents a record of inventory movement.
@@ -76,7 +83,8 @@ func (r *InventoryRepository) ListItems(ctx context.Context, filter InventoryFil
 		SELECT id, tenant_id, sku, name, category, description, unit,
 		       quantity_on_hand, quantity_reserved, quantity_available,
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
-		       currency, metadata, created_at, updated_at
+		       currency, metadata, created_at, updated_at, material_id,
+		       (SELECT m.code FROM material_registry m WHERE m.id = inventory_items.material_id)
 		FROM inventory_items
 		WHERE 1=1 AND ` + tenantMatch + `
 	`
@@ -149,7 +157,8 @@ func (r *InventoryRepository) GetItemByID(ctx context.Context, id uuid.UUID) (*I
 		SELECT id, tenant_id, sku, name, category, description, unit,
 		       quantity_on_hand, quantity_reserved, quantity_available,
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
-		       currency, metadata, created_at, updated_at
+		       currency, metadata, created_at, updated_at, material_id,
+		       (SELECT m.code FROM material_registry m WHERE m.id = inventory_items.material_id)
 		FROM inventory_items
 		WHERE id = $1 AND ` + tenantMatch + `
 	`
@@ -176,9 +185,10 @@ func (r *InventoryRepository) CreateItem(ctx context.Context, item *InventoryIte
 			id, tenant_id, sku, name, category, description, unit,
 			quantity_on_hand, quantity_reserved,
 			reorder_point, reorder_quantity, forgesight_id, unit_cost,
-			currency, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-		RETURNING quantity_available, created_at, updated_at
+			currency, metadata, material_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		RETURNING quantity_available, created_at, updated_at,
+			(SELECT m.code FROM material_registry m WHERE m.id = $16)
 	`
 
 	if item.ID == uuid.Nil {
@@ -187,7 +197,7 @@ func (r *InventoryRepository) CreateItem(ctx context.Context, item *InventoryIte
 
 	metadataJSON, _ := json.Marshal(item.Metadata)
 
-	var description sql.NullString
+	var description, materialCode sql.NullString
 	if item.Description != "" {
 		description = sql.NullString{String: item.Description, Valid: true}
 	}
@@ -196,12 +206,16 @@ func (r *InventoryRepository) CreateItem(ctx context.Context, item *InventoryIte
 		item.ID, item.TenantID, item.SKU, item.Name, item.Category,
 		description, item.Unit, item.QuantityOnHand, item.QuantityReserved,
 		item.ReorderPoint, item.ReorderQuantity,
-		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON,
-	).Scan(&item.QuantityAvailable, &item.CreatedAt, &item.UpdatedAt)
+		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON, item.MaterialID,
+	).Scan(&item.QuantityAvailable, &item.CreatedAt, &item.UpdatedAt, &materialCode)
 
+	if uniqueViolation(err) && item.MaterialID != nil {
+		return ErrMaterialAlreadyStocked
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create inventory item: %w", err)
 	}
+	item.MaterialCode = materialCode.String
 
 	return nil
 }
@@ -220,14 +234,15 @@ func (r *InventoryRepository) UpdateItem(ctx context.Context, item *InventoryIte
 			forgesight_id = $9,
 			unit_cost = $10,
 			currency = $11,
-			metadata = $12
+			metadata = $12,
+			material_id = $13
 		WHERE id = $1 AND ` + tenantMatch + `
-		RETURNING updated_at
+		RETURNING updated_at, (SELECT m.code FROM material_registry m WHERE m.id = $13)
 	`
 
 	metadataJSON, _ := json.Marshal(item.Metadata)
 
-	var description sql.NullString
+	var description, materialCode sql.NullString
 	if item.Description != "" {
 		description = sql.NullString{String: item.Description, Valid: true}
 	}
@@ -235,11 +250,17 @@ func (r *InventoryRepository) UpdateItem(ctx context.Context, item *InventoryIte
 	err := r.db.QueryRowContext(ctx, query,
 		item.ID, item.SKU, item.Name, item.Category, description,
 		item.Unit, item.ReorderPoint, item.ReorderQuantity,
-		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON,
-	).Scan(&item.UpdatedAt)
+		item.ForgeSightID, item.UnitCost, item.Currency, metadataJSON, item.MaterialID,
+	).Scan(&item.UpdatedAt, &materialCode)
 
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("inventory item not found")
+	}
+	if uniqueViolation(err) && item.MaterialID != nil {
+		return ErrMaterialAlreadyStocked
+	}
+	if err == nil {
+		item.MaterialCode = materialCode.String
 	}
 	if err != nil {
 		return fmt.Errorf("failed to update inventory item: %w", err)
@@ -355,7 +376,8 @@ func (r *InventoryRepository) GetLowStock(ctx context.Context) ([]InventoryItem,
 		SELECT id, tenant_id, sku, name, category, description, unit,
 		       quantity_on_hand, quantity_reserved, quantity_available,
 		       reorder_point, reorder_quantity, forgesight_id, unit_cost,
-		       currency, metadata, created_at, updated_at
+		       currency, metadata, created_at, updated_at, material_id,
+		       (SELECT m.code FROM material_registry m WHERE m.id = inventory_items.material_id)
 		FROM inventory_items
 		WHERE (quantity_on_hand - quantity_reserved) <= reorder_point
 		  AND reorder_point > 0 AND ` + tenantMatch + `
@@ -446,19 +468,22 @@ func (r *InventoryRepository) scanInventoryItem(rows *sql.Rows) (*InventoryItem,
 	var forgeSightID sql.NullString
 	var unitCost sql.NullFloat64
 	var metadataJSON []byte
+	var materialID uuid.NullUUID
+	var materialCode sql.NullString
 
 	err := rows.Scan(
 		&item.ID, &item.TenantID, &item.SKU, &item.Name, &category,
 		&description, &item.Unit, &item.QuantityOnHand, &item.QuantityReserved,
 		&item.QuantityAvailable, &item.ReorderPoint, &item.ReorderQuantity,
 		&forgeSightID, &unitCost, &item.Currency, &metadataJSON,
-		&item.CreatedAt, &item.UpdatedAt,
+		&item.CreatedAt, &item.UpdatedAt, &materialID, &materialCode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan inventory item: %w", err)
 	}
 
 	item.Category = category.String
+	item.MaterialID, item.MaterialCode = ptrUUID(materialID), materialCode.String
 	if description.Valid {
 		item.Description = description.String
 	}
@@ -481,19 +506,22 @@ func (r *InventoryRepository) scanInventoryItemRow(row *sql.Row) (*InventoryItem
 	var forgeSightID sql.NullString
 	var unitCost sql.NullFloat64
 	var metadataJSON []byte
+	var materialID uuid.NullUUID
+	var materialCode sql.NullString
 
 	err := row.Scan(
 		&item.ID, &item.TenantID, &item.SKU, &item.Name, &category,
 		&description, &item.Unit, &item.QuantityOnHand, &item.QuantityReserved,
 		&item.QuantityAvailable, &item.ReorderPoint, &item.ReorderQuantity,
 		&forgeSightID, &unitCost, &item.Currency, &metadataJSON,
-		&item.CreatedAt, &item.UpdatedAt,
+		&item.CreatedAt, &item.UpdatedAt, &materialID, &materialCode,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	item.Category = category.String
+	item.MaterialID, item.MaterialCode = ptrUUID(materialID), materialCode.String
 	if description.Valid {
 		item.Description = description.String
 	}

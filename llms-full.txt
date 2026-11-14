@@ -50,8 +50,14 @@ gap or incident link.
   `POST /v1/cost-events` as quantity-only `consumption` events (source
   `pravara`, never money; Dhanam values them, ruling C12), through the
   tenant-scoped outbox `cost_event_outbox` (migration 034), off unless
-  `PRAVARA_COST_EVENTS_ENABLED=true` (owner only). See
-  `docs/operations/cost-events.md`.
+  `PRAVARA_COST_EVENTS_ENABLED=true` (owner only); `item.material_code` is
+  the material registry code. See `docs/operations/cost-events.md`.
+  Inventory (RFC 0058 wave 1, migration 035): material code registry owned
+  by Pravara, aliases, unit conversions (never guessed: a quantity with no
+  conversion is a listed gap and moves no stock), receipts with invoice
+  evidence, batch lots linked to stock, physical counts whose differences
+  are their own `adjustment`; quantities only. See
+  `docs/operations/inventory.md`.
 - `apps/telemetry-worker` (Go): MQTT telemetry ingest and machine command
   dispatch.
 - `apps/pravara-ui` (Next 15.5), `apps/pravara-landing` (Next 15.5, public

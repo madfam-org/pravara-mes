@@ -380,7 +380,27 @@ Quantities only, no cost. Rules: [docs/operations/job-consumption.md](docs/opera
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
+| GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug` and the material's `registry_code`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
+| GET | `/v1/jobs/consumption/coverage` | Material rows with and without a registry code, and the unresolved codes |
+
+### Inventory registry, receipts and counts (RFC 0058 wave 1)
+
+Quantities only, no cost. Material code registry with aliases and unit conversions, receipts with invoice evidence (CFDI UUID and line, or `no_invoice`), batch lots linked to stock, physical counts whose differences are their own `adjustment`, and conversion gaps (a quantity with no conversion is recorded and moves no stock). Writes are people only. Full HTTP contract: [docs/operations/inventory.md](docs/operations/inventory.md).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET, POST | `/v1/inventory/materials` | List / register material codes |
+| GET, PATCH | `/v1/inventory/materials/:id` | Registry entry with aliases and conversions / change it (the code never changes) |
+| POST | `/v1/inventory/materials/:id/aliases` | Name a material by another code |
+| POST | `/v1/inventory/materials/:id/conversions` | Add a unit conversion; posts what waited for it |
+| GET | `/v1/inventory/materials/unlinked` | Items, lots and consumption codes not in the registry |
+| GET | `/v1/inventory/conversion-gaps` | Quantities waiting for a unit conversion |
+| GET, POST | `/v1/inventory/receipts` | List / record receipts |
+| GET | `/v1/inventory/receipts/:id` | One receipt |
+| GET, POST | `/v1/inventory/counts` | List / open physical counts (one opening count per tenant) |
+| GET | `/v1/inventory/counts/:id` | A count with its lines |
+| POST | `/v1/inventory/counts/:id/lines` | Record a counted material |
+| POST | `/v1/inventory/counts/:id/close` | Close: post differences (idempotent) |
 
 ### Cost events to Dhanam
 
@@ -392,8 +412,8 @@ Pravara pushes each completed job's material consumption to Dhanam's `POST /v1/c
 
 | Tool | Same read as | Returns |
 |------|--------------|---------|
-| `mes_job_consumption(from, to, task_id?, order_id?, engagement_slug?, limit?, offset?)` | `GET /v1/jobs/consumption` | Per-job material and machine-minute quantities with the order's engagement slug (no `recorded_by`) |
-| `mes_inventory_levels(material_code?, limit?, offset?)` | `GET /v1/inventory` | On hand, reserved, available and reorder point per SKU (no unit cost or currency) |
+| `mes_job_consumption(from, to, task_id?, order_id?, engagement_slug?, limit?, offset?)` | `GET /v1/jobs/consumption` | Per-job material and machine-minute quantities with the material's registry code and the order's engagement slug (no `recorded_by`) |
+| `mes_inventory_levels(material_code?, limit?, offset?)` | `GET /v1/inventory` | On hand, reserved, available and reorder point per SKU, with its material registry code (no unit cost or currency) |
 
 Tool names use underscores (Claude accepts only `^[a-zA-Z0-9_-]{1,64}$`); each title carries the RFC 0051 name (`mes.job_consumption`, `mes.inventory_levels`). No write tools. One `mcp.call` audit line per request (client, tool, outcome, latency, `args_sha256`; never the arguments); per-client rate limit `PRAVARA_MCP_RATE_PER_MINUTE` (60) / `PRAVARA_MCP_BURST` (10).
 

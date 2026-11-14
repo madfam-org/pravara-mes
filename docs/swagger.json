@@ -948,6 +948,976 @@
                 }
             }
         },
+        "/inventory/conversion-gaps": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A job consumption, receipt or count line in a unit with no conversion to its stock item's unit is recorded but moves no stock (\"needs conversion\"). Adding the conversion (POST /v1/inventory/materials/{id}/conversions) posts it and marks the gap resolved; a newer fact of the same job marks an older gap superseded.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Quantities waiting for a unit conversion",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "open (default), resolved, superseded or all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Page size (max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/internal_api.ListResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConversionGap"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_status, invalid_limit or invalid_offset",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/counts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Newest first, without lines (line_count says how many).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List physical counts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "open or closed",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Page size (max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/internal_api.ListResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_status, invalid_limit or invalid_offset",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "is_opening marks the tenant's one opening count (ruling I7; 409 opening_count_exists for a second).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Open a physical count",
+                "parameters": [
+                    {
+                        "description": "Count",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count"
+                        }
+                    },
+                    "409": {
+                        "description": "opening_count_exists",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/counts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get a physical count with its lines",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Count ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count"
+                        }
+                    },
+                    "404": {
+                        "description": "count_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/counts/{id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For each line: result matched (no difference), adjusted (an 'adjustment' movement of counted minus expected, reference_type inventory_count, reference_id the line), needs_conversion (no conversion to the stock item's unit: no movement, a conversion gap is listed and posted once the conversion exists) or not_stocked (the material has no stock item). Count differences are never folded into a job. Idempotent: closing a closed count returns it with already_closed true and moves nothing.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Close a physical count",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Count ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{count, already_closed}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "count_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/counts/{id}/lines": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One line per material: recording the same material again replaces its quantity, unit and counted_at while the count is open. counted_at (default now) is when the material was counted; closing compares with the stock on hand at that moment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Record a counted material",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Count ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Counted material",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CountLineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "count_not_found or material_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "count_closed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/materials": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Registry entries ordered by code, each with its stock item (inventory_item_id, stock_sku, stock_unit, quantity_on_hand) when it has one. Quantities only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List the material code registry",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Only active (true) or inactive (false) entries",
+                        "name": "active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "filament, resin, sheet, spare_part, consumable, packaging or other",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Code or name contains (case-insensitive)",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Page size (max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/internal_api.ListResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_active, invalid_category, invalid_limit or invalid_offset",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Codes are 1-64 letters, digits, '.', '_' or '-' (starting with a letter or digit), unique per tenant ignoring case, and never change. A code equal to an alias or a linked item's SKU is refused. Link a stock item with PATCH /v1/inventory/{id} (material_id).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Register a material code",
+                "parameters": [
+                    {
+                        "description": "Material",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.MaterialRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "material_code_taken",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/materials/unlinked": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stock items with no registry entry (with the reason the migration left them: sku_is_not_a_valid_code, unit_is_not_a_valid_unit, sku_differs_from_another_only_in_case, code_registered_for_another_material, not_linked), batch lots with no stock item, and consumption material codes that resolve to no registry entry. Nothing here is guessed: a person registers, links or aliases each one. At most 500 of each.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "What is not in the registry yet",
+                "responses": {
+                    "200": {
+                        "description": "{items, lots, consumption_codes}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/materials/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get a registry entry with its aliases and conversions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Material ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.MaterialDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "material_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The code never changes. An inactive material takes no new receipts; history keeps resolving to it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Change a registry entry (name, category, base unit, active, notes)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Material ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.MaterialPatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "material_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/materials/{id}/aliases": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For a code consumption already uses (a print profile's material type, a lot's product code). Consumption recorded from then on resolves to the material; stock already relieved, or not, is not re-settled. The alias must not already name a material (code, alias or linked SKU).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Name a material by another code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Material ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Alias (1-100 characters)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.AliasRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias"
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "material_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "alias_taken",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/materials/{id}/conversions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "1 from_unit = factor to_unit (for example 1 spool = 1000 g). kg↔g, l↔ml, m↔mm and cm↔mm are built in (409 conversion_builtin). One factor per unit pair in either direction (409 conversion_exists); conversions never change. In the same transaction, every quantity of this material waiting for a conversion (job consumption relief, receipts, count lines) is posted when the new conversion makes it convertible: gaps_resolved and stock_movements say what moved.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Add a unit conversion for a material",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Material ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Conversion",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ConversionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{conversion, gaps_resolved, stock_movements}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "material_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "conversion_exists or conversion_builtin",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/receipts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Newest received first. from inclusive, to exclusive, on received_at.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List receipts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Material (UUID)",
+                        "name": "material_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "invoiced or no_invoice",
+                        "name": "invoice_status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "posted or needs_conversion",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "received_at \u003e= from (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "received_at \u003c to (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Page size (max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/internal_api.ListResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_material_id, invalid_invoice_status, invalid_status, invalid_from, invalid_to, invalid_limit or invalid_offset",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records a registered, active material that has a stock item. received_at defaults to now. The lot is batch_lot_id (linked to the material's stock item when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number (found, or created for this item). When the unit converts to the stock item's unit (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material's conversion), a 'receipt' movement (reference_type inventory_receipt) raises stock and status is posted; otherwise status is needs_conversion, stock is untouched and a conversion gap is listed. idempotency_key (1-100 characters) makes a retry return the first receipt with 200 and replayed true.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Record a receipt",
+                "parameters": [
+                    {
+                        "description": "Receipt",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ReceiptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{receipt, stock_movement: null, replayed: true}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "201": {
+                        "description": "{receipt, stock_movement, replayed}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "material_not_found or batch_lot_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "material_inactive, material_not_stocked or lot_belongs_to_other_item",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/receipts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get a receipt",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Receipt ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt"
+                        }
+                    },
+                    "404": {
+                        "description": "receipt_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/jobs/consumption": {
             "get": {
                 "security": [
@@ -955,7 +1925,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Per-job consumption rows, quantities only (no cost): material (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate) and source (printer, operator or slicer). engagement_slug is the order's current engagement. Rows are ordered by occurred_at (the job's completion); from is inclusive and to exclusive.",
+                "description": "Per-job consumption rows, quantities only (no cost): material (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate) and source (printer, operator or slicer). engagement_slug is the order's current engagement. registry_code is the material registry code material_code resolves to (omitted when unregistered). Rows are ordered by occurred_at (the job's completion); from is inclusive and to exclusive.",
                 "produces": [
                     "application/json"
                 ],
@@ -1051,6 +2021,54 @@
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/consumption/coverage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The RFC 0058 wave 1 gate is that every material consumption row carries a material registry code. A row's code resolves at read time: the code itself, an alias, or a linked stock item's SKU. Counts material rows (occurred_at in [from, to) when given) with and without a registry code, and lists the unresolved codes, most rows first (at most 200). Register, alias or link each one; nothing is guessed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "How many consumption rows carry a registry code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "occurred_at \u003e= from (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "occurred_at \u003c to (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConsumptionCoverage"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_from or invalid_to",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -5648,6 +6666,170 @@
                 }
             }
         },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConsumptionCoverage": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "material_rows": {
+                    "type": "integer"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "unresolved_codes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnresolvedCode"
+                    }
+                },
+                "with_registry_code": {
+                    "type": "integer"
+                },
+                "without_registry_code": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConversionGap": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "from_unit": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inventory_item_id": {
+                    "type": "string"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "job_kind": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "resolved_at": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "source_id": {
+                    "type": "string"
+                },
+                "source_type": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "to_unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count": {
+            "type": "object",
+            "properties": {
+                "closed_at": {
+                    "type": "string"
+                },
+                "closed_by": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_opening": {
+                    "type": "boolean"
+                },
+                "line_count": {
+                    "type": "integer"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine": {
+            "type": "object",
+            "properties": {
+                "count_id": {
+                    "type": "string"
+                },
+                "counted_at": {
+                    "type": "string"
+                },
+                "counted_by": {
+                    "type": "string"
+                },
+                "counted_quantity": {
+                    "type": "number"
+                },
+                "counted_stock_quantity": {
+                    "type": "number"
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "expected_quantity": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inventory_item_id": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "transaction_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.GenealogyTree": {
             "type": "object",
             "properties": {
@@ -5724,6 +6906,10 @@
                     "type": "number"
                 },
                 "recorded_by": {
+                    "type": "string"
+                },
+                "registry_code": {
+                    "description": "RegistryCode is the material registry code material_code resolves to\n(the code itself, an alias, or a linked item's SKU), read at query\ntime; empty when the code is not registered (List only).",
                     "type": "string"
                 },
                 "source": {
@@ -5884,6 +7070,74 @@
                 }
             }
         },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "base_unit": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inventory_item_id": {
+                    "description": "The stock item linked to the material (none until one is linked).",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "quantity_on_hand": {
+                    "type": "number"
+                },
+                "stock_sku": {
+                    "type": "string"
+                },
+                "stock_unit": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias": {
+            "type": "object",
+            "properties": {
+                "alias": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialConsumption": {
             "type": "object",
             "properties": {
@@ -6021,6 +7275,132 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt": {
+            "type": "object",
+            "properties": {
+                "batch_lot_id": {
+                    "type": "string"
+                },
+                "cfdi_line": {
+                    "type": "integer"
+                },
+                "cfdi_uuid": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "inventory_item_id": {
+                    "type": "string"
+                },
+                "invoice_status": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "posted_at": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "received_at": {
+                    "type": "string"
+                },
+                "received_by": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "stock_quantity": {
+                    "description": "StockQuantity is Quantity in the stock item's unit, once posted.",
+                    "type": "number"
+                },
+                "transaction_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnitConversion": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "factor": {
+                    "type": "number"
+                },
+                "from_unit": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "to_unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnresolvedCode": {
+            "type": "object",
+            "properties": {
+                "last_occurred_at": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "integer"
+                },
+                "units": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_api.AliasRequest": {
+            "type": "object",
+            "required": [
+                "alias"
+            ],
+            "properties": {
+                "alias": {
                     "type": "string"
                 }
             }
@@ -6180,6 +7560,28 @@
                 }
             }
         },
+        "internal_api.ConversionRequest": {
+            "type": "object",
+            "required": [
+                "factor",
+                "from_unit",
+                "to_unit"
+            ],
+            "properties": {
+                "factor": {
+                    "type": "number"
+                },
+                "from_unit": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "to_unit": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.CotizaItemData": {
             "type": "object",
             "required": [
@@ -6265,6 +7667,39 @@
                     "$ref": "#/definitions/internal_api.CotizaOrderData"
                 },
                 "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CountLineRequest": {
+            "type": "object",
+            "required": [
+                "counted_quantity",
+                "material_id",
+                "unit"
+            ],
+            "properties": {
+                "counted_at": {
+                    "type": "string"
+                },
+                "counted_quantity": {
+                    "type": "number"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CountRequest": {
+            "type": "object",
+            "properties": {
+                "is_opening": {
+                    "type": "boolean"
+                },
+                "notes": {
                     "type": "string"
                 }
             }
@@ -6851,6 +8286,115 @@
                 }
             }
         },
+        "internal_api.MaterialDetail": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "aliases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias"
+                    }
+                },
+                "base_unit": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "conversions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnitConversion"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inventory_item_id": {
+                    "description": "The stock item linked to the material (none until one is linked).",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "quantity_on_hand": {
+                    "type": "number"
+                },
+                "stock_sku": {
+                    "type": "string"
+                },
+                "stock_unit": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.MaterialPatchRequest": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "base_unit": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.MaterialRequest": {
+            "type": "object",
+            "required": [
+                "base_unit",
+                "category",
+                "code",
+                "name"
+            ],
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "base_unit": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_api.MoveTaskRequest": {
             "type": "object",
             "required": [
@@ -6863,6 +8407,50 @@
                     "minimum": 1
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ReceiptRequest": {
+            "type": "object",
+            "required": [
+                "invoice_status",
+                "material_id",
+                "quantity",
+                "unit"
+            ],
+            "properties": {
+                "batch_lot_id": {
+                    "type": "string"
+                },
+                "cfdi_line": {
+                    "type": "integer"
+                },
+                "cfdi_uuid": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "invoice_status": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "material_id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "received_at": {
+                    "type": "string"
+                },
+                "unit": {
                     "type": "string"
                 }
             }

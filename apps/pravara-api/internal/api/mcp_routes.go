@@ -113,6 +113,29 @@ func MCPCoverage() map[string]MCPRouteCoverage {
 		k(post, "/v1/inventory"):            exempt("write: creates stock items; people only"),
 		k(patch, "/v1/inventory/:id"):       exempt("write: edits stock items and their cost fields; people only"),
 		k(post, "/v1/inventory/:id/adjust"): exempt("manual adjust: moves stock; people only"),
+		k(get, "/v1/jobs/consumption/coverage"): exempt("a data-quality gate over the same rows; " +
+			"each mes_job_consumption row carries its registry_code"),
+		// RFC 0058 wave 1 (docs/operations/inventory.md). Reads stay on HTTP
+		// until the cost ledger's wave 2 needs them over MCP (ROADMAP item 22).
+		k(get, "/v1/inventory/materials"): exempt("registry reference data; its codes reach the ledger as " +
+			"item.material_code and as material_code on mes_inventory_levels"),
+		k(get, "/v1/inventory/materials/:id"): exempt("registry reference data (aliases, conversions); " +
+			"see GET /v1/inventory/materials"),
+		k(get, "/v1/inventory/materials/unlinked"): exempt("registry housekeeping for people, not a cost input"),
+		k(get, "/v1/inventory/conversion-gaps"):    exempt("housekeeping for people: quantities waiting for a unit conversion"),
+		k(get, "/v1/inventory/receipts"): exempt("receipt quantities; the cost ledger takes purchase lines " +
+			"from Karafiel (RFC 0058 wave 2 decides a receipt read)"),
+		k(get, "/v1/inventory/receipts/:id"):               exempt("see GET /v1/inventory/receipts"),
+		k(get, "/v1/inventory/counts"):                     exempt("count records for people; the stock they adjust is mes_inventory_levels"),
+		k(get, "/v1/inventory/counts/:id"):                 exempt("see GET /v1/inventory/counts"),
+		k(post, "/v1/inventory/materials"):                 exempt("write: registers a material code; people only"),
+		k(patch, "/v1/inventory/materials/:id"):            exempt("write: edits a registry entry; people only"),
+		k(post, "/v1/inventory/materials/:id/aliases"):     exempt("write: changes how codes resolve; people only"),
+		k(post, "/v1/inventory/materials/:id/conversions"): exempt("write: adds a conversion and posts waiting stock; people only"),
+		k(post, "/v1/inventory/receipts"):                  exempt("write: a receipt raises stock; people only"),
+		k(post, "/v1/inventory/counts"):                    exempt("write: opens a physical count; people only"),
+		k(post, "/v1/inventory/counts/:id/lines"):          exempt("write: records a counted quantity; people only"),
+		k(post, "/v1/inventory/counts/:id/close"):          exempt("write: posts count adjustments; people only"),
 		// Fabrication dispatch and machine control.
 		k(post, "/v1/match"):                exempt("dispatch planning (a dry run), not a cost input"),
 		k(post, "/v1/dispatches"):           exempt("dispatch: ends in start_job on a printer (machine control, irreversible)"),

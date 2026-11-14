@@ -18,6 +18,9 @@ type Fact struct {
 	JobKind      string
 	JobID        uuid.UUID
 	MaterialCode string
+	// RegistryCode is the material registry code MaterialCode resolves to
+	// (RFC 0058 ruling I3; "" when unregistered).
+	RegistryCode string
 	// Quantity is the stored NUMERIC as text (never a float).
 	Quantity   string
 	Unit       string
@@ -158,7 +161,7 @@ func Build(line Line, prev *Event, opts Options) Built {
 		Schema: Schema, ID: b.EventID, Source: Source, Kind: KindConsumption, Status: StatusActive,
 		OccurredAt: occurred.UTC().Format(time.RFC3339), CostClass: opts.CostClass, Basis: eff.Basis,
 		Quantity: NormalizeQuantity(eff.Quantity), Unit: eff.Unit,
-		Item:     Item{MaterialCode: line.MaterialCode},
+		Item:     Item{MaterialCode: itemCode(line.MaterialCode, facts)},
 		Evidence: &Evidence{JobID: line.JobID.String()},
 	}
 	if slug != "" {
@@ -185,6 +188,21 @@ func Build(line Line, prev *Event, opts Options) Built {
 	b.Event = &ev
 	b.Problems = Validate(ev)
 	return b
+}
+
+// itemCode is the code sent as item.material_code: the material registry
+// code the line's code resolves to (Pravara owns the registry, RFC 0058
+// ruling I3), else the code as recorded. The event id stays keyed by the
+// recorded code, so a line rebuilt after its code was registered or
+// aliased (within the emitter's lookback) re-sends the same event with the
+// registry code, which Dhanam reports as updated.
+func itemCode(recorded string, facts []Fact) string {
+	for i := len(facts) - 1; i >= 0; i-- {
+		if facts[i].RegistryCode != "" {
+			return facts[i].RegistryCode
+		}
+	}
+	return recorded
 }
 
 // Body is the event's wire JSON and its SHA-256 (hex). The same event always

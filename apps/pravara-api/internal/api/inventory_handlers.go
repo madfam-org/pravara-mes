@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -27,6 +28,13 @@ type InventoryHandler struct {
 	publisher        *pubsub.Publisher
 	log              *logrus.Logger
 	forgeSightSecret string
+	materials        *repositories.MaterialRepository
+}
+
+// SetMaterialRepository lets item writes link a material registry entry
+// (material_id).
+func (h *InventoryHandler) SetMaterialRepository(m *repositories.MaterialRepository) {
+	h.materials = m
 }
 
 // NewInventoryHandler creates a new inventory handler.
@@ -63,6 +71,9 @@ type CreateInventoryItemRequest struct {
 	UnitCost        *float64       `json:"unit_cost"`
 	Currency        string         `json:"currency"`
 	Metadata        map[string]any `json:"metadata"`
+	// MaterialID links the item to a material registry entry (one item
+	// per material; docs/operations/inventory.md).
+	MaterialID *uuid.UUID `json:"material_id"`
 }
 
 // UpdateInventoryItemRequest represents the request body for updating an inventory item.
@@ -78,6 +89,9 @@ type UpdateInventoryItemRequest struct {
 	UnitCost        *float64       `json:"unit_cost"`
 	Currency        string         `json:"currency"`
 	Metadata        map[string]any `json:"metadata"`
+	// MaterialID links the item to a material registry entry; "" unlinks
+	// it; absent leaves it unchanged.
+	MaterialID *string `json:"material_id"`
 }
 
 // AdjustInventoryRequest represents the request body for adjusting inventory quantity.
@@ -230,8 +244,17 @@ func (h *InventoryHandler) CreateItem(c *gin.Context) {
 		Currency:        currency,
 		Metadata:        req.Metadata,
 	}
+	if req.MaterialID != nil {
+		if !h.materialExists(c, *req.MaterialID) {
+			return
+		}
+		item.MaterialID = req.MaterialID
+	}
 
-	if err := h.inventoryRepo.CreateItem(c.Request.Context(), item); err != nil {
+	if err := h.inventoryRepo.CreateItem(c.Request.Context(), item); errors.Is(err, repositories.ErrMaterialAlreadyStocked) {
+		c.JSON(http.StatusConflict, gin.H{"error": "material_already_stocked", "message": err.Error()})
+		return
+	} else if err != nil {
 		h.log.WithError(err).Error("Failed to create inventory item")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "internal_error",
@@ -315,8 +338,25 @@ func (h *InventoryHandler) UpdateItem(c *gin.Context) {
 	if req.Metadata != nil {
 		item.Metadata = req.Metadata
 	}
+	if req.MaterialID != nil {
+		item.MaterialID = nil
+		if *req.MaterialID != "" {
+			mid, err := uuid.Parse(*req.MaterialID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "validation_error", "message": "material_id is not a UUID"})
+				return
+			}
+			if !h.materialExists(c, mid) {
+				return
+			}
+			item.MaterialID = &mid
+		}
+	}
 
-	if err := h.inventoryRepo.UpdateItem(c.Request.Context(), item); err != nil {
+	if err := h.inventoryRepo.UpdateItem(c.Request.Context(), item); errors.Is(err, repositories.ErrMaterialAlreadyStocked) {
+		c.JSON(http.StatusConflict, gin.H{"error": "material_already_stocked", "message": err.Error()})
+		return
+	} else if err != nil {
 		h.log.WithError(err).Error("Failed to update inventory item")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "internal_error",

@@ -29,6 +29,114 @@ definitions:
       updated_at:
         type: string
     type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConsumptionCoverage:
+    properties:
+      from:
+        type: string
+      material_rows:
+        type: integer
+      to:
+        type: string
+      unresolved_codes:
+        items:
+          $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnresolvedCode'
+        type: array
+      with_registry_code:
+        type: integer
+      without_registry_code:
+        type: integer
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConversionGap:
+    properties:
+      created_at:
+        type: string
+      from_unit:
+        type: string
+      id:
+        type: string
+      inventory_item_id:
+        type: string
+      job_id:
+        type: string
+      job_kind:
+        type: string
+      material_code:
+        type: string
+      material_id:
+        type: string
+      quantity:
+        type: number
+      resolved_at:
+        type: string
+      sku:
+        type: string
+      source_id:
+        type: string
+      source_type:
+        type: string
+      status:
+        type: string
+      to_unit:
+        type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count:
+    properties:
+      closed_at:
+        type: string
+      closed_by:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      is_opening:
+        type: boolean
+      line_count:
+        type: integer
+      lines:
+        items:
+          $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine'
+        type: array
+      notes:
+        type: string
+      status:
+        type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine:
+    properties:
+      count_id:
+        type: string
+      counted_at:
+        type: string
+      counted_by:
+        type: string
+      counted_quantity:
+        type: number
+      counted_stock_quantity:
+        type: number
+      difference:
+        type: number
+      expected_quantity:
+        type: number
+      id:
+        type: string
+      inventory_item_id:
+        type: string
+      material_code:
+        type: string
+      material_id:
+        type: string
+      result:
+        type: string
+      transaction_id:
+        type: string
+      unit:
+        type: string
+      updated_at:
+        type: string
+    type: object
   github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.GenealogyTree:
     properties:
       bom_items:
@@ -80,6 +188,12 @@ definitions:
       quantity:
         type: number
       recorded_by:
+        type: string
+      registry_code:
+        description: |-
+          RegistryCode is the material registry code material_code resolves to
+          (the code itself, an alias, or a linked item's SKU), read at query
+          time; empty when the code is not registered (List only).
         type: string
       source:
         type: string
@@ -186,6 +300,51 @@ definitions:
       work_order_number:
         type: string
     type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material:
+    properties:
+      active:
+        type: boolean
+      base_unit:
+        type: string
+      category:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      inventory_item_id:
+        description: The stock item linked to the material (none until one is linked).
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      quantity_on_hand:
+        type: number
+      stock_sku:
+        type: string
+      stock_unit:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias:
+    properties:
+      alias:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      material_id:
+        type: string
+    type: object
   github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialConsumption:
     properties:
       batch_lot_id:
@@ -279,6 +438,89 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt:
+    properties:
+      batch_lot_id:
+        type: string
+      cfdi_line:
+        type: integer
+      cfdi_uuid:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      inventory_item_id:
+        type: string
+      invoice_status:
+        type: string
+      lot_number:
+        type: string
+      material_code:
+        type: string
+      material_id:
+        type: string
+      notes:
+        type: string
+      posted_at:
+        type: string
+      quantity:
+        type: number
+      received_at:
+        type: string
+      received_by:
+        type: string
+      status:
+        type: string
+      stock_quantity:
+        description: StockQuantity is Quantity in the stock item's unit, once posted.
+        type: number
+      transaction_id:
+        type: string
+      unit:
+        type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnitConversion:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      factor:
+        type: number
+      from_unit:
+        type: string
+      id:
+        type: string
+      material_id:
+        type: string
+      note:
+        type: string
+      to_unit:
+        type: string
+    type: object
+  github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnresolvedCode:
+    properties:
+      last_occurred_at:
+        type: string
+      material_code:
+        type: string
+      rows:
+        type: integer
+      units:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_api.AliasRequest:
+    properties:
+      alias:
+        type: string
+    required:
+    - alias
     type: object
   internal_api.AssignTaskRequest:
     properties:
@@ -385,6 +627,21 @@ definitions:
     - quantity
     - unit
     type: object
+  internal_api.ConversionRequest:
+    properties:
+      factor:
+        type: number
+      from_unit:
+        type: string
+      note:
+        type: string
+      to_unit:
+        type: string
+    required:
+    - factor
+    - from_unit
+    - to_unit
+    type: object
   internal_api.CotizaItemData:
     properties:
       cad_file_url:
@@ -444,6 +701,28 @@ definitions:
     required:
     - event
     - order
+    type: object
+  internal_api.CountLineRequest:
+    properties:
+      counted_at:
+        type: string
+      counted_quantity:
+        type: number
+      material_id:
+        type: string
+      unit:
+        type: string
+    required:
+    - counted_quantity
+    - material_id
+    - unit
+    type: object
+  internal_api.CountRequest:
+    properties:
+      is_opening:
+        type: boolean
+      notes:
+        type: string
     type: object
   internal_api.CreateBOMItemRequest:
     properties:
@@ -842,6 +1121,79 @@ definitions:
       total:
         type: integer
     type: object
+  internal_api.MaterialDetail:
+    properties:
+      active:
+        type: boolean
+      aliases:
+        items:
+          $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias'
+        type: array
+      base_unit:
+        type: string
+      category:
+        type: string
+      code:
+        type: string
+      conversions:
+        items:
+          $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.UnitConversion'
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      inventory_item_id:
+        description: The stock item linked to the material (none until one is linked).
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      quantity_on_hand:
+        type: number
+      stock_sku:
+        type: string
+      stock_unit:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  internal_api.MaterialPatchRequest:
+    properties:
+      active:
+        type: boolean
+      base_unit:
+        type: string
+      category:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+    type: object
+  internal_api.MaterialRequest:
+    properties:
+      active:
+        type: boolean
+      base_unit:
+        type: string
+      category:
+        type: string
+      code:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+    required:
+    - base_unit
+    - category
+    - code
+    - name
+    type: object
   internal_api.MoveTaskRequest:
     properties:
       position:
@@ -852,6 +1204,36 @@ definitions:
     required:
     - position
     - status
+    type: object
+  internal_api.ReceiptRequest:
+    properties:
+      batch_lot_id:
+        type: string
+      cfdi_line:
+        type: integer
+      cfdi_uuid:
+        type: string
+      idempotency_key:
+        type: string
+      invoice_status:
+        type: string
+      lot_number:
+        type: string
+      material_id:
+        type: string
+      notes:
+        type: string
+      quantity:
+        type: number
+      received_at:
+        type: string
+      unit:
+        type: string
+    required:
+    - invoice_status
+    - material_id
+    - quantity
+    - unit
     type: object
   internal_api.SealGenealogyRequest:
     properties:
@@ -2268,13 +2650,666 @@ paths:
       summary: Kubernetes readiness probe
       tags:
       - health
+  /inventory/conversion-gaps:
+    get:
+      description: A job consumption, receipt or count line in a unit with no conversion
+        to its stock item's unit is recorded but moves no stock ("needs conversion").
+        Adding the conversion (POST /v1/inventory/materials/{id}/conversions) posts
+        it and marks the gap resolved; a newer fact of the same job marks an older
+        gap superseded.
+      parameters:
+      - description: open (default), resolved, superseded or all
+        in: query
+        name: status
+        type: string
+      - default: 100
+        description: Page size (max 1000)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/internal_api.ListResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConversionGap'
+                  type: array
+              type: object
+        "400":
+          description: invalid_status, invalid_limit or invalid_offset
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Quantities waiting for a unit conversion
+      tags:
+      - inventory
+  /inventory/counts:
+    get:
+      description: Newest first, without lines (line_count says how many).
+      parameters:
+      - description: open or closed
+        in: query
+        name: status
+        type: string
+      - default: 100
+        description: Page size (max 1000)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/internal_api.ListResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count'
+                  type: array
+              type: object
+        "400":
+          description: invalid_status, invalid_limit or invalid_offset
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List physical counts
+      tags:
+      - inventory
+    post:
+      consumes:
+      - application/json
+      description: is_opening marks the tenant's one opening count (ruling I7; 409
+        opening_count_exists for a second).
+      parameters:
+      - description: Count
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/internal_api.CountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count'
+        "409":
+          description: opening_count_exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Open a physical count
+      tags:
+      - inventory
+  /inventory/counts/{id}:
+    get:
+      parameters:
+      - description: Count ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Count'
+        "404":
+          description: count_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a physical count with its lines
+      tags:
+      - inventory
+  /inventory/counts/{id}/close:
+    post:
+      description: 'For each line: result matched (no difference), adjusted (an ''adjustment''
+        movement of counted minus expected, reference_type inventory_count, reference_id
+        the line), needs_conversion (no conversion to the stock item''s unit: no movement,
+        a conversion gap is listed and posted once the conversion exists) or not_stocked
+        (the material has no stock item). Count differences are never folded into
+        a job. Idempotent: closing a closed count returns it with already_closed true
+        and moves nothing.'
+      parameters:
+      - description: Count ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{count, already_closed}'
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: count_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Close a physical count
+      tags:
+      - inventory
+  /inventory/counts/{id}/lines:
+    post:
+      consumes:
+      - application/json
+      description: 'One line per material: recording the same material again replaces
+        its quantity, unit and counted_at while the count is open. counted_at (default
+        now) is when the material was counted; closing compares with the stock on
+        hand at that moment.'
+      parameters:
+      - description: Count ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Counted material
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CountLineRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.CountLine'
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: count_not_found or material_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: count_closed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Record a counted material
+      tags:
+      - inventory
+  /inventory/materials:
+    get:
+      description: Registry entries ordered by code, each with its stock item (inventory_item_id,
+        stock_sku, stock_unit, quantity_on_hand) when it has one. Quantities only.
+      parameters:
+      - description: Only active (true) or inactive (false) entries
+        in: query
+        name: active
+        type: boolean
+      - description: filament, resin, sheet, spare_part, consumable, packaging or
+          other
+        in: query
+        name: category
+        type: string
+      - description: Code or name contains (case-insensitive)
+        in: query
+        name: search
+        type: string
+      - default: 100
+        description: Page size (max 1000)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/internal_api.ListResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material'
+                  type: array
+              type: object
+        "400":
+          description: invalid_active, invalid_category, invalid_limit or invalid_offset
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List the material code registry
+      tags:
+      - inventory
+    post:
+      consumes:
+      - application/json
+      description: Codes are 1-64 letters, digits, '.', '_' or '-' (starting with
+        a letter or digit), unique per tenant ignoring case, and never change. A code
+        equal to an alias or a linked item's SKU is refused. Link a stock item with
+        PATCH /v1/inventory/{id} (material_id).
+      parameters:
+      - description: Material
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.MaterialRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material'
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: material_code_taken
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Register a material code
+      tags:
+      - inventory
+  /inventory/materials/{id}:
+    get:
+      parameters:
+      - description: Material ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api.MaterialDetail'
+        "404":
+          description: material_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a registry entry with its aliases and conversions
+      tags:
+      - inventory
+    patch:
+      consumes:
+      - application/json
+      description: The code never changes. An inactive material takes no new receipts;
+        history keeps resolving to it.
+      parameters:
+      - description: Material ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.MaterialPatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Material'
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: material_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change a registry entry (name, category, base unit, active, notes)
+      tags:
+      - inventory
+  /inventory/materials/{id}/aliases:
+    post:
+      consumes:
+      - application/json
+      description: For a code consumption already uses (a print profile's material
+        type, a lot's product code). Consumption recorded from then on resolves to
+        the material; stock already relieved, or not, is not re-settled. The alias
+        must not already name a material (code, alias or linked SKU).
+      parameters:
+      - description: Material ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Alias (1-100 characters)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.AliasRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.MaterialAlias'
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: material_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: alias_taken
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Name a material by another code
+      tags:
+      - inventory
+  /inventory/materials/{id}/conversions:
+    post:
+      consumes:
+      - application/json
+      description: '1 from_unit = factor to_unit (for example 1 spool = 1000 g). kg↔g,
+        l↔ml, m↔mm and cm↔mm are built in (409 conversion_builtin). One factor per
+        unit pair in either direction (409 conversion_exists); conversions never change.
+        In the same transaction, every quantity of this material waiting for a conversion
+        (job consumption relief, receipts, count lines) is posted when the new conversion
+        makes it convertible: gaps_resolved and stock_movements say what moved.'
+      parameters:
+      - description: Material ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Conversion
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ConversionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: '{conversion, gaps_resolved, stock_movements}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: material_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: conversion_exists or conversion_builtin
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a unit conversion for a material
+      tags:
+      - inventory
+  /inventory/materials/unlinked:
+    get:
+      description: 'Stock items with no registry entry (with the reason the migration
+        left them: sku_is_not_a_valid_code, unit_is_not_a_valid_unit, sku_differs_from_another_only_in_case,
+        code_registered_for_another_material, not_linked), batch lots with no stock
+        item, and consumption material codes that resolve to no registry entry. Nothing
+        here is guessed: a person registers, links or aliases each one. At most 500
+        of each.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{items, lots, consumption_codes}'
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: What is not in the registry yet
+      tags:
+      - inventory
+  /inventory/receipts:
+    get:
+      description: Newest received first. from inclusive, to exclusive, on received_at.
+      parameters:
+      - description: Material (UUID)
+        in: query
+        name: material_id
+        type: string
+      - description: invoiced or no_invoice
+        in: query
+        name: invoice_status
+        type: string
+      - description: posted or needs_conversion
+        in: query
+        name: status
+        type: string
+      - description: received_at >= from (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: received_at < to (RFC3339)
+        in: query
+        name: to
+        type: string
+      - default: 100
+        description: Page size (max 1000)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/internal_api.ListResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt'
+                  type: array
+              type: object
+        "400":
+          description: invalid_material_id, invalid_invoice_status, invalid_status,
+            invalid_from, invalid_to, invalid_limit or invalid_offset
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List receipts
+      tags:
+      - inventory
+    post:
+      consumes:
+      - application/json
+      description: Records a registered, active material that has a stock item. received_at
+        defaults to now. The lot is batch_lot_id (linked to the material's stock item
+        when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number (found,
+        or created for this item). When the unit converts to the stock item's unit
+        (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material's conversion), a 'receipt'
+        movement (reference_type inventory_receipt) raises stock and status is posted;
+        otherwise status is needs_conversion, stock is untouched and a conversion
+        gap is listed. idempotency_key (1-100 characters) makes a retry return the
+        first receipt with 200 and replayed true.
+      parameters:
+      - description: Receipt
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.ReceiptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{receipt, stock_movement: null, replayed: true}'
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: '{receipt, stock_movement, replayed}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: validation_error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: material_not_found or batch_lot_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: material_inactive, material_not_stocked or lot_belongs_to_other_item
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Record a receipt
+      tags:
+      - inventory
+  /inventory/receipts/{id}:
+    get:
+      parameters:
+      - description: Receipt ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.Receipt'
+        "404":
+          description: receipt_not_found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a receipt
+      tags:
+      - inventory
   /jobs/consumption:
     get:
       description: 'Per-job consumption rows, quantities only (no cost): material
         (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate)
         and source (printer, operator or slicer). engagement_slug is the order''s
-        current engagement. Rows are ordered by occurred_at (the job''s completion);
-        from is inclusive and to exclusive.'
+        current engagement. registry_code is the material registry code material_code
+        resolves to (omitted when unregistered). Rows are ordered by occurred_at (the
+        job''s completion); from is inclusive and to exclusive.'
       parameters:
       - description: occurred_at >= from (RFC3339)
         in: query
@@ -2341,6 +3376,41 @@ paths:
       security:
       - BearerAuth: []
       summary: List job consumption
+      tags:
+      - jobs
+  /jobs/consumption/coverage:
+    get:
+      description: 'The RFC 0058 wave 1 gate is that every material consumption row
+        carries a material registry code. A row''s code resolves at read time: the
+        code itself, an alias, or a linked stock item''s SKU. Counts material rows
+        (occurred_at in [from, to) when given) with and without a registry code, and
+        lists the unresolved codes, most rows first (at most 200). Register, alias
+        or link each one; nothing is guessed.'
+      parameters:
+      - description: occurred_at >= from (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: occurred_at < to (RFC3339)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_madfam-org_pravara-mes_apps_pravara-api_internal_db_repositories.ConsumptionCoverage'
+        "400":
+          description: invalid_from or invalid_to
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: How many consumption rows carry a registry code
       tags:
       - jobs
   /machines:

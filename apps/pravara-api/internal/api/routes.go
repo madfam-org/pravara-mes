@@ -106,8 +106,12 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	wiHandler := NewWorkInstructionHandler(wiRepo, log)
 	spcHandler := NewSPCHandler(spcRepo, log)
 	inventoryHandler := NewInventoryHandler(inventoryRepo, log)
-	consumptionHandler := NewConsumptionHandler(consumptionRepo,
-		services.NewConsumptionService(tdb, consumptionRepo, genealogyRepo, log), log)
+	inventoryHandler.SetMaterialRepository(repositories.NewMaterialRepository(tdb))
+	consumptionService := services.NewConsumptionService(tdb, consumptionRepo, genealogyRepo, log)
+	consumptionHandler := NewConsumptionHandler(consumptionRepo, consumptionService, log)
+	// RFC 0058 wave 1: registry, conversions, receipts, counts
+	// (inventory_registry_handlers.go, inventory_receipt_handlers.go).
+	inventoryRecords := NewInventoryRecordsHandler(tdb, consumptionService, log)
 
 	// Initialize Yantra4D handler
 	var yantra4dHandler *Yantra4DHandler
@@ -389,6 +393,24 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			inventory.GET("", inventoryHandler.ListItems)
 			inventory.POST("", inventoryHandler.CreateItem)
 			inventory.GET("/low-stock", inventoryHandler.GetLowStock)
+			// Material code registry, conversions and what waits for one.
+			inventory.GET("/materials", inventoryRecords.ListMaterials)
+			inventory.POST("/materials", inventoryRecords.CreateMaterial)
+			inventory.GET("/materials/unlinked", inventoryRecords.Unlinked)
+			inventory.GET("/materials/:id", inventoryRecords.GetMaterial)
+			inventory.PATCH("/materials/:id", inventoryRecords.UpdateMaterial)
+			inventory.POST("/materials/:id/aliases", inventoryRecords.AddAlias)
+			inventory.POST("/materials/:id/conversions", inventoryRecords.AddConversion)
+			inventory.GET("/conversion-gaps", inventoryRecords.ListConversionGaps)
+			// Receipts and physical counts.
+			inventory.GET("/receipts", inventoryRecords.ListReceipts)
+			inventory.POST("/receipts", inventoryRecords.CreateReceipt)
+			inventory.GET("/receipts/:id", inventoryRecords.GetReceipt)
+			inventory.GET("/counts", inventoryRecords.ListCounts)
+			inventory.POST("/counts", inventoryRecords.CreateCount)
+			inventory.GET("/counts/:id", inventoryRecords.GetCount)
+			inventory.POST("/counts/:id/lines", inventoryRecords.RecordCountLine)
+			inventory.POST("/counts/:id/close", inventoryRecords.CloseCount)
 			inventory.GET("/:id", inventoryHandler.GetItemByID)
 			inventory.PATCH("/:id", inventoryHandler.UpdateItem)
 			inventory.POST("/:id/adjust", inventoryHandler.AdjustItem)
@@ -396,6 +418,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 
 		// Job consumption (quantities only): consumption_handlers.go
 		v1.GET("/jobs/consumption", consumptionHandler.List)
+		v1.GET("/jobs/consumption/coverage", consumptionHandler.Coverage)
 
 		// --- fabrication dispatch (MES-1 §5-§7): dispatch_handlers.go ---
 		registerDispatchRoutes(v1, database, cfg, log, publisher, deps.Dispatch)

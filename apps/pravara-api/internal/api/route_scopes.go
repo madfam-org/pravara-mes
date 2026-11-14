@@ -94,7 +94,8 @@ func MachineRouteScopes() mw.RouteScopes {
 		// sees engagement slugs over HTTP exactly as over MCP.
 		// POST /v1/tasks/:id/consumption is deliberately absent: it moves
 		// stock, so it is people-only like the inventory writes.
-		k(get, "/v1/jobs/consumption"): mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
+		k(get, "/v1/jobs/consumption"):          mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
+		k(get, "/v1/jobs/consumption/coverage"): mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
 
 		// Event history and feeds.
 		k(get, "/v1/events"):                        events,
@@ -114,6 +115,20 @@ func MachineRouteScopes() mw.RouteScopes {
 		// update, adjust) stay unlisted: people and wildcard API keys only.
 		k(get, "/v1/inventory"):     read,
 		k(get, "/v1/inventory/:id"): read,
+
+		// RFC 0058 wave 1 reads (quantities only). The registry's codes are
+		// what the cost ledger references (ruling I3), so it also accepts
+		// pravara-cogs:read. Every write (materials, aliases, conversions,
+		// receipts, counts) moves stock or changes what is stock: people and
+		// wildcard API keys only.
+		k(get, "/v1/inventory/materials"):          mw.Require(mw.ScopeRead, mw.ScopeCogsRead),
+		k(get, "/v1/inventory/materials/:id"):      mw.Require(mw.ScopeRead, mw.ScopeCogsRead),
+		k(get, "/v1/inventory/materials/unlinked"): read,
+		k(get, "/v1/inventory/conversion-gaps"):    read,
+		k(get, "/v1/inventory/receipts"):           read,
+		k(get, "/v1/inventory/receipts/:id"):       read,
+		k(get, "/v1/inventory/counts"):             read,
+		k(get, "/v1/inventory/counts/:id"):         read,
 	}
 }
 

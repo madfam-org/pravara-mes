@@ -77,6 +77,8 @@ func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, err
 		)
 		SELECT c.id, c.job_kind, c.job_id, c.material_code, c.quantity::text, c.unit, c.basis,
 		       c.occurred_at, c.created_at, COALESCE(o.engagement_slug, ''),
+		       COALESCE((SELECT m.code FROM material_registry m
+		                 WHERE m.id = material_resolve(c.material_code) AND m.tenant_id = `+tenant+`), ''),
 		       COALESCE(CASE c.job_kind WHEN 'dispatch' THEN d.status WHEN 'print_job' THEN p.status END, '')
 		FROM job_consumption c
 		JOIN recent r ON r.job_kind = c.job_kind AND r.job_id = c.job_id AND r.material_code = c.material_code
@@ -93,7 +95,7 @@ func (s *PGStore) RecentLines(ctx context.Context, since time.Time) ([]Line, err
 	for rows.Next() {
 		var f Fact
 		if err := rows.Scan(&f.ID, &f.JobKind, &f.JobID, &f.MaterialCode, &f.Quantity, &f.Unit, &f.Basis,
-			&f.OccurredAt, &f.CreatedAt, &f.EngagementSlug, &f.JobStatus); err != nil {
+			&f.OccurredAt, &f.CreatedAt, &f.EngagementSlug, &f.RegistryCode, &f.JobStatus); err != nil {
 			return nil, fmt.Errorf("scan consumption fact: %w", err)
 		}
 		n := len(out)
