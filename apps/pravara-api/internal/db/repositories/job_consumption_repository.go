@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,15 +60,19 @@ type JobConsumption struct {
 	MachineID      *uuid.UUID `json:"machine_id,omitempty"`
 	Kind           string     `json:"kind"`
 	MaterialCode   string     `json:"material_code,omitempty"`
-	MaterialLot    string     `json:"material_lot,omitempty"`
-	Quantity       float64    `json:"quantity"`
-	Unit           string     `json:"unit"`
-	Basis          string     `json:"basis"`
-	Source         string     `json:"source"`
-	Note           string     `json:"note,omitempty"`
-	RecordedBy     *uuid.UUID `json:"recorded_by,omitempty"`
-	OccurredAt     time.Time  `json:"occurred_at"`
-	CreatedAt      time.Time  `json:"created_at"`
+	// RegistryCode is the material registry code material_code resolves to
+	// (the code itself, an alias, or a linked item's SKU), read at query
+	// time; empty when the code is not registered (List only).
+	RegistryCode string     `json:"registry_code,omitempty"`
+	MaterialLot  string     `json:"material_lot,omitempty"`
+	Quantity     float64    `json:"quantity"`
+	Unit         string     `json:"unit"`
+	Basis        string     `json:"basis"`
+	Source       string     `json:"source"`
+	Note         string     `json:"note,omitempty"`
+	RecordedBy   *uuid.UUID `json:"recorded_by,omitempty"`
+	OccurredAt   time.Time  `json:"occurred_at"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // Validate checks c against the constraints of migration 033.
@@ -210,6 +215,99 @@ func (r *JobConsumptionRepository) MaterialFacts(ctx context.Context, jobKind st
 	return out, rows.Err()
 }
 
+// registryCodeOf is the SQL for the registry code a job_consumption row's
+// material_code resolves to (” when unregistered or machine time).
+func registryCodeOf(alias string) string {
+	return "COALESCE((SELECT m.code FROM material_registry m WHERE m.id = material_resolve(" + alias +
+		".material_code) AND " + tenantMatchOn("m") + "), '')"
+}
+
+// ItemFacts lists a job's material facts whose code names item (resolved
+// as StockRepository.ResolveStockItem resolves it), oldest first, in every
+// unit.
+func (r *JobConsumptionRepository) ItemFacts(ctx context.Context, jobKind string, jobID uuid.UUID, item *StockItem) ([]JobConsumption, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+jobConsumptionColumns+` FROM job_consumption c
+		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = 'material'
+		  AND (material_resolve(c.material_code) = $3::uuid
+		       OR ($3::uuid IS NULL AND material_resolve(c.material_code) IS NULL AND c.material_code = $4))
+		  AND `+tenantMatchOn("c")+`
+		ORDER BY c.created_at, c.id`, jobKind, jobID, item.MaterialID, item.SKU)
+	if err != nil {
+		return nil, fmt.Errorf("list item facts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []JobConsumption
+	for rows.Next() {
+		c, err := scanJobConsumption(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan item fact: %w", err)
+		}
+		out = append(out, *c)
+	}
+	return out, rows.Err()
+}
+
+// ConsumptionCoverage is how many material rows carry a registry code (the
+// RFC 0058 wave 1 gate: every consumption row carries one).
+type ConsumptionCoverage struct {
+	MaterialRows     int              `json:"material_rows"`
+	WithRegistryCode int              `json:"with_registry_code"`
+	WithoutCode      int              `json:"without_registry_code"`
+	Unresolved       []UnresolvedCode `json:"unresolved_codes"`
+	From             *time.Time       `json:"from,omitempty"`
+	To               *time.Time       `json:"to,omitempty"`
+}
+
+// UnresolvedCode is a consumption material code with no registry entry.
+type UnresolvedCode struct {
+	MaterialCode   string    `json:"material_code"`
+	Rows           int       `json:"rows"`
+	Units          []string  `json:"units"`
+	LastOccurredAt time.Time `json:"last_occurred_at"`
+}
+
+// Coverage counts the tenant's material rows (occurred_at in [from, to)
+// when given) with and without a registry code, and lists the unresolved
+// codes, most rows first (at most limit).
+func (r *JobConsumptionRepository) Coverage(ctx context.Context, from, to *time.Time, limit int) (*ConsumptionCoverage, error) {
+	out := &ConsumptionCoverage{From: from, To: to, Unresolved: []UnresolvedCode{}}
+	where := ` FROM job_consumption c WHERE c.kind = 'material' AND ($1::timestamptz IS NULL OR c.occurred_at >= $1)
+		AND ($2::timestamptz IS NULL OR c.occurred_at < $2) AND ` + tenantMatchOn("c")
+	err := r.db.QueryRowContext(ctx, `SELECT count(*), count(*) FILTER (WHERE material_resolve(c.material_code) IS NOT NULL)`+
+		where, from, to).Scan(&out.MaterialRows, &out.WithRegistryCode)
+	if err != nil {
+		return nil, fmt.Errorf("count consumption coverage: %w", err)
+	}
+	out.WithoutCode = out.MaterialRows - out.WithRegistryCode
+	rows, err := r.db.QueryContext(ctx, `SELECT c.material_code, count(*), array_agg(DISTINCT c.unit ORDER BY c.unit)::text, max(c.occurred_at)`+
+		where+` AND material_resolve(c.material_code) IS NULL
+		GROUP BY c.material_code ORDER BY count(*) DESC, c.material_code LIMIT $3`, from, to, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list unresolved consumption codes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var u UnresolvedCode
+		var units string
+		if err := rows.Scan(&u.MaterialCode, &u.Rows, &units, &u.LastOccurredAt); err != nil {
+			return nil, fmt.Errorf("scan unresolved code: %w", err)
+		}
+		u.Units = pgTextArray(units)
+		out.Unresolved = append(out.Unresolved, u)
+	}
+	return out, rows.Err()
+}
+
+// pgTextArray splits a PostgreSQL text[] literal of simple words ({g,mm}).
+func pgTextArray(s string) []string {
+	s = strings.TrimSuffix(strings.TrimPrefix(s, "{"), "}")
+	if s == "" {
+		return []string{}
+	}
+	return strings.Split(s, ",")
+}
+
 // JobConsumptionFilter selects rows for GET /v1/jobs/consumption.
 type JobConsumptionFilter struct {
 	From           *time.Time // occurred_at >= From
@@ -251,7 +349,7 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	if err := r.db.QueryRowContext(ctx, "SELECT count(*)"+from+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count job consumption: %w", err)
 	}
-	query := "SELECT " + jobConsumptionColumns + ", COALESCE(o.engagement_slug, '')" + from + where +
+	query := "SELECT " + jobConsumptionColumns + ", COALESCE(o.engagement_slug, ''), " + registryCodeOf("c") + from + where +
 		" ORDER BY c.occurred_at, c.id"
 	if f.Limit > 0 {
 		args = append(args, f.Limit)
@@ -268,81 +366,49 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	defer func() { _ = rows.Close() }()
 	out := []JobConsumption{}
 	for rows.Next() {
-		var slug string
-		c, err := scanJobConsumption(rows, &slug)
+		var slug, registry string
+		c, err := scanJobConsumption(rows, &slug, &registry)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan job consumption: %w", err)
 		}
-		c.EngagementSlug = slug
+		c.EngagementSlug, c.RegistryCode = slug, registry
 		out = append(out, *c)
 	}
 	return out, total, rows.Err()
 }
 
-// StockItem is the inventory item a material maps to.
-type StockItem struct {
-	ID   uuid.UUID
-	Name string
+// Relief is the net stock a job's movements took from one item under one
+// recorded material code (positive when stock left).
+type Relief struct {
+	ItemID       uuid.UUID
+	MaterialCode string
+	Quantity     float64
 }
 
-// LockStockItem returns the tenant's inventory item whose SKU is sku and
-// whose unit is unit, locked for update (nil when the material maps to no
-// item in that unit).
-func (r *JobConsumptionRepository) LockStockItem(ctx context.Context, sku, unit string) (*StockItem, error) {
-	var it StockItem
-	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name FROM inventory_items
-		WHERE sku = $1 AND unit = $2 AND `+tenantMatch+` FOR UPDATE`, sku, unit).Scan(&it.ID, &it.Name)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+// JobRelief is every item and code a job's job_consumption movements
+// touched, with the net relieved (zero sums included).
+func (r *JobConsumptionRepository) JobRelief(ctx context.Context, jobKind string, jobID uuid.UUID) ([]Relief, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT t.inventory_item_id, c.material_code, -SUM(t.quantity)
+		FROM inventory_transactions t
+		JOIN job_consumption c ON c.id = t.reference_id AND `+tenantMatchOn("c")+`
+		WHERE t.reference_type = '`+StockReferenceJobConsumption+`' AND c.job_kind = $1 AND c.job_id = $2
+		  AND `+tenantMatchOn("t")+`
+		GROUP BY t.inventory_item_id, c.material_code
+		ORDER BY t.inventory_item_id, c.material_code`, jobKind, jobID)
 	if err != nil {
-		return nil, fmt.Errorf("lock inventory item: %w", err)
+		return nil, fmt.Errorf("job relief: %w", err)
 	}
-	return &it, nil
-}
-
-// RelievedQuantity is the stock already relieved from itemID for one job
-// (positive when stock left), summed over its job_consumption movements.
-func (r *JobConsumptionRepository) RelievedQuantity(ctx context.Context, itemID uuid.UUID, jobKind string, jobID uuid.UUID) (float64, error) {
-	var q float64
-	err := r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(-SUM(t.quantity), 0) FROM inventory_transactions t
-		WHERE t.inventory_item_id = $1 AND t.reference_type = '`+StockReferenceJobConsumption+`'
-		  AND t.reference_id IN (SELECT c.id FROM job_consumption c
-		                         WHERE c.job_kind = $2 AND c.job_id = $3 AND `+tenantMatchOn("c")+`)
-		  AND `+tenantMatchOn("t"), itemID, jobKind, jobID).Scan(&q)
-	if err != nil {
-		return 0, fmt.Errorf("relieved quantity: %w", err)
+	defer func() { _ = rows.Close() }()
+	var out []Relief
+	for rows.Next() {
+		var rl Relief
+		if err := rows.Scan(&rl.ItemID, &rl.MaterialCode, &rl.Quantity); err != nil {
+			return nil, fmt.Errorf("scan job relief: %w", err)
+		}
+		out = append(out, rl)
 	}
-	return q, nil
-}
-
-// PostStockMovement changes the item's quantity on hand by quantity
-// (negative relieves stock) and records the movement with its running
-// balance, referencing the job_consumption row it settles. The caller holds
-// the item lock (LockStockItem) in the same transaction.
-func (r *JobConsumptionRepository) PostStockMovement(ctx context.Context, itemID, consumptionID uuid.UUID, txnType string, quantity float64, note string) (*InventoryTransaction, error) {
-	t := &InventoryTransaction{ID: uuid.New(), InventoryItemID: itemID, TransactionType: txnType, Quantity: Round4(quantity)}
-	err := r.db.QueryRowContext(ctx, `
-		UPDATE inventory_items SET quantity_on_hand = quantity_on_hand + $2, updated_at = NOW()
-		WHERE id = $1 AND `+tenantMatch+`
-		RETURNING tenant_id, quantity_on_hand`, itemID, t.Quantity).Scan(&t.TenantID, &t.RunningBalance)
-	if err != nil {
-		return nil, fmt.Errorf("relieve inventory item: %w", err)
-	}
-	ref := StockReferenceJobConsumption
-	t.ReferenceType, t.ReferenceID, t.Notes = &ref, &consumptionID, &note
-	err = r.db.QueryRowContext(ctx, `
-		INSERT INTO inventory_transactions (id, tenant_id, inventory_item_id, transaction_type, quantity,
-			running_balance, reference_type, reference_id, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING created_at`, t.ID, t.TenantID, itemID, txnType, t.Quantity, t.RunningBalance,
-		ref, consumptionID, note).Scan(&t.CreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("record inventory transaction: %w", err)
-	}
-	return t, nil
+	return out, rows.Err()
 }
 
 // BatchLotRef is the batch lot a material lot number names.

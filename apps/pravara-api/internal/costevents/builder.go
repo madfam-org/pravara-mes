@@ -18,6 +18,9 @@ type Fact struct {
 	JobKind      string
 	JobID        uuid.UUID
 	MaterialCode string
+	// RegistryCode is the material registry code MaterialCode resolves to
+	// (RFC 0058 ruling I3; "" when unregistered).
+	RegistryCode string
 	// Quantity is the stored NUMERIC as text (never a float).
 	Quantity   string
 	Unit       string
@@ -31,7 +34,11 @@ type Fact struct {
 	JobStatus string
 }
 
-// Line is every material fact of one job and material code: one cost event.
+// Line is every material fact of one job and material: one cost event.
+// MaterialCode is the line's key: the material registry code the facts'
+// codes resolve to, else the recorded code (RFC 0058). It is the event's
+// item.material_code and the basis of its id, so the ledger gets exactly
+// one event per job and material, the quantity stock relief settled.
 type Line struct {
 	JobKind      string
 	JobID        uuid.UUID

@@ -219,12 +219,36 @@ is not built.
     [#38](https://github.com/madfam-org/pravara-mes/issues/38) (Dependency
     graph) appears resolved: on 2026-10-02 the Dependency Review job ran on #45
     and passed with no high-severity findings.
-22. **Job consumption follow-ups.** *Owner decision, then engineering.*
+22. **Job consumption and inventory (RFC 0058).** *Owner steps, then engineering.*
     Pravara records per-job quantities and order engagement
-    ([docs/operations/job-consumption.md](docs/operations/job-consumption.md)).
-    Still open, each needing a ruling first:
-    - who owns the material-code registry (today: batch-lot product code,
-      else material class; print jobs use the profile's material type);
+    ([docs/operations/job-consumption.md](docs/operations/job-consumption.md))
+    and, since RFC 0058 wave 1, the inventory records behind them
+    ([docs/operations/inventory.md](docs/operations/inventory.md)).
+    - ~~who owns the material-code registry~~: Pravara (ruling I3). Wave 1
+      PR A builds it: registry, aliases, unit conversions (a quantity with no
+      conversion is a listed gap and moves no stock), receipts with invoice
+      evidence (I7), batch lots linked to stock, physical counts with their
+      own adjustments (I8), consumption coverage, and the registry code as
+      the cost event's `item.material_code`. Owner: apply migration 035
+      (apply notes in inventory.md), then resolve
+      `GET /v1/inventory/materials/unlinked` and
+      `GET /v1/jobs/consumption/coverage` to zero;
+    - wave 1 gate (owner): an opening count, then a second count whose
+      differences stay within an agreed tolerance (tolerance not ruled), and
+      every consumption row carrying a registry code;
+    - open for the owner: whether a second receipt of the same CFDI line is
+      refused (today allowed, for partial deliveries); whether a conversion
+      may ever be corrected (today immutable: fix stock with a count);
+      inventory reads over MCP for the cost ledger's wave 2;
+    - role on inventory writes (owner ruling 2026-11-14): receipts, counts
+      and registry writes need `admin` or `inventory_manager` (not issued by
+      Janua yet: only admins today). Still ungated, for the owner to rule:
+      `POST /v1/inventory`, `PATCH /v1/inventory/:id` (except linking a
+      material), `POST /v1/inventory/:id/adjust`;
+    - open for the owner: unlinking a stock item (or re-linking its
+      material) returns old jobs' relief to it when they are next settled,
+      so its stock rises although the material was consumed
+      (docs/operations/inventory.md «Known behaviour»);
     - ~~emitting consumption to the cost ledger (an event outbox)~~: built,
       switch off (item 24); Pravara stays quantities-only;
     - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is

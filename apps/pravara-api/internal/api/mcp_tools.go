@@ -59,6 +59,7 @@ type mcpConsumptionRow struct {
 	MachineID      *uuid.UUID `json:"machine_id,omitempty"`
 	Kind           string     `json:"kind"`
 	MaterialCode   string     `json:"material_code,omitempty"`
+	RegistryCode   string     `json:"registry_code,omitempty"`
 	MaterialLot    string     `json:"material_lot,omitempty"`
 	Quantity       float64    `json:"quantity"`
 	Unit           string     `json:"unit"`
@@ -82,7 +83,10 @@ type mcpInventoryLevel struct {
 	QuantityReserved  float64   `json:"quantity_reserved"`
 	QuantityAvailable float64   `json:"quantity_available"`
 	ReorderPoint      float64   `json:"reorder_point"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	// The material registry entry the item holds (RFC 0058), when linked.
+	MaterialID   *uuid.UUID `json:"material_id,omitempty"`
+	MaterialCode string     `json:"material_code,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // mcpPage is a tool's paginated result (the HTTP ListResponse shape).
@@ -125,8 +129,9 @@ func (t *mcpTools) tools() []mcp.Tool {
 			Name:  MCPToolInventoryLevels,
 			Title: mcpRFCNameInventoryLevels + " — inventory levels (quantities)",
 			Description: "Stock levels per inventory item: on hand, reserved, available and reorder point, in the item's " +
-				"unit. Quantities only: no unit cost or currency. material_code is the item SKU (the material_code " +
-				"of job consumption rows when the material is stocked). Same rows as GET /v1/inventory.",
+				"unit. Quantities only: no unit cost or currency. The material_code argument selects by item SKU; " +
+				"each row's material_code is the item's material registry code (the registry_code of job " +
+				"consumption rows). Same rows as GET /v1/inventory.",
 			InputSchema:  inventoryLevelsInputSchema(),
 			OutputSchema: pageSchema(inventoryLevelSchema()),
 			Call:         t.inventoryLevels,
@@ -170,7 +175,7 @@ func (t *mcpTools) jobConsumption(ctx context.Context, req mcp.Request) (any, er
 	for _, r := range rows {
 		row := mcpConsumptionRow{ID: r.ID, JobKind: r.JobKind, JobID: r.JobID, DispatchID: r.DispatchID,
 			PrintJobID: r.PrintJobID, TaskID: r.TaskID, OrderID: r.OrderID, MachineID: r.MachineID, Kind: r.Kind,
-			MaterialCode: r.MaterialCode, MaterialLot: r.MaterialLot, Quantity: r.Quantity, Unit: r.Unit,
+			MaterialCode: r.MaterialCode, RegistryCode: r.RegistryCode, MaterialLot: r.MaterialLot, Quantity: r.Quantity, Unit: r.Unit,
 			Basis: r.Basis, Source: r.Source, Note: r.Note, OccurredAt: r.OccurredAt, CreatedAt: r.CreatedAt}
 		if seesSlugs {
 			row.EngagementSlug = r.EngagementSlug
@@ -228,7 +233,8 @@ func (t *mcpTools) inventoryLevels(ctx context.Context, req mcp.Request) (any, e
 		}
 		out = append(out, mcpInventoryLevel{ID: it.ID, SKU: it.SKU, Name: it.Name, Category: it.Category, Unit: it.Unit,
 			QuantityOnHand: it.QuantityOnHand, QuantityReserved: it.QuantityReserved,
-			QuantityAvailable: it.QuantityAvailable, ReorderPoint: it.ReorderPoint, UpdatedAt: it.UpdatedAt})
+			QuantityAvailable: it.QuantityAvailable, ReorderPoint: it.ReorderPoint, MaterialID: it.MaterialID,
+			MaterialCode: it.MaterialCode, UpdatedAt: it.UpdatedAt})
 	}
 	if byCode {
 		total, limit, offset = len(out), len(out), 0
@@ -307,7 +313,8 @@ func jobConsumptionRowSchema() map[string]any {
 			"engagement_slug": str("The order's engagement", "pattern", types.EngagementSlugPattern),
 			"machine_id":      uuidRef("Machine"),
 			"kind":            map[string]any{"type": "string", "enum": []string{"material", "machine_time"}},
-			"material_code":   str("Inventory SKU when stocked, else the material class"),
+			"material_code":   str("The code recorded with the fact: a lot's product code, a print profile's material type, or what the operator sent"),
+			"registry_code":   str("The material registry code material_code resolves to (code, alias or linked SKU); absent when unregistered"),
 			"material_lot":    str("Material lot"),
 			"quantity":        map[string]any{"type": "number", "minimum": 0},
 			"unit":            map[string]any{"type": "string", "enum": []string{"g", "mm", "ml", "sheet", "min"}},
@@ -332,6 +339,8 @@ func inventoryLevelSchema() map[string]any {
 			"quantity_reserved":  num("Reserved"),
 			"quantity_available": num("On hand minus reserved"),
 			"reorder_point":      num("Reorder point"),
+			"material_id":        uuidRef("Material registry entry the item holds"),
+			"material_code":      str("Material registry code of the item (the registry_code of consumption rows)"),
 			"updated_at":         str("Last change", "format", "date-time"),
 		}}
 }

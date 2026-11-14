@@ -21,12 +21,17 @@ import (
 // Rules (docs/operations/job-consumption.md):
 //   - A fact is (job, kind, basis, source, material). Recording it again is
 //     a no-op, so replays never duplicate.
-//   - For each job and material, the effective quantity is the latest
-//     actual, else the latest estimate. Stock relieved for the job always
-//     equals the effective quantity: the first relief is a 'consumption'
+//   - A material code names a stock item through the registry (the code,
+//     an alias, or a linked item's SKU), else an unlinked item whose SKU is
+//     the code (docs/operations/inventory.md).
+//   - For each job and stock item, the effective quantity is the latest
+//     actual, else the latest estimate, across every code and unit naming
+//     that item. Stock relieved for the job always equals the effective
+//     quantity in the item's unit: the first relief is a 'consumption'
 //     movement, a later actual posts the difference as an 'adjustment'.
-//     Relief happens only when the material code is the SKU of an inventory
-//     item in the same unit.
+//   - A quantity whose unit has no conversion to the item's unit relieves
+//     nothing: it is recorded as a conversion gap and settled once a
+//     conversion exists (MaterialService.AddConversion).
 //   - When the material's lot is known and the job has an unsealed
 //     genealogy record, the material is written to that record once.
 //
@@ -34,6 +39,7 @@ import (
 type ConsumptionService struct {
 	q         repositories.DBTX
 	repo      *repositories.JobConsumptionRepository
+	stock     *repositories.StockRepository
 	genealogy *repositories.GenealogyRepository
 	log       *logrus.Logger
 }
@@ -41,7 +47,7 @@ type ConsumptionService struct {
 // NewConsumptionService creates the service. q is the tenant-scoped handle
 // the repositories use (savepoints run on it).
 func NewConsumptionService(q repositories.DBTX, repo *repositories.JobConsumptionRepository, genealogy *repositories.GenealogyRepository, log *logrus.Logger) *ConsumptionService {
-	return &ConsumptionService{q: q, repo: repo, genealogy: genealogy, log: log}
+	return &ConsumptionService{q: q, repo: repo, stock: repositories.NewStockRepository(q), genealogy: genealogy, log: log}
 }
 
 // Errors of the operator and print-job paths.
@@ -85,14 +91,12 @@ func (j JobRef) apply(c *repositories.JobConsumption) {
 	}
 }
 
-type materialKey struct{ code, unit string }
-
 // Record stores facts for job and settles stock and genealogy for every
 // material a new fact touches.
 func (s *ConsumptionService) Record(ctx context.Context, job JobRef, facts []repositories.JobConsumption) (*ConsumptionResult, error) {
 	res := &ConsumptionResult{}
-	var touched []materialKey
-	seen := map[materialKey]bool{}
+	var touched []string
+	seen := map[string]bool{}
 	for i := range facts {
 		c := facts[i]
 		job.apply(&c)
@@ -101,25 +105,73 @@ func (s *ConsumptionService) Record(ctx context.Context, job JobRef, facts []rep
 			return nil, err
 		}
 		res.Facts, res.Created = append(res.Facts, c), append(res.Created, created)
-		k := materialKey{c.MaterialCode, c.Unit}
-		if created && c.Kind == repositories.ConsumptionMaterial && !seen[k] {
-			seen[k] = true
-			touched = append(touched, k)
+		if created && c.Kind == repositories.ConsumptionMaterial && !seen[c.MaterialCode] {
+			seen[c.MaterialCode] = true
+			touched = append(touched, c.MaterialCode)
 		}
 	}
-	for _, k := range touched {
-		mv, err := s.settle(ctx, job, k)
+	if len(touched) > 0 {
+		ids, err := s.JobLockSet(ctx, job.Kind, job.ID, touched)
 		if err != nil {
 			return nil, err
 		}
-		if mv != nil {
-			res.Movements = append(res.Movements, *mv)
+		if err := s.stock.LockItems(ctx, ids); err != nil {
+			return nil, err
+		}
+	}
+	settled := map[uuid.UUID]bool{}
+	for _, code := range touched {
+		item, err := s.stock.ResolveStockItem(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		var moves []repositories.InventoryTransaction
+		switch {
+		case item == nil:
+			moves, err = s.withdrawRelief(ctx, job.Kind, job.ID, code)
+		case !settled[item.ID]:
+			settled[item.ID] = true
+			moves, err = s.settleItem(ctx, job.Kind, job.ID, item)
+		}
+		if err != nil {
+			return nil, err
+		}
+		res.Movements = append(res.Movements, moves...)
+		if err := s.linkGenealogy(ctx, job, code, item); err != nil {
+			return nil, err
 		}
 	}
 	return res, nil
 }
 
-// effective is the latest actual, else the latest estimate.
+// JobLockSet is every stock item settling a job may move: the items the
+// given codes name now, and every item the job's movements already touched
+// (relief that may have to move to where a code points now). The caller
+// locks them with StockRepository.LockItems before settling.
+func (s *ConsumptionService) JobLockSet(ctx context.Context, jobKind string, jobID uuid.UUID, codes []string) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	for _, code := range codes {
+		id, err := s.stock.ResolveStockItemID(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil {
+			ids = append(ids, *id)
+		}
+	}
+	relief, err := s.repo.JobRelief(ctx, jobKind, jobID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range relief {
+		ids = append(ids, r.ItemID)
+	}
+	return ids, nil
+}
+
+// effective is the latest actual, else the latest estimate. facts are
+// ordered by created_at: a correction (always an actual, always newer than
+// the row it supersedes) is therefore the effective row.
 func effective(facts []repositories.JobConsumption) *repositories.JobConsumption {
 	var actual, estimate *repositories.JobConsumption
 	for i := range facts {
@@ -136,14 +188,14 @@ func effective(facts []repositories.JobConsumption) *repositories.JobConsumption
 	return estimate
 }
 
-func (s *ConsumptionService) settle(ctx context.Context, job JobRef, k materialKey) (*repositories.InventoryTransaction, error) {
-	// Lock the item first: the facts and the relieved quantity read after
-	// the lock include whatever a concurrent settle for this job committed.
-	item, err := s.repo.LockStockItem(ctx, k.code, k.unit)
-	if err != nil {
-		return nil, err
-	}
-	facts, err := s.repo.MaterialFacts(ctx, job.Kind, job.ID, k.code, k.unit)
+// settleItem brings a job's stock relief for the codes that name item to
+// the job's effective quantity, in the item's unit, taken from item alone.
+// Relief those codes took from another item (the code named another item
+// when it was settled) is reversed there first, so a job is never relieved
+// twice. Without a conversion it records a gap and moves nothing on item.
+// The caller holds the locks (JobLockSet).
+func (s *ConsumptionService) settleItem(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) ([]repositories.InventoryTransaction, error) {
+	facts, err := s.repo.ItemFacts(ctx, jobKind, jobID, item)
 	if err != nil {
 		return nil, err
 	}
@@ -151,32 +203,120 @@ func (s *ConsumptionService) settle(ctx context.Context, job JobRef, k materialK
 	if eff == nil {
 		return nil, nil
 	}
-	var mv *repositories.InventoryTransaction
-	if item != nil {
-		relieved, err := s.repo.RelievedQuantity(ctx, item.ID, job.Kind, job.ID)
-		if err != nil {
-			return nil, err
-		}
-		if delta := repositories.Round4(eff.Quantity - relieved); delta != 0 {
-			typ := "adjustment"
-			if relieved == 0 && delta > 0 {
-				typ = "consumption"
-			}
-			note := fmt.Sprintf("%s %s: %s %s %s (%s, %s)", job.Kind, job.ID, k.code,
-				formatQuantity(eff.Quantity), k.unit, eff.Basis, eff.Source)
-			if mv, err = s.repo.PostStockMovement(ctx, item.ID, eff.ID, typ, -delta, note); err != nil {
-				return nil, err
-			}
-		}
+	codes := map[string]bool{}
+	for _, f := range facts {
+		codes[f.MaterialCode] = true
 	}
-	if err := s.linkGenealogy(ctx, job, facts, eff, item); err != nil {
+	moves, relieved, err := s.moveStrayRelief(ctx, jobKind, jobID, codes, &item.ID, eff)
+	if err != nil {
 		return nil, err
 	}
-	return mv, nil
+	factor, ok, err := stockFactor(ctx, s.stock, item, eff.Unit)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		job := jobID
+		return moves, s.stock.OpenGap(ctx, repositories.ConversionGap{InventoryItemID: item.ID, MaterialID: item.MaterialID,
+			SourceType: repositories.GapSourceJobConsumption, SourceID: eff.ID, JobKind: jobKind, JobID: &job,
+			Quantity: eff.Quantity, FromUnit: eff.Unit, ToUnit: item.Unit})
+	}
+	if err := s.stock.CloseJobGaps(ctx, item.ID, jobKind, jobID); err != nil {
+		return nil, err
+	}
+	target := repositories.Round4(eff.Quantity * factor)
+	delta := repositories.Round4(target - relieved)
+	if delta == 0 {
+		return moves, nil
+	}
+	typ := "adjustment"
+	if relieved == 0 && delta > 0 {
+		typ = "consumption"
+	}
+	note := fmt.Sprintf("%s %s: %s %s %s (%s, %s)", jobKind, jobID, eff.MaterialCode,
+		formatQuantity(eff.Quantity), eff.Unit, eff.Basis, eff.Source)
+	if factor != 1 {
+		note += fmt.Sprintf(" = %s %s", formatQuantity(target), item.Unit)
+	}
+	mv, err := s.stock.PostMovement(ctx, repositories.Movement{ItemID: item.ID, Type: typ, Quantity: -delta,
+		ReferenceType: repositories.StockReferenceJobConsumption, ReferenceID: eff.ID, Note: note})
+	if err != nil {
+		return nil, err
+	}
+	return append(moves, *mv), nil
 }
 
-func (s *ConsumptionService) linkGenealogy(ctx context.Context, job JobRef, facts []repositories.JobConsumption, eff *repositories.JobConsumption, item *repositories.StockItem) error {
+// moveStrayRelief reverses, on every item other than keep (nil: every
+// item), the relief the job took under codes, and returns what stays
+// relieved on keep. Reversals reference ref, a fact under one of the
+// codes, so the per-code sums net to zero.
+func (s *ConsumptionService) moveStrayRelief(ctx context.Context, jobKind string, jobID uuid.UUID, codes map[string]bool,
+	keep *uuid.UUID, ref *repositories.JobConsumption) ([]repositories.InventoryTransaction, float64, error) {
+	relief, err := s.repo.JobRelief(ctx, jobKind, jobID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var kept float64
+	stray := map[uuid.UUID]float64{}
+	var order []uuid.UUID
+	for _, r := range relief {
+		if !codes[r.MaterialCode] {
+			continue
+		}
+		if keep != nil && r.ItemID == *keep {
+			kept += r.Quantity
+			continue
+		}
+		if _, ok := stray[r.ItemID]; !ok {
+			order = append(order, r.ItemID)
+		}
+		stray[r.ItemID] += r.Quantity
+	}
+	var moves []repositories.InventoryTransaction
+	for _, itemID := range order {
+		q := repositories.Round4(stray[itemID])
+		if q == 0 {
+			continue
+		}
+		note := fmt.Sprintf("%s %s: %s now names another stock item; relief returned here", jobKind, jobID, ref.MaterialCode)
+		mv, err := s.stock.PostMovement(ctx, repositories.Movement{ItemID: itemID, Type: "adjustment", Quantity: q,
+			ReferenceType: repositories.StockReferenceJobConsumption, ReferenceID: ref.ID, Note: note})
+		if err != nil {
+			return nil, 0, err
+		}
+		moves = append(moves, *mv)
+	}
+	return moves, repositories.Round4(kept), nil
+}
+
+// withdrawRelief returns every item's relief a job took under code when
+// the code names no stock item any more (its material lost its item).
+func (s *ConsumptionService) withdrawRelief(ctx context.Context, jobKind string, jobID uuid.UUID, code string) ([]repositories.InventoryTransaction, error) {
+	facts, err := s.repo.MaterialFacts(ctx, jobKind, jobID, code, "")
+	if err != nil || len(facts) == 0 {
+		return nil, err
+	}
+	moves, _, err := s.moveStrayRelief(ctx, jobKind, jobID, map[string]bool{code: true}, nil, &facts[len(facts)-1])
+	return moves, err
+}
+
+// ResettleJob settles one job's stock relief for item again (a conversion
+// gap waiting for a conversion that now exists). The caller holds the
+// locks of the job's lock set (JobLockSet).
+func (s *ConsumptionService) ResettleJob(ctx context.Context, jobKind string, jobID uuid.UUID, item *repositories.StockItem) ([]repositories.InventoryTransaction, error) {
+	return s.settleItem(ctx, jobKind, jobID, item)
+}
+
+func (s *ConsumptionService) linkGenealogy(ctx context.Context, job JobRef, code string, item *repositories.StockItem) error {
 	if s.genealogy == nil {
+		return nil
+	}
+	facts, err := s.repo.MaterialFacts(ctx, job.Kind, job.ID, code, "")
+	if err != nil {
+		return err
+	}
+	eff := effective(facts)
+	if eff == nil {
 		return nil
 	}
 	lot := eff.MaterialLot
