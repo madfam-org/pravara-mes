@@ -36,6 +36,7 @@ engagement after a job completed still attributes that job.
 | `basis` | `actual` or `estimate` |
 | `source` | `printer`, `operator` or `slicer` |
 | `note` | how the quantity was derived |
+| `registry_code` (read only) | the material registry code `material_code` resolves to, at read time ([inventory.md](./inventory.md)) |
 | `occurred_at` | the job's completion (period cut-off) |
 
 A fact is keyed by job, kind, basis, source and material: recording the same
@@ -58,7 +59,8 @@ and never blocks the manufacturing record or the passport.
 
 ### Material code
 
-Until an owner names the registry for material codes, the code is:
+Pravara owns the material code registry (RFC 0058 ruling I3;
+[inventory.md](./inventory.md)). The code recorded with a fact is still:
 
 - dispatch: the `product_code` of the batch lot named by the machine's
   material lot (`batch_lots.lot_number`), else the material class;
@@ -66,16 +68,35 @@ Until an owner names the registry for material codes, the code is:
 - operator report: what the operator sends (use the code the dispatch
   recorded, shown by `GET /v1/jobs/consumption`, so the report settles it).
 
+Each recorded code resolves to a registry entry at read time: the code
+itself, an alias a person added, or the SKU of a linked stock item.
+`GET /v1/jobs/consumption/coverage` counts rows with and without a registry
+code and lists the unresolved codes (the wave 1 gate: none left).
+
 ## Stock and genealogy
 
-- **Stock relief.** When `material_code` is the SKU of an inventory item in the
-  same unit, the stock relieved for a job and material always equals its
-  effective quantity: the latest actual, else the latest estimate. The first
-  relief is a `consumption` movement; a later actual posts the difference as
-  an `adjustment` (for example estimate 5.2 g, then operator actual 6 g: −5.2,
-  then −0.8). Movements carry `reference_type = 'job_consumption'`, the
-  consumption row as `reference_id`, and the running balance. Recording the
-  same fact again relieves nothing.
+- **Stock relief.** A material code names a stock item when it resolves to a
+  registry entry with a linked item, or (not registered) is the SKU of an
+  unlinked item. The stock relieved for a job and item always equals the
+  job's effective quantity across every code and unit naming that item (the
+  latest actual, else the latest estimate), converted to the item's unit:
+  same unit, the built-in kg↔g, l↔ml, m↔mm, cm↔mm, or the material's own
+  conversion. The first relief is a `consumption` movement; a later actual
+  posts the difference as an `adjustment` (for example estimate 5.2 g, then
+  operator actual 6 g: −5.2, then −0.8). Movements carry
+  `reference_type = 'job_consumption'`, the consumption row as
+  `reference_id`, and the running balance. Recording the same fact again
+  relieves nothing.
+- **Re-pointed codes.** Relief is taken from the item a code names when the
+  job is settled. If the code named another item before (a material
+  re-linked, an item unlinked), that earlier relief is returned to the old
+  item in the same transaction, so a job is never relieved twice. Settling
+  locks every item involved in one ordered statement.
+- **No conversion, no guess.** When the effective quantity's unit has no
+  conversion to the item's unit (a print job's actual kept in mm for an item
+  stocked in g), nothing more is relieved: the job is listed in
+  `GET /v1/inventory/conversion-gaps` and settled in the same transaction as
+  the conversion that makes it convertible.
 - **Genealogy.** When the lot is known and the job has an unsealed genealogy
   record, the material is written to it once
   (`genealogy_material_consumption`, batch lot resolved by lot number).
@@ -112,5 +133,6 @@ default): [cost-events.md](./cost-events.md).
 - Response: `{data: [row], total, limit, offset}`; each row has `job_kind`,
   `job_id`, `dispatch_id`, `print_job_id`, `task_id`, `order_id`,
   `engagement_slug`, `machine_id`, `kind`, `material_code`, `material_lot`,
-  `quantity`, `unit`, `basis`, `source`, `note`, `occurred_at`, `created_at`.
+  `quantity`, `unit`, `basis`, `source`, `note`, `occurred_at`, `created_at`,
+  and `registry_code` (omitted when the code is unregistered).
   Machine minutes are the `machine_time` rows (`unit = min`).

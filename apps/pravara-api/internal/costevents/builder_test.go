@@ -141,3 +141,19 @@ func TestNormalizeQuantity(t *testing.T) {
 		assert.Equal(t, want, costevents.NormalizeQuantity(in), in)
 	}
 }
+
+// The line key (RFC 0058 ruling I3) is the registry code when the recorded
+// codes resolve to one: it is both item.material_code and the event id's
+// basis, and nothing outside Dhanam's contract is added.
+func TestBuildSendsTheLineKey(t *testing.T) {
+	f := fact("actual", "6", "g", completed)
+	f.MaterialCode = "pla" // a print profile's material type, aliased in the registry
+	f.RegistryCode = "FIL-PLA-BLK"
+	l := line(f) // keyed FIL-PLA-BLK by the store
+	b := costevents.Build(l, nil, opts)
+	require.Empty(t, b.Problems)
+	m := wire(t, b.Event)
+	assert.Equal(t, map[string]any{"material_code": "FIL-PLA-BLK"}, m["item"])
+	assert.Equal(t, costevents.EventID("dispatch", jobA, "FIL-PLA-BLK"), b.EventID)
+	assert.Empty(t, costevents.ValidateWire(m))
+}

@@ -45,7 +45,7 @@ func badRequest(c *gin.Context, code, msg string) {
 
 // List is GET /v1/jobs/consumption.
 // @Summary List job consumption
-// @Description Per-job consumption rows, quantities only (no cost): material (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate) and source (printer, operator or slicer). engagement_slug is the order's current engagement. Rows are ordered by occurred_at (the job's completion); from is inclusive and to exclusive.
+// @Description Per-job consumption rows, quantities only (no cost): material (g, mm, ml, sheet) and machine time (min), each with basis (actual or estimate) and source (printer, operator or slicer). engagement_slug is the order's current engagement. registry_code is the material registry code material_code resolves to (omitted when unregistered). Rows are ordered by occurred_at (the job's completion); from is inclusive and to exclusive.
 // @Tags jobs
 // @Produce json
 // @Param from query string false "occurred_at >= from (RFC3339)"
@@ -74,6 +74,44 @@ func (h *ConsumptionHandler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, ListResponse{Data: rows, Total: total, Limit: f.Limit, Offset: f.Offset})
+}
+
+// coverageMaxCodes caps the unresolved codes listed by Coverage.
+const coverageMaxCodes = 200
+
+// Coverage is GET /v1/jobs/consumption/coverage.
+// @Summary How many consumption rows carry a registry code
+// @Description The RFC 0058 wave 1 gate is that every material consumption row carries a material registry code. A row's code resolves at read time: the code itself, an alias, or a linked stock item's SKU. Counts material rows (occurred_at in [from, to) when given) with and without a registry code, and lists the unresolved codes, most rows first (at most 200). Register, alias or link each one; nothing is guessed.
+// @Tags jobs
+// @Produce json
+// @Param from query string false "occurred_at >= from (RFC3339)"
+// @Param to query string false "occurred_at < to (RFC3339)"
+// @Success 200 {object} repositories.ConsumptionCoverage
+// @Failure 400 {object} map[string]string "invalid_from or invalid_to"
+// @Security BearerAuth
+// @Router /jobs/consumption/coverage [get]
+func (h *ConsumptionHandler) Coverage(c *gin.Context) {
+	var from, to *time.Time
+	for _, p := range []struct {
+		name string
+		dst  **time.Time
+	}{{"from", &from}, {"to", &to}} {
+		if raw := c.Query(p.name); raw != "" {
+			t, err := time.Parse(time.RFC3339Nano, raw)
+			if err != nil {
+				badRequest(c, "invalid_"+p.name, p.name+" must be an RFC3339 timestamp")
+				return
+			}
+			*p.dst = &t
+		}
+	}
+	cov, err := h.repo.Coverage(c.Request.Context(), from, to, coverageMaxCodes)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to compute consumption coverage")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error", "message": "Failed to compute coverage"})
+		return
+	}
+	c.JSON(http.StatusOK, cov)
 }
 
 // jobConsumptionParams are the query parameters of GET /v1/jobs/consumption,

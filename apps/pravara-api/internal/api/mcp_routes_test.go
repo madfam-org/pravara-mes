@@ -185,7 +185,7 @@ func TestMCPToolsListIsTheReadOnlyCatalog(t *testing.T) {
 
 var consumptionCols = []string{"id", "tenant_id", "job_kind", "job_id", "dispatch_id", "print_job_id", "task_id",
 	"order_id", "machine_id", "kind", "material_code", "material_lot", "quantity", "unit", "basis", "source", "note",
-	"recorded_by", "occurred_at", "created_at", "engagement_slug"}
+	"recorded_by", "occurred_at", "created_at", "engagement_slug", "registry_code"}
 
 func (r *mcpRig) expectTenantTx() {
 	r.mock.ExpectBegin()
@@ -205,7 +205,7 @@ func TestMCPJobConsumptionRunsTheHTTPReadInTheTokensTenant(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	r.mock.ExpectQuery(`FROM job_consumption c LEFT JOIN orders o .* ORDER BY c.occurred_at, c.id LIMIT`).
 		WillReturnRows(sqlmock.NewRows(consumptionCols).AddRow(rowID, r.tenantID, "task", jobID, nil, nil, nil,
-			orderID, nil, "material", "FIL-PLA-BLK", "", 12.5, "g", "actual", "operator", "", reporter, occurred, occurred, "eng-alpha"))
+			orderID, nil, "material", "FIL-PLA-BLK", "", 12.5, "g", "actual", "operator", "", reporter, occurred, occurred, "eng-alpha", "FIL-PLA-BLK"))
 	r.mock.ExpectCommit()
 
 	reply := readReply(t, r.mcp(r.cogsToken(t), toolCall(1, MCPToolJobConsumption,
@@ -247,7 +247,7 @@ func TestMCPJobConsumptionArgumentErrorsTouchNoDatabase(t *testing.T) {
 
 var inventoryCols = []string{"id", "tenant_id", "sku", "name", "category", "description", "unit", "quantity_on_hand",
 	"quantity_reserved", "quantity_available", "reorder_point", "reorder_quantity", "forgesight_id", "unit_cost",
-	"currency", "metadata", "created_at", "updated_at"}
+	"currency", "metadata", "created_at", "updated_at", "material_id", "material_code"}
 
 func TestMCPInventoryLevelsAreQuantitiesOnly(t *testing.T) {
 	r := newMCPRig(t, true)
@@ -257,7 +257,7 @@ func TestMCPInventoryLevelsAreQuantitiesOnly(t *testing.T) {
 		"FIL-PLA-XL": uuid.MustParse("8e3a1d7f-4c6b-4f19-a0d3-5b7c9e1f3a64")}
 	item := func(sku string) []driver.Value {
 		return []driver.Value{ids[sku], r.tenantID, sku, "PLA black 1 kg", nil, "secret note", "g", 1000.0, 100.0, 900.0, 200.0,
-			500.0, "fs-1", 250.0, "MXN", []byte(`{"supplier":"someone"}`), now, now}
+			500.0, "fs-1", 250.0, "MXN", []byte(`{"supplier":"someone"}`), now, now, nil, nil}
 	}
 
 	// By material code: the HTTP search, then the exact SKU.

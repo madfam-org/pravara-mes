@@ -357,7 +357,11 @@ func TestJobConsumptionPrintJob(t *testing.T) {
 	var petgMoves int
 	require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM inventory_transactions t JOIN inventory_items i ON i.id = t.inventory_item_id
 		WHERE i.sku = 'PETG'`).Scan(&petgMoves))
-	assert.Equal(t, 1, petgMoves, "the gram estimate relieves the gram item; the mm actual cannot")
+	assert.Zero(t, petgMoves, "the mm actual is effective and has no conversion to g: nothing is relieved by guessing")
+	var gapUnit string
+	require.NoError(t, r.admin.QueryRow(`SELECT from_unit FROM inventory_conversion_gaps
+		WHERE job_id = $1 AND status = 'open'`, petg).Scan(&gapUnit))
+	assert.Equal(t, "mm", gapUnit, "the job waits for a conversion, listed as a gap")
 
 	_, err = record(printJob(withDensity, "printing"))
 	assert.ErrorIs(t, err, services.ErrConsumptionPrintJobOpen)

@@ -58,8 +58,8 @@ name (`mes.job_consumption`, `mes.inventory_levels`).
 
 | Tool | Arguments | Returns | Same read as |
 | --- | --- | --- | --- |
-| `mes_job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
-| `mes_inventory_levels` | `material_code?` (exact SKU), `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: SKU, name, category, unit, on hand, reserved, available, reorder point | `GET /v1/inventory` (same repository; `material_code` is the search narrowed to the exact SKU) |
+| `mes_job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source, the material's `registry_code` and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
+| `mes_inventory_levels` | `material_code?` (exact SKU), `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: SKU, name, category, unit, on hand, reserved, available, reorder point, and the linked material registry entry (`material_id`, `material_code`) | `GET /v1/inventory` (same repository; `material_code` is the search narrowed to the exact SKU) |
 
 What the tools leave out:
 - `mes_job_consumption` omits `recorded_by` (the id of the person who
@@ -93,6 +93,9 @@ families (`/v1/jobs`, `/v1/inventory`, `/v1/tasks/:id/consumption`,
 | `POST /v1/dispatches` | EXEMPTED: ends in `start_job` on a printer |
 | `POST /v1/machines/:id/command` | EXEMPTED: machine control |
 | `POST /v1/webhooks/forgesight` | EXEMPTED: inbound webhook |
+| `GET /v1/jobs/consumption/coverage` | EXEMPTED: a data-quality gate over the same rows (each row carries `registry_code`) |
+| `GET /v1/inventory/materials`, `…/materials/:id`, `…/materials/unlinked`, `…/conversion-gaps`, `…/receipts`, `…/receipts/:id`, `…/counts`, `…/counts/:id` | EXEMPTED: registry reference data and records for people (RFC 0058 wave 1); reasons in `MCPCoverage()` |
+| `POST`/`PATCH` registry, alias, conversion, receipt and count routes | EXEMPTED: writes, people only |
 
 The drift guard (`mcp_coverage_test.go`) fails CI when:
 - a route in those families is added without an entry;

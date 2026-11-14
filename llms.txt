@@ -21,6 +21,10 @@ physical jobs (orders, tasks, machines, telemetry, quality).
 - `docs/operations/job-consumption.md` — per-job consumption (material and
   machine minutes, actual or estimate; quantities only, no cost), stock
   relief, `orders.engagement_slug` and `GET /v1/jobs/consumption`.
+- `docs/operations/inventory.md` — RFC 0058 wave 1, quantities only: material
+  code registry, aliases, unit conversions, receipts with invoice evidence,
+  batch lots linked to stock, physical counts, conversion gaps (migration
+  035), and the HTTP contract the inventory screens consume.
 - `docs/operations/cost-events.md` — job consumption pushed to Dhanam as
   quantity-only `cost.event.v1` `consumption` events (off unless
   `PRAVARA_COST_EVENTS_ENABLED=true`, owner-run): durable outbox
