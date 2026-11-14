@@ -23,22 +23,23 @@ type OIDCConfig struct {
 	Issuer   string
 	JWKSURL  string
 	Audience string
-	// SessionAudiences are further audiences accepted for HUMAN session
-	// tokens only. Janua signs the access token of a first-party sign-in
-	// (email and password in the app) with its own audience, `janua.dev`,
-	// not with this API's. A token that matches only one of these must be a
-	// human access token: `type: "access"` and no machine marker. Machine
-	// (client_credentials) tokens are accepted on Audience alone. Empty by
-	// default, so nothing but Audience is accepted unless it is configured.
+	// SessionAudiences are further audiences accepted for a person's
+	// FIRST-PARTY session token only. Janua signs the access token of a
+	// sign-in in the app (email and password) with its own audience,
+	// `janua.dev`, not with this API's. Other products and any OAuth client
+	// without an audience of its own share it, so a token that matches only
+	// one of these must carry no `client_id` and no `scope` (see
+	// VerifyToken). Machine tokens and tokens issued to an OAuth client are
+	// accepted on Audience alone. Empty by default, so nothing but Audience
+	// is accepted unless it is configured.
 	SessionAudiences []string
 	// SessionRoleApp is this application's slug in Janua's application
-	// roles ("pravara-mes"). A session token is issued for every product of
-	// the ecosystem at once, so on its own it says nothing about this one:
-	// it is accepted only when it holds at least one "<app>:<role>" role,
-	// and those, with the prefix removed, become its roles here. Every
-	// other role it carries (another product's, or a bare name such as an
-	// organization-account "admin") is dropped. Required when
-	// SessionAudiences is set; with it empty no session token is accepted.
+	// roles ("pravara-mes"). Janua's `roles` claim mixes application roles
+	// of every product with organization-account roles ("admin", "owner"),
+	// so a person's token, on any audience, is accepted only when it holds
+	// at least one "<app>:<role>" role, and those, with the prefix removed,
+	// are its roles here. Everything else in the claim is dropped. With it
+	// empty no person's token is accepted.
 	SessionRoleApp string
 }
 
@@ -79,9 +80,12 @@ type Claims struct {
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
 
-	// Type is Janua's token kind on session tokens: "access" or "refresh".
-	// Tokens minted for this API's own audience do not carry it.
+	// Type is Janua's token kind: "access" or "refresh" on a person's token.
 	Type string `json:"type,omitempty"`
+
+	// IsServiceAccount marks a Janua service principal: a technical login
+	// with a person-shaped token (UUID subject, no machine marker).
+	IsServiceAccount bool `json:"is_service_account,omitempty"`
 
 	// Machine-token claims (Janua client_credentials grant). Human tokens
 	// carry none of them; see machine_claims.go.
@@ -103,6 +107,25 @@ func NewOIDCVerifier(config OIDCConfig, log *logrus.Logger) *OIDCVerifier {
 }
 
 // VerifyToken verifies a JWT token and returns the claims.
+//
+// Every token: RS256, signed by a key in the issuer's JWKS, carrying an
+// expiry that has not passed, the configured issuer and an accepted audience.
+//
+// A MACHINE token (client_credentials) must name Audience and is returned as
+// it is; its authority is its scope.
+//
+// Any other token is a PERSON's and is held to the same rules whichever
+// accepted audience it names and whether or not it names a key ID:
+//
+//   - `type` is "access" (a refresh token shares signature and audience);
+//   - it is not a Janua service principal (`is_service_account`);
+//   - it holds at least one "<SessionRoleApp>:<role>" application role, and
+//     those, with the prefix removed, are its only roles here.
+//
+// On a session audience, which other products and OAuth clients share, it
+// must also be a first-party session token: no `client_id` and no `scope`.
+// Every token Janua issues to an OAuth client carries both, so a token
+// obtained by some other application cannot be replayed here.
 func (v *OIDCVerifier) VerifyToken(ctx context.Context, tokenString string) (*Claims, error) {
 	// Parse the token
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
@@ -122,7 +145,7 @@ func (v *OIDCVerifier) VerifyToken(ctx context.Context, tokenString string) (*Cl
 
 		// Get the public key
 		return v.getPublicKey(ctx, kid)
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()}), jwt.WithExpirationRequired())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)
@@ -139,21 +162,28 @@ func (v *OIDCVerifier) VerifyToken(ctx context.Context, tokenString string) (*Cl
 	}
 
 	// Verify audience
-	if v.verifyAudience(claims.Audience) {
-		return claims, nil
-	}
-	if !v.verifySessionAudience(claims.Audience) {
+	primary := v.verifyAudience(claims.Audience)
+	if !primary && !v.verifySessionAudience(claims.Audience) {
 		return nil, fmt.Errorf("invalid audience")
 	}
 
-	// Accepted on a session audience only: it must be a human access token.
-	// A refresh token carries the same audience and signature, and a machine
-	// token must name this API as its audience.
 	if claims.IsMachineToken() {
-		return nil, fmt.Errorf("invalid audience: machine tokens must be issued for %s", v.config.Audience)
+		if !primary {
+			return nil, fmt.Errorf("invalid audience: machine tokens must be issued for %s", v.config.Audience)
+		}
+		return claims, nil
 	}
-	if claims.Type != SessionTokenTypeAccess {
-		return nil, fmt.Errorf("invalid token type for a session audience: %q", claims.Type)
+
+	// A person's token from here on.
+	if claims.Type != TokenTypeAccess {
+		return nil, fmt.Errorf("invalid token type: %q", claims.Type)
+	}
+	if claims.IsServiceAccount {
+		return nil, fmt.Errorf("service principals are not people: use a client_credentials token")
+	}
+	if !primary && (claims.ClientID != "" || len(claims.Scope) > 0) {
+		// Issued to an OAuth client that shares the session audience.
+		return nil, fmt.Errorf("invalid audience: tokens issued to an OAuth client must name %s", v.config.Audience)
 	}
 
 	// The roles this application granted, and nothing else.
@@ -186,11 +216,15 @@ func applicationRoles(roles []string, app string) []string {
 	return out
 }
 
-// SessionTokenTypeAccess is the `type` claim of a Janua session access token.
-const SessionTokenTypeAccess = "access"
+// TokenTypeAccess is the `type` claim of a Janua access token issued to a
+// person, by a sign-in or by an OAuth client.
+const TokenTypeAccess = "access"
 
 // verifyAudience checks if the token audience matches the expected audience.
 func (v *OIDCVerifier) verifyAudience(audiences []string) bool {
+	if v.config.Audience == "" {
+		return false
+	}
 	for _, aud := range audiences {
 		if aud == v.config.Audience {
 			return true
@@ -247,7 +281,7 @@ func (v *OIDCVerifier) signingKeySet(ctx context.Context) (interface{}, error) {
 	set := jwt.VerificationKeySet{}
 	for i := range jwks.Keys {
 		key := jwks.Keys[i]
-		if key.Kty != "RSA" || (key.Use != "" && key.Use != "sig") {
+		if !isSigningKey(key) {
 			continue
 		}
 		publicKey, err := key.ToPublicKey()
@@ -260,6 +294,18 @@ func (v *OIDCVerifier) signingKeySet(ctx context.Context) (interface{}, error) {
 		return nil, fmt.Errorf("no RSA signing key published")
 	}
 	return set, nil
+}
+
+// isSigningKey reports whether a published key may verify a signature: an
+// RSA key not published for another use or another algorithm.
+func isSigningKey(key JWK) bool {
+	if key.Kty != "RSA" {
+		return false
+	}
+	if key.Use != "" && key.Use != "sig" {
+		return false
+	}
+	return key.Alg == "" || key.Alg == jwt.SigningMethodRS256.Alg()
 }
 
 // getPublicKey retrieves the public key for the given key ID.
@@ -286,7 +332,7 @@ func (v *OIDCVerifier) getPublicKey(ctx context.Context, kid string) (interface{
 
 	// Find the key with matching kid
 	for _, key := range v.jwks.Keys {
-		if key.Kid == kid {
+		if key.Kid == kid && isSigningKey(key) {
 			return key.ToPublicKey()
 		}
 	}

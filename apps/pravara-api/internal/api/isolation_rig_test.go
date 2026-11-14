@@ -40,6 +40,7 @@ import (
 const (
 	rigIssuer   = "https://issuer.test"
 	rigAudience = "pravara-api"
+	rigRoleApp  = "pravara-mes"
 	rigKid      = "isolation-test"
 )
 
@@ -101,6 +102,7 @@ func newIsolationRig(t *testing.T) *isolationRig {
 	tdb := database.Tenant(log)
 	cfg := &config.Config{}
 	cfg.OIDC.Issuer, cfg.OIDC.JWKSURL, cfg.OIDC.Audience = rigIssuer, jwks.URL, rigAudience
+	cfg.OIDC.SessionRoleApp = rigRoleApp
 
 	router := gin.New()
 	api.RegisterRoutesAll(router, database, cfg, log, nil, nil, api.RoutesDeps{
@@ -128,7 +130,7 @@ func (r *isolationRig) newTenant(key *rsa.PrivateKey, label string) tenantFixtur
 
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"iss": rigIssuer, "aud": rigAudience, "sub": f.UserID.String(),
-		"tenant_id": f.ID.String(), "roles": []string{"admin"},
+		"tenant_id": f.ID.String(), "type": "access", "roles": []string{rigRoleApp + ":admin"},
 		"exp": time.Now().Add(time.Hour).Unix(),
 	})
 	tok.Header["kid"] = rigKid

@@ -44,7 +44,10 @@ import (
 const (
 	testIssuer   = "https://issuer.test"
 	testAudience = "pravara-api"
-	testKid      = "test-key-1"
+	// testRoleApp is the application slug of a person's roles in Janua
+	// ("<app>:<role>"); userToken prefixes the roles it is given with it.
+	testRoleApp = "pravara-mes"
+	testKid     = "test-key-1"
 )
 
 type scopeRig struct {
@@ -117,6 +120,7 @@ func newScopeRig(t *testing.T) *scopeRig {
 	cfg.OIDC.Issuer = testIssuer
 	cfg.OIDC.JWKSURL = jwks.URL
 	cfg.OIDC.Audience = testAudience
+	cfg.OIDC.SessionRoleApp = testRoleApp
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -163,7 +167,16 @@ func (r *scopeRig) machineToken(t *testing.T, scope string, mutate func(jwt.MapC
 func (r *scopeRig) userToken(t *testing.T, roles ...string) string {
 	c := r.baseClaims(uuid.NewString())
 	c["email"] = "person@example.test"
-	c["roles"] = roles
+	// A person's token as Janua issues it: type "access", and authority here
+	// only through this application's roles. Everyone here holds
+	// "operator" (no route gates on it); a bare organization-account role
+	// rides along to show that it grants nothing.
+	c["type"] = "access"
+	appRoles := []string{"member", testRoleApp + ":operator"}
+	for _, role := range roles {
+		appRoles = append(appRoles, testRoleApp+":"+role)
+	}
+	c["roles"] = appRoles
 	return r.sign(t, c, r.key)
 }
 

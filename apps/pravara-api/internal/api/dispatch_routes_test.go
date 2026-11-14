@@ -45,6 +45,7 @@ func TestDispatchDisabledAnswers503(t *testing.T) {
 	defer jwks.Close()
 	cfg := &config.Config{}
 	cfg.OIDC.Issuer, cfg.OIDC.JWKSURL, cfg.OIDC.Audience = testIssuer, jwks.URL, testAudience
+	cfg.OIDC.SessionRoleApp = testRoleApp
 	sqlDB, err := sql.Open("postgres", "postgres://unused@127.0.0.1:1/unused?sslmode=disable")
 	require.NoError(t, err)
 	defer func() { _ = sqlDB.Close() }()

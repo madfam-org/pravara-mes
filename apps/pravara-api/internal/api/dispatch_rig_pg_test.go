@@ -159,6 +159,7 @@ func newDispatchRig(t *testing.T) *dispatchRig {
 	t.Setenv("ASSET_SHELLS_PUBLISHER_MADFAM_ECOSYSTEM_CLIENT_SECRET", "jns_ash")
 	cfg := &config.Config{}
 	cfg.OIDC.Issuer, cfg.OIDC.JWKSURL, cfg.OIDC.Audience = testIssuer, jwks.URL, testAudience
+	cfg.OIDC.SessionRoleApp = testRoleApp
 	cfg.Dispatch = config.DispatchConfig{Enabled: true, RenderFormat: "3mf", ReservationTTLSeconds: 900,
 		CommandHoldSeconds: 3600, MaxAttempts: 5, PollIntervalSeconds: 1, PassportMaxAttempts: 5,
 		YantraAPIURL: r.yantra.Server.URL, FabricationPrepAPIURL: r.fabprep.Server.URL, AssetShellsAPIURL: r.shells.Server.URL}
