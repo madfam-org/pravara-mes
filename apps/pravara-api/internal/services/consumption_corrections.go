@@ -84,17 +84,27 @@ func (s *ConsumptionService) Correct(ctx context.Context, targetID uuid.UUID, in
 	if c.Kind != repositories.ConsumptionMaterial {
 		return res, nil
 	}
-	item, err := s.stock.ResolveStockItem(ctx, c.MaterialCode)
-	if err != nil || item == nil {
-		return res, err
-	}
-	mv, err := s.settleItem(ctx, c.JobKind, c.JobID, item)
+	ids, err := s.JobLockSet(ctx, c.JobKind, c.JobID, []string{c.MaterialCode})
 	if err != nil {
 		return nil, err
 	}
-	if mv != nil {
-		res.Movements = append(res.Movements, *mv)
+	if err := s.stock.LockItems(ctx, ids); err != nil {
+		return nil, err
 	}
+	item, err := s.stock.ResolveStockItem(ctx, c.MaterialCode)
+	if err != nil {
+		return nil, err
+	}
+	var moves []repositories.InventoryTransaction
+	if item == nil {
+		moves, err = s.withdrawRelief(ctx, c.JobKind, c.JobID, c.MaterialCode)
+	} else {
+		moves, err = s.settleItem(ctx, c.JobKind, c.JobID, item)
+	}
+	if err != nil {
+		return nil, err
+	}
+	res.Movements = append(res.Movements, moves...)
 	return res, nil
 }
 

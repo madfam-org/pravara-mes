@@ -17,7 +17,28 @@ var (
 	ErrCountNotFound = errors.New("count not found")
 	ErrCountClosed   = errors.New("count is closed")
 	ErrCountInvalid  = errors.New("invalid count line")
+	ErrNewerCount    = errors.New("a newer count of this material is already closed")
 )
+
+// NewerCountError lists the materials a newer closed count already set:
+// applying an older difference on top would count it twice.
+type NewerCountError struct {
+	Materials []NewerCountMaterial
+}
+
+// NewerCountMaterial is one material and the newer count that set it.
+type NewerCountMaterial struct {
+	MaterialID   uuid.UUID `json:"material_id"`
+	MaterialCode string    `json:"material_code"`
+	CountID      uuid.UUID `json:"newer_count_id"`
+}
+
+func (e *NewerCountError) Error() string {
+	return fmt.Sprintf("%s (%d materials): close or recount them in a new count", ErrNewerCount, len(e.Materials))
+}
+
+// Unwrap makes errors.Is(err, ErrNewerCount) hold.
+func (e *NewerCountError) Unwrap() error { return ErrNewerCount }
 
 // CountService runs physical counts. Closing a count compares each counted
 // material with the stock on hand when it was counted and posts the
@@ -143,6 +164,35 @@ func (s *CountService) Close(ctx context.Context, countID uuid.UUID, by *uuid.UU
 	if err != nil {
 		return nil, err
 	}
+	// A newer closed count already set these materials: refuse rather than
+	// fold an older difference in on top of it.
+	var newer NewerCountError
+	for _, l := range lines {
+		id, err := s.counts.NewerCount(ctx, l.MaterialID, l.CountedAt, countID)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil {
+			newer.Materials = append(newer.Materials, NewerCountMaterial{MaterialID: l.MaterialID, MaterialCode: l.MaterialCode, CountID: *id})
+		}
+	}
+	if len(newer.Materials) > 0 {
+		return nil, &newer
+	}
+	// Lock every stocked item of the count in one ordered statement.
+	var ids []uuid.UUID
+	for _, l := range lines {
+		id, err := s.materials.Get(ctx, l.MaterialID)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil && id.InventoryItemID != nil {
+			ids = append(ids, *id.InventoryItemID)
+		}
+	}
+	if err := s.stock.LockItems(ctx, ids); err != nil {
+		return nil, err
+	}
 	for i := range lines {
 		if err := s.applyLine(ctx, c, &lines[i]); err != nil {
 			return nil, err
@@ -184,6 +234,11 @@ func (s *CountService) applyLine(ctx context.Context, c *repositories.Count, l *
 	if err != nil {
 		return err
 	}
+	moved, movedQty, err := s.stock.MovementsSince(ctx, item.ID, l.CountedAt)
+	if err != nil {
+		return err
+	}
+	l.MovementsSinceCounted, l.QuantitySinceCounted = &moved, &movedQty
 	counted := repositories.Round4(l.CountedQuantity * factor)
 	expected = repositories.Round4(expected)
 	diff := repositories.Round4(counted - expected)
@@ -219,6 +274,19 @@ func (s *CountService) ResolveLine(ctx context.Context, lineID uuid.UUID) error 
 	c, err := s.counts.Get(ctx, l.CountID, false)
 	if err != nil || c == nil {
 		return err
+	}
+	newer, err := s.counts.NewerCount(ctx, l.MaterialID, l.CountedAt, l.CountID)
+	if err != nil {
+		return err
+	}
+	if newer != nil {
+		// A newer count set this material's stock while the line waited:
+		// applying it now would count that difference twice.
+		l.Result = repositories.CountLineSuperseded
+		if err := s.counts.SetLineResult(ctx, l); err != nil {
+			return err
+		}
+		return s.stock.SupersedeGap(ctx, repositories.GapSourceCountLine, l.ID)
 	}
 	return s.applyLine(ctx, c, l)
 }

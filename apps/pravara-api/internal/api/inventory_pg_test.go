@@ -61,7 +61,7 @@ func (r *dispatchRig) newStockedMaterial(t *testing.T, person, code, category, u
 
 func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 	r := newDispatchRig(t)
-	person := r.userToken(t, "operator")
+	person := r.userToken(t, "admin") // inventory writes need an inventory role
 
 	// 1. Registry: codes are unique ignoring case and never guessed.
 	plaID, plaItem := r.newStockedMaterial(t, person, "FIL-PLA-BLK", "filament", "g", 0)
@@ -83,7 +83,7 @@ func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 
 	// 2. Receipt with invoice evidence; kg → g is built in.
 	cfdi := uuid.NewString()
-	rc := r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"material_id": plaID, "quantity": 2,
+	rc := r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"idempotency_key": "synthetic-1", "material_id": plaID, "quantity": 2,
 		"unit": "kg", "invoice_status": "invoiced", "cfdi_uuid": cfdi, "cfdi_line": 3, "lot_number": "LOT-SYN-0001"}, http.StatusCreated)
 	receipt := rc["receipt"].(map[string]any)
 	assert.Equal(t, "posted", receipt["status"])
@@ -98,11 +98,11 @@ func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 
 	// Invoice evidence is mandatory and consistent (ruling I7).
 	for _, bad := range []map[string]any{
-		{"material_id": plaID, "quantity": 1, "unit": "g"},
-		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "invoiced", "cfdi_uuid": cfdi},
-		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "cfdi_uuid": cfdi, "cfdi_line": 1},
-		{"material_id": plaID, "quantity": 0, "unit": "g", "invoice_status": "no_invoice"},
-		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "unit_cost": 5},
+		{"material_id": plaID, "quantity": 1, "unit": "g", "idempotency_key": "bad-1"},
+		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "invoiced", "cfdi_uuid": cfdi, "idempotency_key": "bad-2"},
+		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "cfdi_uuid": cfdi, "cfdi_line": 1, "idempotency_key": "bad-3"},
+		{"material_id": plaID, "quantity": 0, "unit": "g", "invoice_status": "no_invoice", "idempotency_key": "bad-4"},
+		{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "unit_cost": 5, "idempotency_key": "money-1"},
 	} {
 		w := r.do(http.MethodPost, "/v1/inventory/receipts", person, bad)
 		if _, money := bad["unit_cost"]; money {
@@ -159,7 +159,8 @@ func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 	require.NoError(t, r.admin.QueryRow(`INSERT INTO batch_lots (tenant_id, lot_number, product_name, quantity, unit, inventory_item_id)
 		VALUES ($1, 'LOT-SYN-PETG', 'PETG', 1, 'g', $2) RETURNING id`, r.tenantID, petgItem).Scan(&otherLot))
 	assert.Equal(t, "lot_belongs_to_other_item", errCode(r.call(t, person, http.MethodPost, "/v1/inventory/receipts",
-		map[string]any{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "batch_lot_id": otherLot},
+		map[string]any{"material_id": plaID, "quantity": 1, "unit": "g", "invoice_status": "no_invoice", "batch_lot_id": otherLot,
+			"idempotency_key": "synthetic-lot"},
 		http.StatusConflict)))
 
 	// 6. Consumption: a registered code relieves stock; a unit with no
@@ -213,7 +214,7 @@ func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 	require.NoError(t, r.admin.QueryRow(`INSERT INTO material_registry (tenant_id, code, name, category, base_unit)
 		VALUES ($1, 'FIL-OTHER', 'other tenant', 'filament', 'g') RETURNING id`, other).Scan(&otherMaterial))
 	r.call(t, person, http.MethodGet, "/v1/inventory/materials/"+otherMaterial, nil, http.StatusNotFound)
-	r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"material_id": otherMaterial, "quantity": 1,
+	r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"idempotency_key": "synthetic-4", "material_id": otherMaterial, "quantity": 1,
 		"unit": "g", "invoice_status": "no_invoice"}, http.StatusNotFound)
 
 	// Receipts are append-only.
@@ -225,7 +226,7 @@ func TestInventoryRegistryReceiptsAndConversions(t *testing.T) {
 
 func TestInventoryCountCloseIsIdempotent(t *testing.T) {
 	r := newDispatchRig(t)
-	person := r.userToken(t, "operator")
+	person := r.userToken(t, "admin") // inventory writes need an inventory role
 	plaID, plaItem := r.newStockedMaterial(t, person, "FIL-PLA-WHT", "filament", "g", 1000)
 	resinID, resinItem := r.newStockedMaterial(t, person, "RES-STD-GRY", "resin", "ml", 500)
 	loose := r.call(t, person, http.MethodPost, "/v1/inventory/materials",
@@ -245,7 +246,7 @@ func TestInventoryCountCloseIsIdempotent(t *testing.T) {
 	r.call(t, person, http.MethodPost, lines, map[string]any{"material_id": plaID, "counted_quantity": -1, "unit": "g"}, http.StatusBadRequest)
 
 	// A movement after counted_at is not the count's business.
-	r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"material_id": plaID, "quantity": 50, "unit": "g",
+	r.call(t, person, http.MethodPost, "/v1/inventory/receipts", map[string]any{"idempotency_key": "synthetic-5", "material_id": plaID, "quantity": 50, "unit": "g",
 		"invoice_status": "no_invoice"}, http.StatusCreated)
 	assert.Equal(t, 1050.0, r.onHand(t, plaItem))
 

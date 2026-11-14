@@ -240,6 +240,11 @@ is not built.
       refused (today allowed, for partial deliveries); whether a conversion
       may ever be corrected (today immutable: fix stock with a count);
       inventory reads over MCP for the cost ledger's wave 2;
+    - role on inventory writes (owner ruling 2026-11-14): receipts, counts
+      and registry writes need `admin` or `inventory_manager` (not issued by
+      Janua yet: only admins today). Still ungated, for the owner to rule:
+      `POST /v1/inventory`, `PATCH /v1/inventory/:id` (except linking a
+      material), `POST /v1/inventory/:id/adjust`;
     - ~~emitting consumption to the cost ledger (an event outbox)~~: built,
       switch off (item 24); Pravara stays quantities-only;
     - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is

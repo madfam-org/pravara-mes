@@ -43,8 +43,10 @@ type Receipt struct {
 	TransactionID  *uuid.UUID `json:"transaction_id,omitempty"`
 	PostedAt       *time.Time `json:"posted_at,omitempty"`
 	Notes          string     `json:"notes,omitempty"`
-	IdempotencyKey string     `json:"idempotency_key,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	IdempotencyKey string     `json:"idempotency_key"`
+	// RequestSHA256 fingerprints the request the key was first used with.
+	RequestSHA256 string    `json:"-"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // ReceiptRepository stores receipts. Every statement runs in the tenant
@@ -58,7 +60,7 @@ func NewReceiptRepository(db DBTX) *ReceiptRepository { return &ReceiptRepositor
 
 const receiptColumns = `r.id, r.material_id, m.code, r.inventory_item_id, r.quantity, r.unit, r.received_at, r.received_by,
 	r.batch_lot_id, COALESCE(b.lot_number, ''), r.invoice_status, r.cfdi_uuid, r.cfdi_line, r.status, r.stock_quantity,
-	r.transaction_id, r.posted_at, COALESCE(r.notes, ''), COALESCE(r.idempotency_key, ''), r.created_at`
+	r.transaction_id, r.posted_at, COALESCE(r.notes, ''), r.idempotency_key, r.request_sha256, r.created_at`
 
 const receiptFrom = ` FROM inventory_receipts r JOIN material_registry m ON m.id = r.material_id
 	LEFT JOIN batch_lots b ON b.id = r.batch_lot_id`
@@ -71,7 +73,7 @@ func scanReceipt(row interface{ Scan(...any) error }) (*Receipt, error) {
 	var posted sql.NullTime
 	if err := row.Scan(&r.ID, &r.MaterialID, &r.MaterialCode, &r.InventoryItemID, &r.Quantity, &r.Unit, &r.ReceivedAt, &by,
 		&lot, &r.LotNumber, &r.InvoiceStatus, &cfdi, &line, &r.Status, &stockQty, &txn, &posted, &r.Notes,
-		&r.IdempotencyKey, &r.CreatedAt); err != nil {
+		&r.IdempotencyKey, &r.RequestSHA256, &r.CreatedAt); err != nil {
 		return nil, err
 	}
 	r.ReceivedBy, r.BatchLotID, r.CFDIUUID, r.TransactionID = ptrUUID(by), ptrUUID(lot), ptrUUID(cfdi), ptrUUID(txn)
@@ -96,13 +98,13 @@ func (r *ReceiptRepository) Insert(ctx context.Context, rc *Receipt) (bool, erro
 	rc.Quantity = Round4(rc.Quantity)
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO inventory_receipts (id, tenant_id, material_id, inventory_item_id, quantity, unit, received_at,
-			received_by, batch_lot_id, invoice_status, cfdi_uuid, cfdi_line, status, notes, idempotency_key)
+			received_by, batch_lot_id, invoice_status, cfdi_uuid, cfdi_line, status, notes, idempotency_key, request_sha256)
 		VALUES ($1, NULLIF(current_setting('app.current_tenant_id', true), '')::uuid, $2, $3, $4, $5, $6, $7, $8, $9,
-			$10, $11, 'needs_conversion', NULLIF($12, ''), NULLIF($13, ''))
-		ON CONFLICT (tenant_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+			$10, $11, 'needs_conversion', NULLIF($12, ''), $13, $14)
+		ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
 		RETURNING created_at`,
 		rc.ID, rc.MaterialID, rc.InventoryItemID, rc.Quantity, rc.Unit, rc.ReceivedAt, rc.ReceivedBy, rc.BatchLotID,
-		rc.InvoiceStatus, rc.CFDIUUID, rc.CFDILine, rc.Notes, rc.IdempotencyKey).Scan(&rc.CreatedAt)
+		rc.InvoiceStatus, rc.CFDIUUID, rc.CFDILine, rc.Notes, rc.IdempotencyKey, rc.RequestSHA256).Scan(&rc.CreatedAt)
 	if err == nil {
 		rc.Status = ReceiptNeedsConversion
 		return true, nil

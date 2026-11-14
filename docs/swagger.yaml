@@ -128,6 +128,11 @@ definitions:
         type: string
       material_id:
         type: string
+      movements_since_counted:
+        description: Movements recorded between counted_at and the close.
+        type: integer
+      quantity_since_counted:
+        type: number
       result:
         type: string
       transaction_id:
@@ -1214,6 +1219,11 @@ definitions:
         type: string
       code:
         type: string
+      inventory_item_id:
+        description: |-
+          InventoryItemID links this unlinked stock item to the new material in
+          the same transaction (required when the code is that item's SKU).
+        type: string
       name:
         type: string
       notes:
@@ -1271,6 +1281,7 @@ definitions:
       unit:
         type: string
     required:
+    - idempotency_key
     - invoice_status
     - material_id
     - quantity
@@ -2844,7 +2855,11 @@ paths:
         a conversion gap is listed and posted once the conversion exists) or not_stocked
         (the material has no stock item). Count differences are never folded into
         a job. Idempotent: closing a closed count returns it with already_closed true
-        and moves nothing.'
+        and moves nothing. An older count never closes over a newer one: when another
+        closed count has a line for the same material counted later, 409 newer_count_exists
+        lists the materials. Each applied line reports movements_since_counted and
+        quantity_since_counted (movements between counted_at and the close). Needs
+        the admin or inventory_manager role.'
       parameters:
       - description: Count ID (UUID)
         in: path
@@ -2864,6 +2879,11 @@ paths:
           schema:
             additionalProperties:
               type: string
+            type: object
+        "409":
+          description: newer_count_exists {error, message, materials}
+          schema:
+            additionalProperties: true
             type: object
       security:
       - BearerAuth: []
@@ -2976,10 +2996,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: Codes are 1-64 letters, digits, '.', '_' or '-' (starting with
-        a letter or digit), unique per tenant ignoring case, and never change. A code
-        equal to an alias or a linked item's SKU is refused. Link a stock item with
-        PATCH /v1/inventory/{id} (material_id).
+      description: 'Codes are 1-64 letters, digits, ''.'', ''_'' or ''-'' (starting
+        with a letter or digit), unique per tenant ignoring case, and never change.
+        A code equal to an alias or a linked item''s SKU is refused, and so is an
+        unlinked item''s SKU unless inventory_item_id is that item: then the code
+        is registered and the item linked in one transaction. Needs the admin or inventory_manager
+        role.'
       parameters:
       - description: Material
         in: body
@@ -3000,8 +3022,14 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "403":
+          description: forbidden (no inventory role) or human_only
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "409":
-          description: material_code_taken
+          description: material_code_taken, item_not_linkable or material_already_stocked
           schema:
             additionalProperties:
               type: string
@@ -3265,15 +3293,17 @@ paths:
     post:
       consumes:
       - application/json
-      description: Records a registered, active material that has a stock item. received_at
-        defaults to now. The lot is batch_lot_id (linked to the material's stock item
-        when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number (found,
-        or created for this item). When the unit converts to the stock item's unit
-        (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material's conversion), a 'receipt'
-        movement (reference_type inventory_receipt) raises stock and status is posted;
-        otherwise status is needs_conversion, stock is untouched and a conversion
-        gap is listed. idempotency_key (1-100 characters) makes a retry return the
-        first receipt with 200 and replayed true.
+      description: 'Records a registered, active material that has a stock item. received_at
+        defaults to now. The lot is batch_lot_id (linked to the material''s stock
+        item when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number
+        (found, or created for this item). When the unit converts to the stock item''s
+        unit (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material''s conversion),
+        a ''receipt'' movement (reference_type inventory_receipt) raises stock and
+        status is posted; otherwise status is needs_conversion, stock is untouched
+        and a conversion gap is listed. idempotency_key (1-100 characters) is required:
+        a retry with the same key and request returns the first receipt with 200 and
+        replayed true; the same key with another request is 409 idempotency_key_reused.
+        Needs a person with the admin or inventory_manager role (403 otherwise).'
       parameters:
       - description: Receipt
         in: body
@@ -3300,6 +3330,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "403":
+          description: forbidden (no inventory role) or human_only
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: material_not_found or batch_lot_not_found
           schema:
@@ -3307,7 +3343,8 @@ paths:
               type: string
             type: object
         "409":
-          description: material_inactive, material_not_stocked or lot_belongs_to_other_item
+          description: idempotency_key_reused, material_inactive, material_not_stocked
+            or lot_belongs_to_other_item
           schema:
             additionalProperties:
               type: string

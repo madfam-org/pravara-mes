@@ -150,20 +150,48 @@ func (r *MaterialRepository) Get(ctx context.Context, id uuid.UUID) (*Material, 
 	return m, nil
 }
 
-// CodeTaken reports whether s already names a material in the tenant: a
-// registry code (ignoring case), an alias, or a linked stock item's SKU
-// (exactly). A second spelling would make resolution ambiguous.
-func (r *MaterialRepository) CodeTaken(ctx context.Context, s string) (bool, error) {
-	var taken bool
+// CodeUse is what a spelling already names in the tenant.
+type CodeUse struct {
+	// Taken: a registry code (ignoring case), an alias, or a linked stock
+	// item's SKU (exactly). A second spelling would make resolution ambiguous.
+	Taken bool
+	// UnlinkedItemID is the unlinked stock item whose SKU is the spelling
+	// (exactly). Consumption under that SKU relieves that item today, so a
+	// code or alias with this spelling would re-point it to another item.
+	UnlinkedItemID *uuid.UUID
+}
+
+// CodeUse reports what s already names.
+func (r *MaterialRepository) CodeUse(ctx context.Context, s string) (CodeUse, error) {
+	var u CodeUse
+	var unlinked uuid.NullUUID
 	err := r.db.QueryRowContext(ctx, `
 		SELECT EXISTS (SELECT 1 FROM material_registry WHERE lower(code) = lower($1) AND `+tenantMatch+`)
 		    OR EXISTS (SELECT 1 FROM material_aliases WHERE alias = $1 AND `+tenantMatch+`)
-		    OR EXISTS (SELECT 1 FROM inventory_items WHERE sku = $1 AND material_id IS NOT NULL AND `+tenantMatch+`)`,
-		s).Scan(&taken)
+		    OR EXISTS (SELECT 1 FROM inventory_items WHERE sku = $1 AND material_id IS NOT NULL AND `+tenantMatch+`),
+		       (SELECT id FROM inventory_items WHERE sku = $1 AND material_id IS NULL AND `+tenantMatch+`)`,
+		s).Scan(&u.Taken, &unlinked)
 	if err != nil {
-		return false, fmt.Errorf("check material code: %w", err)
+		return u, fmt.Errorf("check material code: %w", err)
 	}
-	return taken, nil
+	u.UnlinkedItemID = ptrUUID(unlinked)
+	return u, nil
+}
+
+// LinkItem links an unlinked stock item to a material (one item per
+// material). found is false when the item is not in the tenant or already
+// linked.
+func (r *MaterialRepository) LinkItem(ctx context.Context, itemID, materialID uuid.UUID) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `UPDATE inventory_items SET material_id = $2, updated_at = NOW()
+		WHERE id = $1 AND material_id IS NULL AND `+tenantMatch, itemID, materialID)
+	if uniqueViolation(err) {
+		return false, ErrMaterialAlreadyStocked
+	}
+	if err != nil {
+		return false, fmt.Errorf("link stock item: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // MaterialFilter selects registry entries.

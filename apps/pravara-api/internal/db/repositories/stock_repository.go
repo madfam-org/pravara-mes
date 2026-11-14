@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // Reference types of inventory_transactions rows posted by the inventory
@@ -82,6 +83,52 @@ func (r *StockRepository) ResolveStockItem(ctx context.Context, code string) (*S
 		return nil, fmt.Errorf("resolve stock item: %w", err)
 	}
 	return it, nil
+}
+
+// ResolveStockItemID is ResolveStockItem without the lock, for collecting
+// the items an operation will lock (LockItems) before it touches any.
+func (r *StockRepository) ResolveStockItemID(ctx context.Context, code string) (*uuid.UUID, error) {
+	var id uuid.NullUUID
+	err := r.db.QueryRowContext(ctx, `
+		WITH m AS (SELECT material_resolve($1) AS id)
+		SELECT i.id FROM inventory_items i, m
+		WHERE ((m.id IS NOT NULL AND i.material_id = m.id)
+		    OR (m.id IS NULL AND i.material_id IS NULL AND i.sku = $1))
+		  AND `+tenantMatchOn("i"), code).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve stock item id: %w", err)
+	}
+	return ptrUUID(id), nil
+}
+
+// LockItems locks the given items for update in one statement, in id order.
+// Every operation that moves stock on more than one item locks its whole
+// set this way first, so two operations never wait on each other in
+// opposite orders.
+func (r *StockRepository) LockItems(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make([]string, 0, len(ids))
+	seen := map[uuid.UUID]bool{}
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			set = append(set, id.String())
+		}
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM inventory_items WHERE id = ANY($1::uuid[]) AND `+tenantMatch+`
+		ORDER BY id FOR UPDATE`, pq.Array(set))
+	if err != nil {
+		return fmt.Errorf("lock inventory items: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+	}
+	return rows.Err()
 }
 
 // LockItem returns the item, locked for update (nil when not in the tenant).
@@ -179,6 +226,31 @@ func (r *StockRepository) BalanceAt(ctx context.Context, itemID uuid.UUID, at ti
 		return 0, fmt.Errorf("balance at: %w", err)
 	}
 	return q, nil
+}
+
+// MovementsSince counts the item's movements recorded after at and their
+// net quantity.
+func (r *StockRepository) MovementsSince(ctx context.Context, itemID uuid.UUID, at time.Time) (int, float64, error) {
+	var n int
+	var q float64
+	err := r.db.QueryRowContext(ctx, `SELECT count(*), COALESCE(SUM(quantity), 0) FROM inventory_transactions
+		WHERE inventory_item_id = $1 AND created_at > $2 AND `+tenantMatch, itemID, at).Scan(&n, &q)
+	if err != nil {
+		return 0, 0, fmt.Errorf("movements since: %w", err)
+	}
+	return n, Round4(q), nil
+}
+
+// SupersedeGap marks one open gap superseded: what waited will never be
+// posted (a newer count already set the stock).
+func (r *StockRepository) SupersedeGap(ctx context.Context, sourceType string, sourceID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE inventory_conversion_gaps SET status = 'superseded', resolved_at = NOW()
+		WHERE status = 'open' AND source_type = $1 AND source_id = $2 AND `+tenantMatch, sourceType, sourceID)
+	if err != nil {
+		return fmt.Errorf("supersede conversion gap: %w", err)
+	}
+	return nil
 }
 
 // ConversionGap is a quantity recorded in a unit that has no conversion to

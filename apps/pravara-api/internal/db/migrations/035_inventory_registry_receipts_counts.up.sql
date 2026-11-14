@@ -114,8 +114,11 @@ CREATE TABLE material_unit_conversions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (from_unit <> to_unit)
 );
+-- One factor per unit pair in either direction (a stored pair and its
+-- inverse could disagree), enforced here so two racing requests cannot both
+-- pass the application check.
 CREATE UNIQUE INDEX ux_material_unit_conversions ON material_unit_conversions
-    (tenant_id, material_id, from_unit, to_unit);
+    (tenant_id, material_id, LEAST(from_unit, to_unit), GREATEST(from_unit, to_unit));
 
 -- Resolves a consumption material code to its registry entry: the code
 -- itself, else an alias, else the SKU of a stock item linked to the
@@ -159,7 +162,11 @@ CREATE TABLE inventory_receipts (
     transaction_id UUID REFERENCES inventory_transactions(id) ON DELETE SET NULL,
     posted_at TIMESTAMPTZ,
     notes TEXT,
-    idempotency_key TEXT CHECK (length(idempotency_key) BETWEEN 1 AND 100),
+    -- Every receipt is submitted with a key; a retry with the same key and
+    -- the same request (request_sha256) returns the first receipt, the same
+    -- key with another request is refused.
+    idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 100),
+    request_sha256 CHAR(64) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK ((invoice_status = 'invoiced') = (cfdi_uuid IS NOT NULL AND cfdi_line IS NOT NULL)),
     CHECK (invoice_status = 'invoiced' OR (cfdi_uuid IS NULL AND cfdi_line IS NULL)),
@@ -169,8 +176,7 @@ CREATE INDEX idx_inventory_receipts_tenant_received ON inventory_receipts (tenan
 CREATE INDEX idx_inventory_receipts_material ON inventory_receipts (material_id);
 CREATE INDEX idx_inventory_receipts_cfdi ON inventory_receipts (tenant_id, cfdi_uuid, cfdi_line)
     WHERE cfdi_uuid IS NOT NULL;
-CREATE UNIQUE INDEX ux_inventory_receipts_idempotency ON inventory_receipts (tenant_id, idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX ux_inventory_receipts_idempotency ON inventory_receipts (tenant_id, idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_inventory_txn_receipt ON inventory_transactions (reference_id)
     WHERE reference_type = 'inventory_receipt';
 
@@ -192,6 +198,7 @@ BEGIN
        OR NEW.cfdi_line IS DISTINCT FROM OLD.cfdi_line
        OR NEW.notes IS DISTINCT FROM OLD.notes
        OR NEW.idempotency_key IS DISTINCT FROM OLD.idempotency_key
+       OR NEW.request_sha256 IS DISTINCT FROM OLD.request_sha256
        OR NEW.created_at IS DISTINCT FROM OLD.created_at
        OR (NEW.batch_lot_id IS NOT NULL AND NEW.batch_lot_id IS DISTINCT FROM OLD.batch_lot_id)
        OR (OLD.status = 'posted' AND (NEW.status IS DISTINCT FROM OLD.status
@@ -235,12 +242,18 @@ CREATE TABLE inventory_count_lines (
     counted_at TIMESTAMPTZ NOT NULL,
     counted_by UUID,
     -- Set when the count closes.
-    result VARCHAR(20) CHECK (result IN ('matched', 'adjusted', 'needs_conversion', 'not_stocked')),
+    -- superseded: a newer count of the material closed before this line
+    -- could be applied (its conversion arrived later); it moved nothing.
+    result VARCHAR(20) CHECK (result IN ('matched', 'adjusted', 'needs_conversion', 'not_stocked', 'superseded')),
     inventory_item_id UUID REFERENCES inventory_items(id) ON DELETE SET NULL,
     expected_quantity NUMERIC(15,4),
     counted_stock_quantity NUMERIC(15,4),
     difference NUMERIC(15,4),
     transaction_id UUID REFERENCES inventory_transactions(id) ON DELETE SET NULL,
+    -- Stock movements recorded between counted_at and the close (a receipt
+    -- that may already be on the shelf the count saw).
+    movements_since_counted INTEGER,
+    quantity_since_counted NUMERIC(15,4),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (count_id, material_id)

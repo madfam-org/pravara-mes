@@ -66,6 +66,7 @@ var inventoryErrors = []struct {
 	{services.ErrCountInvalid, http.StatusBadRequest, "validation_error"},
 	{services.ErrMaterialNotFound, http.StatusNotFound, "material_not_found"},
 	{services.ErrItemNotFound, http.StatusNotFound, "not_found"},
+	{services.ErrItemNotLinkable, http.StatusConflict, "item_not_linkable"},
 	{services.ErrLotNotFound, http.StatusNotFound, "batch_lot_not_found"},
 	{services.ErrCountNotFound, http.StatusNotFound, "count_not_found"},
 	{repositories.ErrMaterialCodeTaken, http.StatusConflict, "material_code_taken"},
@@ -77,6 +78,7 @@ var inventoryErrors = []struct {
 	{services.ErrMaterialInactive, http.StatusConflict, "material_inactive"},
 	{services.ErrMaterialNotStocked, http.StatusConflict, "material_not_stocked"},
 	{services.ErrLotOtherItem, http.StatusConflict, "lot_belongs_to_other_item"},
+	{services.ErrIdempotencyReused, http.StatusConflict, "idempotency_key_reused"},
 	{services.ErrCountClosed, http.StatusConflict, "count_closed"},
 }
 
@@ -140,6 +142,9 @@ type MaterialRequest struct {
 	BaseUnit string `json:"base_unit" binding:"required"`
 	Active   *bool  `json:"active"`
 	Notes    string `json:"notes"`
+	// InventoryItemID links this unlinked stock item to the new material in
+	// the same transaction (required when the code is that item's SKU).
+	InventoryItemID *uuid.UUID `json:"inventory_item_id"`
 }
 
 // MaterialPatchRequest changes a registry entry; the code never changes.
@@ -200,14 +205,15 @@ func (h *InventoryRecordsHandler) ListMaterials(c *gin.Context) {
 
 // CreateMaterial is POST /v1/inventory/materials.
 // @Summary Register a material code
-// @Description Codes are 1-64 letters, digits, '.', '_' or '-' (starting with a letter or digit), unique per tenant ignoring case, and never change. A code equal to an alias or a linked item's SKU is refused. Link a stock item with PATCH /v1/inventory/{id} (material_id).
+// @Description Codes are 1-64 letters, digits, '.', '_' or '-' (starting with a letter or digit), unique per tenant ignoring case, and never change. A code equal to an alias or a linked item's SKU is refused, and so is an unlinked item's SKU unless inventory_item_id is that item: then the code is registered and the item linked in one transaction. Needs the admin or inventory_manager role.
 // @Tags inventory
 // @Accept json
 // @Produce json
 // @Param body body MaterialRequest true "Material"
 // @Success 201 {object} repositories.Material
 // @Failure 400 {object} map[string]string "validation_error"
-// @Failure 409 {object} map[string]string "material_code_taken"
+// @Failure 403 {object} map[string]string "forbidden (no inventory role) or human_only"
+// @Failure 409 {object} map[string]string "material_code_taken, item_not_linkable or material_already_stocked"
 // @Security BearerAuth
 // @Router /inventory/materials [post]
 func (h *InventoryRecordsHandler) CreateMaterial(c *gin.Context) {
@@ -218,7 +224,7 @@ func (h *InventoryRecordsHandler) CreateMaterial(c *gin.Context) {
 	}
 	m := &repositories.Material{Code: req.Code, Name: req.Name, Category: req.Category, BaseUnit: req.BaseUnit,
 		Active: req.Active == nil || *req.Active, Notes: req.Notes, CreatedBy: actor(c)}
-	if err := h.materialSvc.Create(c.Request.Context(), m); err != nil {
+	if err := h.materialSvc.Create(c.Request.Context(), m, req.InventoryItemID); err != nil {
 		h.fail(c, err, "register material")
 		return
 	}
@@ -448,4 +454,12 @@ func (h *InventoryHandler) materialExists(c *gin.Context, id uuid.UUID) bool {
 		return false
 	}
 	return true
+}
+
+// forbidLink answers 403 for a link or unlink of a stock item to a material
+// by a caller without an inventory role (the rest of the item write stays
+// open, as before).
+func forbidLink(c *gin.Context) {
+	c.JSON(http.StatusForbidden, gin.H{"error": "forbidden",
+		"message": "Insufficient permissions: linking a stock item to a material needs the admin or inventory_manager role"})
 }

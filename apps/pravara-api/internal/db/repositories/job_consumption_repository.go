@@ -410,20 +410,38 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	return out, total, rows.Err()
 }
 
-// RelievedQuantity is the stock already relieved from itemID for one job
-// (positive when stock left), summed over its job_consumption movements.
-func (r *JobConsumptionRepository) RelievedQuantity(ctx context.Context, itemID uuid.UUID, jobKind string, jobID uuid.UUID) (float64, error) {
-	var q float64
-	err := r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(-SUM(t.quantity), 0) FROM inventory_transactions t
-		WHERE t.inventory_item_id = $1 AND t.reference_type = '`+StockReferenceJobConsumption+`'
-		  AND t.reference_id IN (SELECT c.id FROM job_consumption c
-		                         WHERE c.job_kind = $2 AND c.job_id = $3 AND `+tenantMatchOn("c")+`)
-		  AND `+tenantMatchOn("t"), itemID, jobKind, jobID).Scan(&q)
+// Relief is the net stock a job's movements took from one item under one
+// recorded material code (positive when stock left).
+type Relief struct {
+	ItemID       uuid.UUID
+	MaterialCode string
+	Quantity     float64
+}
+
+// JobRelief is every item and code a job's job_consumption movements
+// touched, with the net relieved (zero sums included).
+func (r *JobConsumptionRepository) JobRelief(ctx context.Context, jobKind string, jobID uuid.UUID) ([]Relief, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT t.inventory_item_id, c.material_code, -SUM(t.quantity)
+		FROM inventory_transactions t
+		JOIN job_consumption c ON c.id = t.reference_id AND `+tenantMatchOn("c")+`
+		WHERE t.reference_type = '`+StockReferenceJobConsumption+`' AND c.job_kind = $1 AND c.job_id = $2
+		  AND `+tenantMatchOn("t")+`
+		GROUP BY t.inventory_item_id, c.material_code
+		ORDER BY t.inventory_item_id, c.material_code`, jobKind, jobID)
 	if err != nil {
-		return 0, fmt.Errorf("relieved quantity: %w", err)
+		return nil, fmt.Errorf("job relief: %w", err)
 	}
-	return q, nil
+	defer func() { _ = rows.Close() }()
+	var out []Relief
+	for rows.Next() {
+		var rl Relief
+		if err := rows.Scan(&rl.ItemID, &rl.MaterialCode, &rl.Quantity); err != nil {
+			return nil, fmt.Errorf("scan job relief: %w", err)
+		}
+		out = append(out, rl)
+	}
+	return out, rows.Err()
 }
 
 // BatchLotRef is the batch lot a material lot number names.
