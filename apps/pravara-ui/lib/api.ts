@@ -874,8 +874,14 @@ export const inventoryAPI = {
       token,
     }),
 
-  getLowStock: (token: string) =>
-    fetchAPI<InventoryItem[]>("/v1/inventory/low-stock", { token }),
+  // The API answers { data, total }; `data` is null when nothing is low.
+  getLowStock: async (token: string): Promise<InventoryItem[]> => {
+    const response = await fetchAPI<{ data: InventoryItem[] | null; total: number }>(
+      "/v1/inventory/low-stock",
+      { token }
+    );
+    return response?.data ?? [];
+  },
 };
 
 // ============ Yantra4D Import ============

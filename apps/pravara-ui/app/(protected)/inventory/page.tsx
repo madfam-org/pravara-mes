@@ -95,7 +95,8 @@ export default function InventoryPage() {
   const { data: lowStockData, isLoading: isLoadingLowStock } = lowStockQuery;
 
   const items = useMemo(() => data?.data ?? [], [data]);
-  const lowStockItems = lowStockData ?? [];
+  // Never trust the shape: a non-array here took the whole page down.
+  const lowStockItems = Array.isArray(lowStockData) ? lowStockData : [];
 
   const filteredItems = useMemo(() => {
     if (!searchQuery) return items;

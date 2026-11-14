@@ -8,7 +8,7 @@ const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 // Import after mock setup
-import { ordersAPI, machinesAPI, tasksAPI, yantra4dAPI } from '../api'
+import { ordersAPI, machinesAPI, tasksAPI, yantra4dAPI, inventoryAPI } from '../api'
 
 describe('API client', () => {
   beforeEach(() => {
@@ -250,6 +250,25 @@ describe('API client', () => {
           body: JSON.stringify(importData),
         })
       )
+    })
+  })
+
+  describe('inventoryAPI.getLowStock', () => {
+    // pravara-api answers GET /v1/inventory/low-stock with { data, total }.
+    it('returns the items inside the envelope', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ id: 'a', sku: 'PLA' }], total: 1 }),
+      })
+      await expect(inventoryAPI.getLowStock('t')).resolves.toEqual([{ id: 'a', sku: 'PLA' }])
+    })
+
+    it('returns an empty list when the API sends data: null', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: null, total: 0 }),
+      })
+      await expect(inventoryAPI.getLowStock('t')).resolves.toEqual([])
     })
   })
 })

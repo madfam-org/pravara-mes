@@ -90,4 +90,13 @@ describe('InventoryPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Record receipt for PETG' }))
     expect(screen.getByLabelText('Quantity received (g)')).toBeInTheDocument()
   })
+
+  it('renders the empty inventory when low stock arrives in an unexpected shape', async () => {
+    // Regression: the API's { data: null, total: 0 } envelope reached the page
+    // as-is and `.map` on it took the whole page down.
+    list.mockResolvedValue({ data: null, total: 0, limit: 20, offset: 0 })
+    getLowStock.mockResolvedValue({ data: null, total: 0 })
+    renderPage()
+    expect(await screen.findByText('No inventory items yet')).toBeInTheDocument()
+  })
 })

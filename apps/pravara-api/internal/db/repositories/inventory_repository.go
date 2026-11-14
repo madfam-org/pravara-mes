@@ -138,7 +138,7 @@ func (r *InventoryRepository) ListItems(ctx context.Context, filter InventoryFil
 	}
 	defer rows.Close()
 
-	var items []InventoryItem
+	items := []InventoryItem{}
 	for rows.Next() {
 		item, err := r.scanInventoryItem(rows)
 		if err != nil {
@@ -390,7 +390,7 @@ func (r *InventoryRepository) GetLowStock(ctx context.Context) ([]InventoryItem,
 	}
 	defer rows.Close()
 
-	var items []InventoryItem
+	items := []InventoryItem{}
 	for rows.Next() {
 		item, err := r.scanInventoryItem(rows)
 		if err != nil {
@@ -428,7 +428,7 @@ func (r *InventoryRepository) ListTransactions(ctx context.Context, itemID uuid.
 	}
 	defer rows.Close()
 
-	var transactions []InventoryTransaction
+	transactions := []InventoryTransaction{}
 	for rows.Next() {
 		var txn InventoryTransaction
 		var refType sql.NullString
