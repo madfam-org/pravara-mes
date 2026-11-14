@@ -8,6 +8,7 @@
  * import { usePravaraSession } from "@/lib/auth" just works.
  */
 
+import { useEffect, useSyncExternalStore } from "react";
 import { useJanua, useUser, useAuth as useJanuaAuth } from "@janua/nextjs";
 
 export interface PravaraUser {
@@ -50,6 +51,94 @@ export interface PravaraSession {
 }
 
 /**
+ * Whether a stored sign-in is still being resolved.
+ *
+ * The SDK's provider (@janua/nextjs 0.1.x) reports `isLoading: false` as
+ * soon as it STARTS fetching the current user, so for a moment after every
+ * page load a signed-in visitor looks signed out. The protected layout acted
+ * on that moment and sent everyone back to /login. This probe asks the same
+ * two questions itself (is there a stored token, does it resolve to a user)
+ * and holds the session at "loading" until the answer is in.
+ *
+ *   pending   not answered yet
+ *   none      no stored token, or it did not resolve to a user
+ *   user      it resolved to a user; the provider's own state follows
+ *   stale     it resolved to a user but the provider never followed
+ *             (PROVIDER_GRACE_MS), so stop waiting
+ *
+ * One probe per page load, shared by every usePravaraSession() caller.
+ */
+type ProbeState = "pending" | "none" | "user" | "stale";
+
+const PROVIDER_GRACE_MS = 5000;
+
+let probeState: ProbeState = "pending";
+let probeStarted = false;
+const probeListeners = new Set<() => void>();
+
+function setProbeState(next: ProbeState) {
+  probeState = next;
+  for (const listener of probeListeners) listener();
+}
+
+function subscribeProbe(listener: () => void) {
+  probeListeners.add(listener);
+  return () => {
+    probeListeners.delete(listener);
+  };
+}
+
+interface ProbeClient {
+  getAccessToken?: () => unknown;
+  auth?: { getCurrentUser?: () => unknown };
+}
+
+function startProbe(client: ProbeClient | null | undefined) {
+  if (probeStarted) return;
+  probeStarted = true;
+  (async () => {
+    try {
+      const token = await client?.getAccessToken?.();
+      if (!token) return setProbeState("none");
+      const user = await client?.auth?.getCurrentUser?.();
+      if (!user) return setProbeState("none");
+      setProbeState("user");
+      setTimeout(() => {
+        if (probeState === "user") setProbeState("stale");
+      }, PROVIDER_GRACE_MS);
+    } catch {
+      setProbeState("none");
+    }
+  })();
+}
+
+/** Test hook: forget the probe so the next render starts a new one. */
+export function resetSessionProbeForTests() {
+  probeState = "pending";
+  probeStarted = false;
+}
+
+/**
+ * The access token to send to pravara-api.
+ *
+ * `client.getAccessToken()` is async in the SDK; calling it inline produced
+ * the text "[object Promise]" as the bearer token. The SDK keeps the current
+ * token in localStorage and rewrites it on refresh, so read it there, and
+ * fall back to the token the provider resolved at load.
+ */
+const ACCESS_TOKEN_STORAGE_KEY = "janua_access_token";
+
+export function currentAccessToken(fallback?: string | null): string {
+  try {
+    const stored = globalThis.localStorage?.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    if (stored) return stored;
+  } catch {
+    // Storage can be unavailable (private mode, blocked site data).
+  }
+  return typeof fallback === "string" ? fallback : "";
+}
+
+/**
  * Drop-in replacement for next-auth's usePravaraSession().
  * Returns { data: session, status } with the same shape.
  */
@@ -60,16 +149,32 @@ export function usePravaraSession(): {
   const janua = useJanua();
   const { user: januaUser } = useUser();
   const { isAuthenticated, isLoading } = useJanuaAuth();
+  const probe = useSyncExternalStore(
+    subscribeProbe,
+    () => probeState,
+    () => "pending" as ProbeState
+  );
+
+  useEffect(() => {
+    startProbe(janua.client as ProbeClient | null | undefined);
+  }, [janua.client]);
 
   if (isLoading) {
     return { data: null, status: "loading" };
   }
 
   if (!isAuthenticated || !januaUser) {
+    // Signed out only once the probe says so (or the provider never caught up).
+    if (probe === "pending" || probe === "user") {
+      return { data: null, status: "loading" };
+    }
     return { data: null, status: "unauthenticated" };
   }
 
-  const accessToken = String(janua.client?.getAccessToken?.() ?? "");
+  const providerSession = (janua as { session?: { accessToken?: unknown } }).session;
+  const accessToken = currentAccessToken(
+    typeof providerSession?.accessToken === "string" ? providerSession.accessToken : null
+  );
   const claims = januaUser as unknown as Record<string, unknown>;
   const { roles, known: rolesKnown } = rolesFromClaims(claims);
 
