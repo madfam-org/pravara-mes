@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { usePravaraSession } from "@/lib/auth";
 import { Sidebar } from "@/components/sidebar";
+import { MobileNav } from "@/components/mobile-nav";
 
 export default function ProtectedLayout({
   children,
@@ -28,21 +29,22 @@ export default function ProtectedLayout({
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar user={session.user} />
+    <div className="flex h-dvh flex-col md:flex-row">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-primary focus:p-3 focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
+      <MobileNav user={session.user} />
+      <Sidebar user={session.user} className="hidden md:flex" />
       <main
         id="main-content"
-        className="flex-1 overflow-auto bg-muted/30"
-        role="main"
+        tabIndex={-1}
+        className="min-h-0 flex-1 overflow-auto bg-muted/30 outline-none"
         aria-label="Main content"
       >
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-primary focus:text-primary-foreground focus:p-3 focus:m-2 focus:rounded-md"
-        >
-          Skip to main content
-        </a>
-        <div className="container mx-auto p-6">{children}</div>
+        <div className="container mx-auto p-4 md:p-6">{children}</div>
       </main>
     </div>
   );

@@ -7,11 +7,16 @@ import {
   DragOverEvent,
   DragOverlay,
   DragStartEvent,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { KanbanColumn } from "./column";
 import { KanbanCard, type CommandStatus } from "./card";
 import type { Task, TaskStatus, Machine } from "@/lib/api";
@@ -47,6 +52,11 @@ export function KanbanBoard({
       activationConstraint: {
         distance: 8,
       },
+    }),
+    // Space or Enter picks a card up, the arrow keys move it, Space or Enter
+    // drops it and Escape cancels.
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 

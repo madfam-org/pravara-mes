@@ -111,4 +111,23 @@ describe('Sidebar', () => {
     expect(screen.getByText('Orders').closest('a')).toHaveAttribute('href', '/orders')
     expect(screen.getByText('Machines').closest('a')).toHaveAttribute('href', '/machines')
   })
+
+  it('hides the collapse control when not collapsible', () => {
+    render(<Sidebar collapsible={false} />)
+    expect(screen.queryByLabelText('Collapse sidebar')).not.toBeInTheDocument()
+    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+  })
+
+  it('calls onNavigate when a destination is chosen', () => {
+    const onNavigate = vi.fn()
+    render(<Sidebar onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByText('Orders'))
+    fireEvent.click(screen.getByText('Settings'))
+    expect(onNavigate).toHaveBeenCalledTimes(2)
+  })
+
+  it('applies extra classes to the root element', () => {
+    render(<Sidebar className="hidden md:flex" />)
+    expect(screen.getByRole('navigation', { name: 'Main navigation' }).className).toContain('hidden md:flex')
+  })
 })
