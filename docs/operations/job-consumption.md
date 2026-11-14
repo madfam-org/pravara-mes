@@ -87,6 +87,11 @@ code and lists the unresolved codes (the wave 1 gate: none left).
   `reference_type = 'job_consumption'`, the consumption row as
   `reference_id`, and the running balance. Recording the same fact again
   relieves nothing.
+- **Re-pointed codes.** Relief is taken from the item a code names when the
+  job is settled. If the code named another item before (a material
+  re-linked, an item unlinked), that earlier relief is returned to the old
+  item in the same transaction, so a job is never relieved twice. Settling
+  locks every item involved in one ordered statement.
 - **No conversion, no guess.** When the effective quantity's unit has no
   conversion to the item's unit (a print job's actual kept in mm for an item
   stocked in g), nothing more is relieved: the job is listed in

@@ -2,8 +2,12 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +23,7 @@ var (
 	ErrLotNotFound        = errors.New("batch lot not found")
 	ErrLotOtherItem       = errors.New("batch lot belongs to another stock item")
 	ErrReceiptInvalid     = errors.New("invalid receipt")
+	ErrIdempotencyReused  = errors.New("idempotency_key was already used with a different receipt")
 )
 
 // ReceiptService records receipts: what physically arrived, with its
@@ -40,9 +45,11 @@ func NewReceiptService(q repositories.DBTX) *ReceiptService {
 
 // ReceiptInput is a receipt to record.
 type ReceiptInput struct {
-	MaterialID    uuid.UUID
-	Quantity      float64
-	Unit          string
+	MaterialID uuid.UUID
+	Quantity   float64
+	Unit       string
+	// ReceivedAt zero means now (and is fingerprinted as absent, so a retry
+	// without it still matches).
 	ReceivedAt    time.Time
 	ReceivedBy    *uuid.UUID
 	BatchLotID    *uuid.UUID
@@ -51,7 +58,9 @@ type ReceiptInput struct {
 	CFDIUUID      *uuid.UUID
 	CFDILine      *int
 	Notes         string
-	// IdempotencyKey makes a retried submission return the first receipt.
+	// IdempotencyKey is required: a retry with the same key and request
+	// returns the first receipt; the same key with another request is
+	// ErrIdempotencyReused.
 	IdempotencyKey string
 }
 
@@ -71,8 +80,10 @@ func (in ReceiptInput) Validate() error {
 		return fmt.Errorf("%w: quantity must be greater than 0", ErrReceiptInvalid)
 	case !repositories.ValidUnit(in.Unit):
 		return fmt.Errorf("%w: unit must be 1-16 lowercase letters, digits or underscores", ErrReceiptInvalid)
-	case in.ReceivedAt.IsZero() || in.ReceivedAt.After(time.Now().Add(5*time.Minute)):
-		return fmt.Errorf("%w: received_at is required and not in the future", ErrReceiptInvalid)
+	case in.ReceivedAt.After(time.Now().Add(5 * time.Minute)):
+		return fmt.Errorf("%w: received_at is in the future", ErrReceiptInvalid)
+	case strings.TrimSpace(in.IdempotencyKey) == "" || len(in.IdempotencyKey) > 100:
+		return fmt.Errorf("%w: idempotency_key is required (1-100 characters)", ErrReceiptInvalid)
 	}
 	switch in.InvoiceStatus {
 	case repositories.ReceiptInvoiced:
@@ -92,11 +103,49 @@ func (in ReceiptInput) Validate() error {
 	return nil
 }
 
+// Fingerprint is the SHA-256 of the request's own fields, as the client
+// sent them (received_at only when given), so a retry matches.
+func (in ReceiptInput) Fingerprint() string {
+	opt := func(id *uuid.UUID) string {
+		if id == nil {
+			return ""
+		}
+		return id.String()
+	}
+	line, at := "", ""
+	if in.CFDILine != nil {
+		line = strconv.Itoa(*in.CFDILine)
+	}
+	if !in.ReceivedAt.IsZero() {
+		at = in.ReceivedAt.UTC().Format(time.RFC3339Nano)
+	}
+	parts := []string{in.MaterialID.String(), strconv.FormatFloat(repositories.Round4(in.Quantity), 'f', 4, 64),
+		repositories.NormalizeUnit(in.Unit), at, opt(in.BatchLotID), in.LotNumber, in.InvoiceStatus, opt(in.CFDIUUID),
+		line, in.Notes}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x1f")))
+	return hex.EncodeToString(sum[:])
+}
+
 // Receive records a receipt and posts it when its unit converts.
 func (s *ReceiptService) Receive(ctx context.Context, in ReceiptInput) (*ReceiptResult, error) {
 	in.Unit = repositories.NormalizeUnit(in.Unit)
 	if err := in.Validate(); err != nil {
 		return nil, err
+	}
+	fingerprint := in.Fingerprint()
+	// A retried submission: return the first receipt before anything else.
+	existing, err := s.receipts.ByIdempotencyKey(ctx, in.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		if existing.RequestSHA256 != fingerprint {
+			return nil, ErrIdempotencyReused
+		}
+		return &ReceiptResult{Receipt: existing}, nil
+	}
+	if in.ReceivedAt.IsZero() {
+		in.ReceivedAt = time.Now().UTC()
 	}
 	material, err := s.materials.Get(ctx, in.MaterialID)
 	if err != nil {
@@ -118,17 +167,7 @@ func (s *ReceiptService) Receive(ctx context.Context, in ReceiptInput) (*Receipt
 	rc := &repositories.Receipt{MaterialID: material.ID, MaterialCode: material.Code, InventoryItemID: item.ID,
 		Quantity: in.Quantity, Unit: in.Unit, ReceivedAt: in.ReceivedAt.UTC(), ReceivedBy: in.ReceivedBy,
 		InvoiceStatus: in.InvoiceStatus, CFDIUUID: in.CFDIUUID, CFDILine: in.CFDILine, Notes: in.Notes,
-		IdempotencyKey: in.IdempotencyKey}
-	if in.IdempotencyKey != "" {
-		// A retried submission: return the first receipt before creating a lot.
-		existing, err := s.receipts.ByIdempotencyKey(ctx, in.IdempotencyKey)
-		if err != nil {
-			return nil, err
-		}
-		if existing != nil {
-			return &ReceiptResult{Receipt: existing}, nil
-		}
-	}
+		IdempotencyKey: in.IdempotencyKey, RequestSHA256: fingerprint}
 	lotID, err := s.lot(ctx, in, material, item)
 	if err != nil {
 		return nil, err
@@ -140,6 +179,10 @@ func (s *ReceiptService) Receive(ctx context.Context, in ReceiptInput) (*Receipt
 	}
 	res := &ReceiptResult{Receipt: rc, Created: created}
 	if !created {
+		// A concurrent request with the same key won the insert.
+		if rc.RequestSHA256 != fingerprint {
+			return nil, ErrIdempotencyReused
+		}
 		return res, nil
 	}
 	if res.Movement, err = s.post(ctx, rc, item); err != nil {

@@ -34,7 +34,11 @@ type Fact struct {
 	JobStatus string
 }
 
-// Line is every material fact of one job and material code: one cost event.
+// Line is every material fact of one job and material: one cost event.
+// MaterialCode is the line's key: the material registry code the facts'
+// codes resolve to, else the recorded code (RFC 0058). It is the event's
+// item.material_code and the basis of its id, so the ledger gets exactly
+// one event per job and material, the quantity stock relief settled.
 type Line struct {
 	JobKind      string
 	JobID        uuid.UUID
@@ -161,7 +165,7 @@ func Build(line Line, prev *Event, opts Options) Built {
 		Schema: Schema, ID: b.EventID, Source: Source, Kind: KindConsumption, Status: StatusActive,
 		OccurredAt: occurred.UTC().Format(time.RFC3339), CostClass: opts.CostClass, Basis: eff.Basis,
 		Quantity: NormalizeQuantity(eff.Quantity), Unit: eff.Unit,
-		Item:     Item{MaterialCode: itemCode(line.MaterialCode, facts)},
+		Item:     Item{MaterialCode: line.MaterialCode},
 		Evidence: &Evidence{JobID: line.JobID.String()},
 	}
 	if slug != "" {
@@ -188,21 +192,6 @@ func Build(line Line, prev *Event, opts Options) Built {
 	b.Event = &ev
 	b.Problems = Validate(ev)
 	return b
-}
-
-// itemCode is the code sent as item.material_code: the material registry
-// code the line's code resolves to (Pravara owns the registry, RFC 0058
-// ruling I3), else the code as recorded. The event id stays keyed by the
-// recorded code, so a line rebuilt after its code was registered or
-// aliased (within the emitter's lookback) re-sends the same event with the
-// registry code, which Dhanam reports as updated.
-func itemCode(recorded string, facts []Fact) string {
-	for i := len(facts) - 1; i >= 0; i-- {
-		if facts[i].RegistryCode != "" {
-			return facts[i].RegistryCode
-		}
-	}
-	return recorded
 }
 
 // Body is the event's wire JSON and its SHA-256 (hex). The same event always

@@ -43,11 +43,11 @@ line's material facts:
 
 | Field | Rule |
 | --- | --- |
-| `id` | Deterministic: job kind, job id and a hash of the material code. A correction re-sends the same id; Dhanam (idempotent on `(source, id)`) reports it `updated`. |
+| `id` | Deterministic: job kind, job id and a hash of the line key. A correction re-sends the same id; Dhanam (idempotent on `(source, id)`) reports it `updated`. When a code is registered or aliased after its line's event was stored, the line moves to the material's key: the sweep re-sends the old id as `cancelled` and the material's line carries the quantity, so nothing is counted twice. |
 | `quantity`, `unit`, `basis` | The line's **effective** fact, as stock relief uses it: the latest `actual`, else the latest `estimate`. Dhanam stores `estimate` events but never counts them. |
 | `occurred_at` | The job's completion: the earliest fact of the line (an operator's later actual must not move the period). UTC, RFC 3339. |
 | `attribution.engagement` | `eng:` + the order's current `engagement_slug`. **Omitted** when the order has none (never guessed). |
-| `item.material_code` | The material registry code the recorded code resolves to (the code, an alias or a linked SKU; RFC 0058 ruling I3, [inventory.md](./inventory.md)); the recorded code when it is not registered. The event `id` stays keyed by the recorded code, so a line rebuilt after its code is registered re-sends the same id with the registry code. No other `item` key is sent. |
+| `item.material_code` | The line key: the material registry code the recorded codes resolve to (the code, an alias or a linked SKU; RFC 0058 ruling I3, [inventory.md](./inventory.md)), else the recorded code. **A line is one job and material**: facts recorded under different codes of the same material (a printer actual under a class aliased to the material, an operator actual under its code) are one line and one event, whose quantity is the effective fact, exactly what stock relief settled. No other `item` key is sent. |
 | `cost_class` | `PRAVARA_COST_EVENTS_COST_CLASS` (default `cogs`). |
 | `status` | `active`; `cancelled` when the line's effective quantity became 0, or its dispatch / print job is no longer `completed` (its completion was withdrawn). A cancellation re-sends the last stored body with `status: cancelled` (Dhanam needs a non-zero quantity), and only for a line stored before; a line never stored is not sent. A task, or a job whose row was deleted, keeps its consumption: what was consumed was consumed. |
 

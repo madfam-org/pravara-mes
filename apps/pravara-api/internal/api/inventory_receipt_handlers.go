@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -25,12 +26,12 @@ type ReceiptRequest struct {
 	CFDIUUID       *uuid.UUID `json:"cfdi_uuid"`
 	CFDILine       *int       `json:"cfdi_line"`
 	Notes          string     `json:"notes"`
-	IdempotencyKey string     `json:"idempotency_key"`
+	IdempotencyKey string     `json:"idempotency_key" binding:"required"`
 }
 
 // CreateReceipt is POST /v1/inventory/receipts.
 // @Summary Record a receipt
-// @Description Records a registered, active material that has a stock item. received_at defaults to now. The lot is batch_lot_id (linked to the material's stock item when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number (found, or created for this item). When the unit converts to the stock item's unit (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material's conversion), a 'receipt' movement (reference_type inventory_receipt) raises stock and status is posted; otherwise status is needs_conversion, stock is untouched and a conversion gap is listed. idempotency_key (1-100 characters) makes a retry return the first receipt with 200 and replayed true.
+// @Description Records a registered, active material that has a stock item. received_at defaults to now. The lot is batch_lot_id (linked to the material's stock item when it has none; 409 lot_belongs_to_other_item otherwise) or lot_number (found, or created for this item). When the unit converts to the stock item's unit (same unit, kg↔g, l↔ml, m↔mm, cm↔mm, or the material's conversion), a 'receipt' movement (reference_type inventory_receipt) raises stock and status is posted; otherwise status is needs_conversion, stock is untouched and a conversion gap is listed. idempotency_key (1-100 characters) is required: a retry with the same key and request returns the first receipt with 200 and replayed true; the same key with another request is 409 idempotency_key_reused. Needs a person with the admin or inventory_manager role (403 otherwise).
 // @Tags inventory
 // @Accept json
 // @Produce json
@@ -39,7 +40,8 @@ type ReceiptRequest struct {
 // @Success 200 {object} map[string]interface{} "{receipt, stock_movement: null, replayed: true}"
 // @Failure 400 {object} map[string]string "validation_error"
 // @Failure 404 {object} map[string]string "material_not_found or batch_lot_not_found"
-// @Failure 409 {object} map[string]string "material_inactive, material_not_stocked or lot_belongs_to_other_item"
+// @Failure 403 {object} map[string]string "forbidden (no inventory role) or human_only"
+// @Failure 409 {object} map[string]string "idempotency_key_reused, material_inactive, material_not_stocked or lot_belongs_to_other_item"
 // @Security BearerAuth
 // @Router /inventory/receipts [post]
 func (h *InventoryRecordsHandler) CreateReceipt(c *gin.Context) {
@@ -53,7 +55,7 @@ func (h *InventoryRecordsHandler) CreateReceipt(c *gin.Context) {
 		return
 	}
 	in := services.ReceiptInput{MaterialID: *req.MaterialID, Quantity: *req.Quantity, Unit: req.Unit,
-		ReceivedAt: time.Now().UTC(), ReceivedBy: actor(c), BatchLotID: req.BatchLotID, LotNumber: req.LotNumber,
+		ReceivedBy: actor(c), BatchLotID: req.BatchLotID, LotNumber: req.LotNumber,
 		InvoiceStatus: req.InvoiceStatus, CFDIUUID: req.CFDIUUID, CFDILine: req.CFDILine, Notes: req.Notes,
 		IdempotencyKey: req.IdempotencyKey}
 	if req.ReceivedAt != nil {
@@ -287,12 +289,13 @@ func (h *InventoryRecordsHandler) RecordCountLine(c *gin.Context) {
 
 // CloseCount is POST /v1/inventory/counts/:id/close.
 // @Summary Close a physical count
-// @Description For each line: result matched (no difference), adjusted (an 'adjustment' movement of counted minus expected, reference_type inventory_count, reference_id the line), needs_conversion (no conversion to the stock item's unit: no movement, a conversion gap is listed and posted once the conversion exists) or not_stocked (the material has no stock item). Count differences are never folded into a job. Idempotent: closing a closed count returns it with already_closed true and moves nothing.
+// @Description For each line: result matched (no difference), adjusted (an 'adjustment' movement of counted minus expected, reference_type inventory_count, reference_id the line), needs_conversion (no conversion to the stock item's unit: no movement, a conversion gap is listed and posted once the conversion exists) or not_stocked (the material has no stock item). Count differences are never folded into a job. Idempotent: closing a closed count returns it with already_closed true and moves nothing. An older count never closes over a newer one: when another closed count has a line for the same material counted later, 409 newer_count_exists lists the materials. Each applied line reports movements_since_counted and quantity_since_counted (movements between counted_at and the close). Needs the admin or inventory_manager role.
 // @Tags inventory
 // @Produce json
 // @Param id path string true "Count ID (UUID)"
 // @Success 200 {object} map[string]interface{} "{count, already_closed}"
 // @Failure 404 {object} map[string]string "count_not_found"
+// @Failure 409 {object} map[string]interface{} "newer_count_exists {error, message, materials}"
 // @Security BearerAuth
 // @Router /inventory/counts/{id}/close [post]
 func (h *InventoryRecordsHandler) CloseCount(c *gin.Context) {
@@ -301,6 +304,11 @@ func (h *InventoryRecordsHandler) CloseCount(c *gin.Context) {
 		return
 	}
 	res, err := h.countSvc.Close(c.Request.Context(), id, actor(c))
+	var newer *services.NewerCountError
+	if errors.As(err, &newer) {
+		c.JSON(http.StatusConflict, gin.H{"error": "newer_count_exists", "message": err.Error(), "materials": newer.Materials})
+		return
+	}
 	if err != nil {
 		h.fail(c, err, "close count")
 		return

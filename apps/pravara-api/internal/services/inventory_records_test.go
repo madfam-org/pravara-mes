@@ -29,7 +29,7 @@ func TestBuiltinConversionsAreExactAndNeverGuessed(t *testing.T) {
 func TestReceiptInputNeedsInvoiceEvidence(t *testing.T) {
 	cfdi, line, zero := uuid.New(), 2, 0
 	ok := ReceiptInput{MaterialID: uuid.New(), Quantity: 1, Unit: "kg", ReceivedAt: time.Now(),
-		InvoiceStatus: repositories.ReceiptInvoiced, CFDIUUID: &cfdi, CFDILine: &line}
+		InvoiceStatus: repositories.ReceiptInvoiced, CFDIUUID: &cfdi, CFDILine: &line, IdempotencyKey: "synthetic-key"}
 	assert.NoError(t, ok.Validate())
 	noInvoice := ok
 	noInvoice.InvoiceStatus, noInvoice.CFDIUUID, noInvoice.CFDILine = repositories.ReceiptNoInvoice, nil, nil
@@ -50,5 +50,24 @@ func TestReceiptInputNeedsInvoiceEvidence(t *testing.T) {
 		mutate(&in)
 		err := in.Validate()
 		assert.True(t, errors.Is(err, ErrReceiptInvalid), "%s: %v", name, err)
+	}
+}
+
+func TestReceiptFingerprintBindsTheRequest(t *testing.T) {
+	in := ReceiptInput{MaterialID: uuid.New(), Quantity: 2, Unit: "kg", InvoiceStatus: repositories.ReceiptNoInvoice,
+		IdempotencyKey: "synthetic-key"}
+	same := in
+	same.Unit = " KG "                  // normalized
+	same.IdempotencyKey = "another key" // the key is not part of the request
+	assert.Equal(t, in.Fingerprint(), same.Fingerprint())
+	for name, mutate := range map[string]func(*ReceiptInput){
+		"quantity":    func(r *ReceiptInput) { r.Quantity = 3 },
+		"received_at": func(r *ReceiptInput) { r.ReceivedAt = time.Now() },
+		"lot":         func(r *ReceiptInput) { r.LotNumber = "LOT-1" },
+		"notes":       func(r *ReceiptInput) { r.Notes = "x" },
+	} {
+		other := in
+		mutate(&other)
+		assert.NotEqual(t, in.Fingerprint(), other.Fingerprint(), name)
 	}
 }

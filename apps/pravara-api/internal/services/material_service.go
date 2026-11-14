@@ -19,6 +19,7 @@ var (
 	ErrConversionInvalid = errors.New("invalid conversion")
 	ErrAliasInvalid      = errors.New("invalid alias")
 	ErrItemNotFound      = errors.New("inventory item not found")
+	ErrItemNotLinkable   = errors.New("inventory item not found or already linked to a material")
 )
 
 // MaterialService keeps the material code registry (ruling I3), its
@@ -38,9 +39,11 @@ func NewMaterialService(q repositories.DBTX, consumption *ConsumptionService, re
 		consumption: consumption, receipts: receipts, counts: counts}
 }
 
-// Create registers a material. The code must be new to the tenant: not a
-// code (ignoring case), an alias, or a linked stock item's SKU.
-func (s *MaterialService) Create(ctx context.Context, m *repositories.Material) error {
+// Create registers a material and, with linkItem, links that unlinked stock
+// item to it in the same transaction. The code must be new to the tenant:
+// not a code (ignoring case), an alias, or a linked stock item's SKU; the
+// SKU of an unlinked item only when that item is the one linked.
+func (s *MaterialService) Create(ctx context.Context, m *repositories.Material, linkItem *uuid.UUID) error {
 	m.Code, m.Name = strings.TrimSpace(m.Code), strings.TrimSpace(m.Name)
 	m.BaseUnit, m.Category = repositories.NormalizeUnit(m.BaseUnit), strings.TrimSpace(m.Category)
 	switch {
@@ -53,14 +56,37 @@ func (s *MaterialService) Create(ctx context.Context, m *repositories.Material) 
 	case !repositories.ValidUnit(m.BaseUnit):
 		return fmt.Errorf("%w: base_unit must be 1-16 lowercase letters, digits or underscores", ErrMaterialInvalid)
 	}
-	taken, err := s.materials.CodeTaken(ctx, m.Code)
+	use, err := s.materials.CodeUse(ctx, m.Code)
 	if err != nil {
 		return err
 	}
-	if taken {
+	switch {
+	case use.Taken:
 		return repositories.ErrMaterialCodeTaken
+	case use.UnlinkedItemID != nil && (linkItem == nil || *linkItem != *use.UnlinkedItemID):
+		// Consumption under this SKU relieves that item today; registering
+		// the code without linking it would re-point it.
+		return fmt.Errorf("%w: unlinked stock item %s has this SKU; send it as inventory_item_id to register and link it together",
+			repositories.ErrMaterialCodeTaken, *use.UnlinkedItemID)
 	}
-	return s.materials.Create(ctx, m)
+	if err := s.materials.Create(ctx, m); err != nil {
+		return err
+	}
+	if linkItem == nil {
+		return nil
+	}
+	linked, err := s.materials.LinkItem(ctx, *linkItem, m.ID)
+	if err != nil {
+		return err
+	}
+	if !linked {
+		return ErrItemNotLinkable
+	}
+	got, err := s.materials.Get(ctx, m.ID)
+	if err == nil && got != nil {
+		*m = *got
+	}
+	return err
 }
 
 // Update changes a material's mutable fields; the code never changes.
@@ -107,12 +133,16 @@ func (s *MaterialService) AddAlias(ctx context.Context, materialID uuid.UUID, al
 	if m == nil {
 		return nil, ErrMaterialNotFound
 	}
-	taken, err := s.materials.CodeTaken(ctx, alias)
+	use, err := s.materials.CodeUse(ctx, alias)
 	if err != nil {
 		return nil, err
 	}
-	if taken {
+	switch {
+	case use.Taken:
 		return nil, repositories.ErrMaterialAliasTaken
+	case use.UnlinkedItemID != nil:
+		return nil, fmt.Errorf("%w: unlinked stock item %s has this SKU; link that item to a material instead",
+			repositories.ErrMaterialAliasTaken, *use.UnlinkedItemID)
 	}
 	a := &repositories.MaterialAlias{MaterialID: m.ID, Alias: alias, CreatedBy: by}
 	return a, s.materials.AddAlias(ctx, a)
@@ -153,6 +183,28 @@ func (s *MaterialService) AddConversion(ctx context.Context, c *repositories.Uni
 		return nil, err
 	}
 	res := &ConversionResult{Conversion: c, Movements: []repositories.InventoryTransaction{}}
+	if m.InventoryItemID == nil {
+		return res, nil
+	}
+	// Lock every item the waiting quantities may move, in one ordered
+	// statement, before touching any (StockRepository.LockItems).
+	ids := []uuid.UUID{*m.InventoryItemID}
+	gaps, err := s.stock.OpenGapsForItem(ctx, *m.InventoryItemID)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range gaps {
+		if g.SourceType == repositories.GapSourceJobConsumption {
+			more, err := s.consumption.JobLockSet(ctx, g.JobKind, *g.JobID, nil)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, more...)
+		}
+	}
+	if err := s.stock.LockItems(ctx, ids); err != nil {
+		return nil, err
+	}
 	item, err := s.stock.LockMaterialItem(ctx, m.ID)
 	if err != nil || item == nil {
 		return res, err
@@ -173,7 +225,9 @@ func (s *MaterialService) resolveGaps(ctx context.Context, item *repositories.St
 		var mv *repositories.InventoryTransaction
 		switch g.SourceType {
 		case repositories.GapSourceJobConsumption:
-			mv, err = s.consumption.ResettleJob(ctx, g.JobKind, *g.JobID, item)
+			var job []repositories.InventoryTransaction
+			job, err = s.consumption.ResettleJob(ctx, g.JobKind, *g.JobID, item)
+			moves = append(moves, job...)
 		case repositories.GapSourceReceipt:
 			mv, err = s.receipts.PostPending(ctx, g.SourceID, item)
 		case repositories.GapSourceCountLine:

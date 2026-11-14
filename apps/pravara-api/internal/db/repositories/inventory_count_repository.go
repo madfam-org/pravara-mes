@@ -19,6 +19,7 @@ const (
 	CountLineAdjusted        = "adjusted"
 	CountLineNeedsConversion = "needs_conversion"
 	CountLineNotStocked      = "not_stocked"
+	CountLineSuperseded      = "superseded"
 )
 
 // ErrOpeningCountExists is returned when a tenant already has its opening
@@ -57,7 +58,10 @@ type CountLine struct {
 	CountedStockQuantity *float64   `json:"counted_stock_quantity,omitempty"`
 	Difference           *float64   `json:"difference,omitempty"`
 	TransactionID        *uuid.UUID `json:"transaction_id,omitempty"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	// Movements recorded between counted_at and the close.
+	MovementsSinceCounted *int      `json:"movements_since_counted,omitempty"`
+	QuantitySinceCounted  *float64  `json:"quantity_since_counted,omitempty"`
+	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 // CountRepository stores counts and their lines. Every statement runs in
@@ -145,16 +149,22 @@ func (r *CountRepository) List(ctx context.Context, status string, limit, offset
 
 const countLineColumns = `l.id, l.count_id, l.material_id, m.code, l.counted_quantity, l.unit, l.counted_at, l.counted_by,
 	COALESCE(l.result, ''), l.inventory_item_id, l.expected_quantity, l.counted_stock_quantity, l.difference,
-	l.transaction_id, l.updated_at`
+	l.transaction_id, l.movements_since_counted, l.quantity_since_counted, l.updated_at`
 
 func scanCountLine(row interface{ Scan(...any) error }) (*CountLine, error) {
 	var l CountLine
 	var by, item, txn uuid.NullUUID
-	var expected, stock, diff sql.NullFloat64
+	var expected, stock, diff, since sql.NullFloat64
+	var moves sql.NullInt64
 	if err := row.Scan(&l.ID, &l.CountID, &l.MaterialID, &l.MaterialCode, &l.CountedQuantity, &l.Unit, &l.CountedAt, &by,
-		&l.Result, &item, &expected, &stock, &diff, &txn, &l.UpdatedAt); err != nil {
+		&l.Result, &item, &expected, &stock, &diff, &txn, &moves, &since, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
+	if moves.Valid {
+		n := int(moves.Int64)
+		l.MovementsSinceCounted = &n
+	}
+	l.QuantitySinceCounted = ptrFloat(since)
 	l.CountedBy, l.InventoryItemID, l.TransactionID = ptrUUID(by), ptrUUID(item), ptrUUID(txn)
 	l.ExpectedQuantity, l.CountedStockQuantity, l.Difference = ptrFloat(expected), ptrFloat(stock), ptrFloat(diff)
 	return &l, nil
@@ -213,9 +223,10 @@ func (r *CountRepository) Line(ctx context.Context, id uuid.UUID) (*CountLine, e
 // SetLineResult stores what closing (or a later conversion) did with a line.
 func (r *CountRepository) SetLineResult(ctx context.Context, l *CountLine) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE inventory_count_lines SET result = $2, inventory_item_id = $3,
-		expected_quantity = $4, counted_stock_quantity = $5, difference = $6, transaction_id = $7, updated_at = NOW()
+		expected_quantity = $4, counted_stock_quantity = $5, difference = $6, transaction_id = $7,
+		movements_since_counted = $8, quantity_since_counted = $9, updated_at = NOW()
 		WHERE id = $1 AND `+tenantMatch, l.ID, l.Result, l.InventoryItemID, l.ExpectedQuantity, l.CountedStockQuantity,
-		l.Difference, l.TransactionID)
+		l.Difference, l.TransactionID, l.MovementsSinceCounted, l.QuantitySinceCounted)
 	if err != nil {
 		return fmt.Errorf("store count line result: %w", err)
 	}
@@ -230,4 +241,22 @@ func (r *CountRepository) Close(ctx context.Context, id uuid.UUID, by *uuid.UUID
 		return fmt.Errorf("close count: %w", err)
 	}
 	return nil
+}
+
+// NewerCount returns a closed count, other than countID, that set the
+// material's stock from a line counted after at (nil when none).
+func (r *CountRepository) NewerCount(ctx context.Context, materialID uuid.UUID, at time.Time, countID uuid.UUID) (*uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.db.QueryRowContext(ctx, `
+		SELECT l.count_id FROM inventory_count_lines l JOIN inventory_counts c ON c.id = l.count_id
+		WHERE l.material_id = $1 AND l.counted_at > $2 AND l.count_id <> $3 AND c.status = 'closed'
+		  AND l.result IN ('matched', 'adjusted') AND `+tenantMatchOn("l")+`
+		ORDER BY l.counted_at DESC LIMIT 1`, materialID, at, countID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find newer count: %w", err)
+	}
+	return &id, nil
 }
