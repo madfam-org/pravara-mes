@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tabs";
 import { QueryErrorState } from "@/components/query-error-state";
 import { StockAdjustForm } from "@/components/inventory/stock-adjust-form";
+import { InventorySectionNav } from "@/components/inventory/records/section-nav";
 import { inventoryAPI, type InventoryItem } from "@/lib/api";
 import { formatRecordedCost } from "@/lib/inventory";
 
@@ -215,6 +216,7 @@ export default function InventoryPage() {
           Track materials, parts, and stock levels
         </p>
       </div>
+      <InventorySectionNav />
 
       {/* Search */}
       <div className="relative w-full sm:w-80">

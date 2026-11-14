@@ -12,7 +12,7 @@ vi.mock('@janua/nextjs', () => ({
 }))
 
 // Import after mocks
-import { usePravaraSession, pravaraSignIn, pravaraSignOut } from '../auth'
+import { usePravaraSession, pravaraSignIn, pravaraSignOut, rolesFromClaims } from '../auth'
 
 describe('usePravaraSession', () => {
   it('returns loading status when auth is loading', () => {
@@ -57,6 +57,23 @@ describe('usePravaraSession', () => {
     expect(result.data?.user.role).toBe('operator')
     expect(result.data?.user.tenantId).toBe('tenant-1')
     expect(result.data?.accessToken).toBe('test-access-token')
+  })
+})
+
+describe('rolesFromClaims', () => {
+  it('joins the roles array claim with the single role claim', () => {
+    expect(rolesFromClaims({ roles: ['inventory_manager', 'operator'], role: 'operator' })).toEqual({
+      roles: ['inventory_manager', 'operator'],
+      known: true,
+    })
+  })
+
+  it('says roles are unknown when the token names none', () => {
+    expect(rolesFromClaims({ id: 'u' })).toEqual({ roles: [], known: false })
+  })
+
+  it('ignores values that are not role names', () => {
+    expect(rolesFromClaims({ roles: ['admin', 3, ''] })).toEqual({ roles: ['admin'], known: true })
   })
 })
 
