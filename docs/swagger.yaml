@@ -3465,8 +3465,11 @@ paths:
         The correction becomes the job''s effective quantity and the stock relieved
         for the job moves by the difference (an adjustment). A row is corrected once:
         correct the latest correction to change it again (409 already_superseded names
-        it). disposition (good, scrap, failed_print) is kept in Pravara and not sent
-        to the cost ledger (its contract has no such field).'
+        it). Only the job''s effective row of the material may be corrected (409 not_effective
+        with effective_id and correct_with). Corrections are stored in job_consumption_corrections
+        and read through job_consumption_facts. disposition (good, scrap, failed_print)
+        is kept in Pravara and not sent to the cost ledger (its contract has no such
+        field).'
       parameters:
       - description: Consumption row ID (UUID)
         in: path
@@ -3500,7 +3503,8 @@ paths:
               type: string
             type: object
         "409":
-          description: already_superseded {error, message, superseded_by}
+          description: already_superseded {error, message, superseded_by} or not_effective
+            {error, message, effective_id, correct_with}
           schema:
             additionalProperties: true
             type: object
@@ -4737,7 +4741,10 @@ paths:
         the operator''s actual material (material_unit g, mm, ml or sheet; material_code
         defaults to the print profile''s material type). disposition (good, scrap,
         failed_print) applies to the material recorded. Calling it again on a completed
-        job records nothing new. A cancelled or failed print job is refused (409 print_job_closed).'
+        job records nothing new. A cancelled or failed print job is refused (409 print_job_closed),
+        and so is a queued one (pending or preparing: 409 print_job_not_started).
+        On a completed job a report that differs from what is recorded is refused:
+        409 disposition_differs or already_recorded, with effective_id and correct_with.'
       parameters:
       - description: Print job ID (UUID)
         in: path
@@ -4771,10 +4778,10 @@ paths:
               type: string
             type: object
         "409":
-          description: print_job_closed
+          description: print_job_closed, print_job_not_started, disposition_differs
+            or already_recorded
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
       security:
       - BearerAuth: []

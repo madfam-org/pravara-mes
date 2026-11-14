@@ -16,15 +16,16 @@ var ErrConsumptionAlreadySuperseded = errors.New("this consumption row is alread
 // supersededByOf is the SQL for the correction that superseded a row (NULL
 // when none).
 func supersededByOf(alias string) string {
-	return "(SELECT s.id FROM job_consumption s WHERE s.supersedes_id = " + alias + ".id AND " + tenantMatchOn("s") + ")"
+	return "(SELECT s.id FROM job_consumption_corrections s WHERE s.supersedes_id = " + alias + ".id AND " +
+		tenantMatchOn("s") + ")"
 }
 
-// Get returns one consumption row with the correction that superseded it,
-// if any (nil when not in the tenant).
+// Get returns one consumption row (a recorded fact or a correction) with
+// the correction that superseded it, if any (nil when not in the tenant).
 func (r *JobConsumptionRepository) Get(ctx context.Context, id uuid.UUID) (*JobConsumption, error) {
 	var supersededBy uuid.NullUUID
 	c, err := scanJobConsumption(r.db.QueryRowContext(ctx, `SELECT `+jobConsumptionColumns+`, `+supersededByOf("c")+`
-		FROM job_consumption c WHERE c.id = $1 AND `+tenantMatchOn("c"), id), &supersededBy)
+		FROM job_consumption_facts c WHERE c.id = $1 AND `+tenantMatchOn("c"), id), &supersededBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -35,12 +36,43 @@ func (r *JobConsumptionRepository) Get(ctx context.Context, id uuid.UUID) (*JobC
 	return c, nil
 }
 
+// LineFacts lists a job's rows of one kind and line: for material, every
+// row whose code resolves to the same registry code as code (or, when code
+// is not registered, carries code itself); for machine time, every
+// machine-time row. Oldest first, corrections included.
+func (r *JobConsumptionRepository) LineFacts(ctx context.Context, jobKind string, jobID uuid.UUID, kind, code string) ([]JobConsumption, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+jobConsumptionColumns+` FROM job_consumption_facts c
+		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = $3
+		  AND ($3 = 'machine_time'
+		       OR COALESCE(material_resolve(c.material_code)::text, 'code:' || c.material_code)
+		        = COALESCE(material_resolve($4)::text, 'code:' || $4))
+		  AND `+tenantMatchOn("c")+`
+		ORDER BY c.created_at, c.id`, jobKind, jobID, kind, code)
+	if err != nil {
+		return nil, fmt.Errorf("list line facts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []JobConsumption
+	for rows.Next() {
+		c, err := scanJobConsumption(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan line fact: %w", err)
+		}
+		out = append(out, *c)
+	}
+	return out, rows.Err()
+}
+
 // InsertCorrection stores c, an operator actual that supersedes
-// c.SupersedesID. History is never updated: the correction is a new row.
-// ErrConsumptionAlreadySuperseded when another correction got there first.
+// c.SupersedesID, in job_consumption_corrections (migration 036): history
+// is never updated, and the 033 fact key is left alone. c carries the
+// corrected row's job, kind and material; RootID is the recorded fact the
+// chain corrects. ErrConsumptionAlreadySuperseded when another correction
+// got there first.
 func (r *JobConsumptionRepository) InsertCorrection(ctx context.Context, c *JobConsumption) error {
-	if c.SupersedesID == nil {
-		return errors.New("insert correction: supersedes_id is required")
+	if c.SupersedesID == nil || c.RootID == uuid.Nil {
+		return errors.New("insert correction: supersedes_id and the corrected fact are required")
 	}
 	if c.Disposition == "" {
 		c.Disposition = DispositionGood
@@ -53,15 +85,12 @@ func (r *JobConsumptionRepository) InsertCorrection(ctx context.Context, c *JobC
 	}
 	c.Quantity = Round4(c.Quantity)
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO job_consumption (id, tenant_id, job_kind, job_id, dispatch_id, print_job_id, task_id,
-			order_id, machine_id, kind, material_code, material_lot, quantity, unit, basis, source, note,
-			recorded_by, occurred_at, disposition, supersedes_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		INSERT INTO job_consumption_corrections (id, tenant_id, consumption_id, supersedes_id, quantity, unit,
+			disposition, note, recorded_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING created_at`,
-		c.ID, c.TenantID, c.JobKind, c.JobID, c.DispatchID, c.PrintJobID, c.TaskID,
-		c.OrderID, c.MachineID, c.Kind, nullableString(c.MaterialCode), nullableString(c.MaterialLot),
-		c.Quantity, c.Unit, c.Basis, c.Source, nullableString(c.Note), c.RecordedBy, c.OccurredAt, c.Disposition,
-		c.SupersedesID).Scan(&c.CreatedAt)
+		c.ID, c.TenantID, c.RootID, c.SupersedesID, c.Quantity, c.Unit, c.Disposition, nullableString(c.Note),
+		c.RecordedBy).Scan(&c.CreatedAt)
 	if uniqueViolation(err) {
 		return ErrConsumptionAlreadySuperseded
 	}
@@ -73,6 +102,8 @@ func (r *JobConsumptionRepository) InsertCorrection(ctx context.Context, c *JobC
 
 // Print job statuses the operator completion path reads (print_jobs, 014).
 const (
+	PrintJobPending   = "pending"
+	PrintJobPreparing = "preparing"
 	PrintJobCompleted = "completed"
 	PrintJobCancelled = "cancelled"
 	PrintJobFailed    = "failed"

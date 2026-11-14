@@ -28,7 +28,7 @@ type CorrectionRequest struct {
 
 // Correct is POST /v1/jobs/consumption/:id/corrections.
 // @Summary Correct a recorded consumption row
-// @Description Append-only: stores a new operator actual of the same job, kind and material that supersedes the row (supersedes_id); history is never updated. The correction becomes the job's effective quantity and the stock relieved for the job moves by the difference (an adjustment). A row is corrected once: correct the latest correction to change it again (409 already_superseded names it). disposition (good, scrap, failed_print) is kept in Pravara and not sent to the cost ledger (its contract has no such field).
+// @Description Append-only: stores a new operator actual of the same job, kind and material that supersedes the row (supersedes_id); history is never updated. The correction becomes the job's effective quantity and the stock relieved for the job moves by the difference (an adjustment). A row is corrected once: correct the latest correction to change it again (409 already_superseded names it). Only the job's effective row of the material may be corrected (409 not_effective with effective_id and correct_with). Corrections are stored in job_consumption_corrections and read through job_consumption_facts. disposition (good, scrap, failed_print) is kept in Pravara and not sent to the cost ledger (its contract has no such field).
 // @Tags jobs
 // @Accept json
 // @Produce json
@@ -37,7 +37,7 @@ type CorrectionRequest struct {
 // @Success 201 {object} map[string]interface{} "{consumption, superseded, stock_movements}"
 // @Failure 400 {object} map[string]string "invalid_id or validation_error"
 // @Failure 404 {object} map[string]string "consumption_not_found"
-// @Failure 409 {object} map[string]interface{} "already_superseded {error, message, superseded_by}"
+// @Failure 409 {object} map[string]interface{} "already_superseded {error, message, superseded_by} or not_effective {error, message, effective_id, correct_with}"
 // @Security BearerAuth
 // @Router /jobs/consumption/{id}/corrections [post]
 func (h *ConsumptionHandler) Correct(c *gin.Context) {
@@ -67,6 +67,15 @@ func (h *ConsumptionHandler) Correct(c *gin.Context) {
 		}
 		c.JSON(http.StatusConflict, body)
 		return
+	case errors.Is(err, services.ErrConsumptionNotEffective):
+		var ne *services.NotEffectiveError
+		body := gin.H{"error": "not_effective", "message": err.Error()}
+		if errors.As(err, &ne) {
+			body["effective_id"] = ne.EffectiveID
+			body["correct_with"] = correctionPath(ne.EffectiveID)
+		}
+		c.JSON(http.StatusConflict, body)
+		return
 	case errors.Is(err, services.ErrConsumptionInvalid):
 		badRequest(c, "validation_error", err.Error())
 		return
@@ -89,7 +98,7 @@ type PrintJobCompletionRequest struct {
 
 // CompletePrintJob is POST /v1/print-jobs/:id/complete.
 // @Summary Mark a print job finished and record its actual consumption
-// @Description An operator marks a print job finished (status completed, completed_at now unless set): a record only, nothing is sent to any machine. Its consumption is then recorded (ConsumptionService.RecordPrintJob): slicer estimates, printer-reported actuals already on the job, machine time, and, when material_quantity is given, the operator's actual material (material_unit g, mm, ml or sheet; material_code defaults to the print profile's material type). disposition (good, scrap, failed_print) applies to the material recorded. Calling it again on a completed job records nothing new. A cancelled or failed print job is refused (409 print_job_closed).
+// @Description An operator marks a print job finished (status completed, completed_at now unless set): a record only, nothing is sent to any machine. Its consumption is then recorded (ConsumptionService.RecordPrintJob): slicer estimates, printer-reported actuals already on the job, machine time, and, when material_quantity is given, the operator's actual material (material_unit g, mm, ml or sheet; material_code defaults to the print profile's material type). disposition (good, scrap, failed_print) applies to the material recorded. Calling it again on a completed job records nothing new. A cancelled or failed print job is refused (409 print_job_closed), and so is a queued one (pending or preparing: 409 print_job_not_started). On a completed job a report that differs from what is recorded is refused: 409 disposition_differs or already_recorded, with effective_id and correct_with.
 // @Tags jobs
 // @Accept json
 // @Produce json
@@ -98,7 +107,7 @@ type PrintJobCompletionRequest struct {
 // @Success 200 {object} map[string]interface{} "{print_job_id, marked_completed, consumption, created, stock_movements, material_recorded}"
 // @Failure 400 {object} map[string]string "invalid_id or validation_error"
 // @Failure 404 {object} map[string]string "print_job_not_found"
-// @Failure 409 {object} map[string]string "print_job_closed"
+// @Failure 409 {object} map[string]interface{} "print_job_closed, print_job_not_started, disposition_differs or already_recorded"
 // @Security BearerAuth
 // @Router /print-jobs/{id}/complete [post]
 func (h *ConsumptionHandler) CompletePrintJob(c *gin.Context) {
@@ -130,12 +139,21 @@ func (h *ConsumptionHandler) CompletePrintJob(c *gin.Context) {
 		in.By = &a
 	}
 	res, err := h.svc.CompletePrintJob(c.Request.Context(), tenantID, id, in)
+	var differs *services.ReportDiffersError
+	if errors.As(err, &differs) {
+		c.JSON(http.StatusConflict, gin.H{"error": differs.Code, "message": err.Error(),
+			"effective_id": differs.EffectiveID, "correct_with": correctionPath(differs.EffectiveID)})
+		return
+	}
 	switch {
 	case errors.Is(err, services.ErrConsumptionPrintJobNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "print_job_not_found", "message": "Print job not found"})
 		return
 	case errors.Is(err, services.ErrConsumptionPrintJobClosed):
 		c.JSON(http.StatusConflict, gin.H{"error": "print_job_closed", "message": err.Error()})
+		return
+	case errors.Is(err, services.ErrPrintJobNotStarted):
+		c.JSON(http.StatusConflict, gin.H{"error": "print_job_not_started", "message": err.Error()})
 		return
 	case errors.Is(err, services.ErrConsumptionInvalid):
 		badRequest(c, "validation_error", err.Error())
@@ -152,4 +170,19 @@ func (h *ConsumptionHandler) CompletePrintJob(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"print_job_id": res.PrintJobID, "marked_completed": res.MarkedCompleted,
 		"consumption": facts, "created": res.Created, "stock_movements": res.Movements,
 		"material_recorded": res.MaterialRecorded})
+}
+
+// correctionPath is the route that corrects a consumption row.
+func correctionPath(id uuid.UUID) string {
+	return "/v1/jobs/consumption/" + id.String() + "/corrections"
+}
+
+// correctionTarget is the row a correction of fact must target: the
+// effective row of its job and material (fact itself when that cannot be
+// read).
+func (h *ConsumptionHandler) correctionTarget(c *gin.Context, fact *repositories.JobConsumption) uuid.UUID {
+	if eff, err := h.svc.EffectiveOf(c.Request.Context(), fact); err == nil && eff != nil {
+		return eff.ID
+	}
+	return fact.ID
 }

@@ -253,7 +253,7 @@ func (h *ConsumptionHandler) Report(c *gin.Context) {
 	if !created {
 		c.JSON(http.StatusConflict, gin.H{"error": "already_recorded",
 			"message":     "an operator actual for this job and material is already recorded; correct it instead",
-			"consumption": fact, "correct_with": "/v1/jobs/consumption/" + fact.ID.String() + "/corrections"})
+			"consumption": fact, "correct_with": correctionPath(h.correctionTarget(c, fact))})
 		return
 	}
 	if moves == nil {

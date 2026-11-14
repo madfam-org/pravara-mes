@@ -88,6 +88,9 @@ type JobConsumption struct {
 	// correction that replaced this row (read only: List and Get).
 	SupersedesID *uuid.UUID `json:"supersedes_id,omitempty"`
 	SupersededBy *uuid.UUID `json:"superseded_by,omitempty"`
+	// RootID is the recorded fact a correction chain corrects (the row
+	// itself for a recorded fact).
+	RootID uuid.UUID `json:"-"`
 }
 
 // Validate checks c against the constraints of migration 033.
@@ -158,7 +161,7 @@ func NewJobConsumptionRepository(db DBTX) *JobConsumptionRepository {
 const jobConsumptionColumns = `c.id, c.tenant_id, c.job_kind, c.job_id, c.dispatch_id, c.print_job_id, c.task_id,
 	c.order_id, c.machine_id, c.kind, COALESCE(c.material_code, ''), COALESCE(c.material_lot, ''),
 	c.quantity, c.unit, c.basis, c.source, COALESCE(c.note, ''), c.recorded_by, c.occurred_at, c.created_at,
-	c.disposition, c.supersedes_id`
+	c.disposition, c.supersedes_id, c.root_id`
 
 func scanJobConsumption(row interface{ Scan(...any) error }, extra ...any) (*JobConsumption, error) {
 	var c JobConsumption
@@ -166,7 +169,7 @@ func scanJobConsumption(row interface{ Scan(...any) error }, extra ...any) (*Job
 	dest := []any{&c.ID, &c.TenantID, &c.JobKind, &c.JobID, &dispatchID, &printJobID, &taskID,
 		&orderID, &machineID, &c.Kind, &c.MaterialCode, &c.MaterialLot,
 		&c.Quantity, &c.Unit, &c.Basis, &c.Source, &c.Note, &recordedBy, &c.OccurredAt, &c.CreatedAt,
-		&c.Disposition, &supersedes}
+		&c.Disposition, &supersedes, &c.RootID}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return nil, err
 	}
@@ -198,8 +201,7 @@ func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption
 			order_id, machine_id, kind, material_code, material_lot, quantity, unit, basis, source, note,
 			recorded_by, occurred_at, disposition)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-		ON CONFLICT (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, '')))
-			WHERE supersedes_id IS NULL DO NOTHING
+		ON CONFLICT (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, ''))) DO NOTHING
 		RETURNING created_at`,
 		c.ID, c.TenantID, c.JobKind, c.JobID, c.DispatchID, c.PrintJobID, c.TaskID,
 		c.OrderID, c.MachineID, c.Kind, nullableString(c.MaterialCode), nullableString(c.MaterialLot),
@@ -212,7 +214,7 @@ func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption
 		return false, fmt.Errorf("insert job consumption: %w", err)
 	}
 	existing, err := scanJobConsumption(r.db.QueryRowContext(ctx, `
-		SELECT `+jobConsumptionColumns+` FROM job_consumption c
+		SELECT `+jobConsumptionColumns+` FROM job_consumption_facts c
 		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = $3 AND c.basis = $4 AND c.source = $5
 		  AND COALESCE(c.material_code, '') = $6 AND c.supersedes_id IS NULL AND `+tenantMatchOn("c"),
 		c.JobKind, c.JobID, c.Kind, c.Basis, c.Source, c.MaterialCode))
@@ -227,7 +229,7 @@ func (r *JobConsumptionRepository) Insert(ctx context.Context, c *JobConsumption
 // first. unit "" matches every unit.
 func (r *JobConsumptionRepository) MaterialFacts(ctx context.Context, jobKind string, jobID uuid.UUID, materialCode, unit string) ([]JobConsumption, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT `+jobConsumptionColumns+` FROM job_consumption c
+		SELECT `+jobConsumptionColumns+` FROM job_consumption_facts c
 		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = 'material' AND c.material_code = $3
 		  AND ($4 = '' OR c.unit = $4) AND `+tenantMatchOn("c")+`
 		ORDER BY c.created_at, c.id`, jobKind, jobID, materialCode, unit)
@@ -258,7 +260,7 @@ func registryCodeOf(alias string) string {
 // unit.
 func (r *JobConsumptionRepository) ItemFacts(ctx context.Context, jobKind string, jobID uuid.UUID, item *StockItem) ([]JobConsumption, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT `+jobConsumptionColumns+` FROM job_consumption c
+		SELECT `+jobConsumptionColumns+` FROM job_consumption_facts c
 		WHERE c.job_kind = $1 AND c.job_id = $2 AND c.kind = 'material'
 		  AND (material_resolve(c.material_code) = $3::uuid
 		       OR ($3::uuid IS NULL AND material_resolve(c.material_code) IS NULL AND c.material_code = $4))
@@ -303,7 +305,7 @@ type UnresolvedCode struct {
 // codes, most rows first (at most limit).
 func (r *JobConsumptionRepository) Coverage(ctx context.Context, from, to *time.Time, limit int) (*ConsumptionCoverage, error) {
 	out := &ConsumptionCoverage{From: from, To: to, Unresolved: []UnresolvedCode{}}
-	where := ` FROM job_consumption c WHERE c.kind = 'material' AND ($1::timestamptz IS NULL OR c.occurred_at >= $1)
+	where := ` FROM job_consumption_facts c WHERE c.kind = 'material' AND ($1::timestamptz IS NULL OR c.occurred_at >= $1)
 		AND ($2::timestamptz IS NULL OR c.occurred_at < $2) AND ` + tenantMatchOn("c")
 	err := r.db.QueryRowContext(ctx, `SELECT count(*), count(*) FILTER (WHERE material_resolve(c.material_code) IS NOT NULL)`+
 		where, from, to).Scan(&out.MaterialRows, &out.WithRegistryCode)
@@ -374,7 +376,7 @@ func (r *JobConsumptionRepository) List(ctx context.Context, f JobConsumptionFil
 	if f.EngagementSlug != nil {
 		add("o.engagement_slug = $%d", *f.EngagementSlug)
 	}
-	from := " FROM job_consumption c LEFT JOIN orders o ON o.id = c.order_id"
+	from := " FROM job_consumption_facts c LEFT JOIN orders o ON o.id = c.order_id"
 
 	var total int
 	if err := r.db.QueryRowContext(ctx, "SELECT count(*)"+from+where, args...).Scan(&total); err != nil {
@@ -424,7 +426,7 @@ func (r *JobConsumptionRepository) JobRelief(ctx context.Context, jobKind string
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT t.inventory_item_id, c.material_code, -SUM(t.quantity)
 		FROM inventory_transactions t
-		JOIN job_consumption c ON c.id = t.reference_id AND `+tenantMatchOn("c")+`
+		JOIN job_consumption_facts c ON c.id = t.reference_id AND `+tenantMatchOn("c")+`
 		WHERE t.reference_type = '`+StockReferenceJobConsumption+`' AND c.job_kind = $1 AND c.job_id = $2
 		  AND `+tenantMatchOn("t")+`
 		GROUP BY t.inventory_item_id, c.material_code

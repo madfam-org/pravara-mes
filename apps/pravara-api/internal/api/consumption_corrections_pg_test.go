@@ -24,8 +24,8 @@ import (
 
 func TestConsumptionCorrectionIsAppendOnly(t *testing.T) {
 	r := newDispatchRig(t)
-	person := r.userToken(t, "operator")
-	_, item := r.newStockedMaterial(t, person, "FIL-PLA-BLK", "filament", "g", 1000)
+	person := r.userToken(t, "operator") // shop-floor writes stay open to any signed-in user
+	_, item := r.newStockedMaterial(t, r.userToken(t, "admin"), "FIL-PLA-BLK", "filament", "g", 1000)
 	task := r.seedTask(t, boxSpecs)
 	report := "/v1/tasks/" + task.String() + "/consumption"
 
@@ -81,8 +81,13 @@ func TestConsumptionCorrectionIsAppendOnly(t *testing.T) {
 	}
 	assert.Equal(t, corr["id"], byID[firstID]["superseded_by"])
 
-	_, err := r.admin.Exec(`UPDATE job_consumption SET disposition = 'good' WHERE id = $1`, corr["id"])
+	_, err := r.admin.Exec(`UPDATE job_consumption_corrections SET disposition = 'good' WHERE id = $1`, corr["id"])
 	assert.ErrorContains(t, err, "append-only")
+	_, err = r.admin.Exec(`UPDATE job_consumption SET disposition = 'scrap' WHERE id = $1`, firstID)
+	assert.ErrorContains(t, err, "append-only")
+	var facts int
+	require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM job_consumption WHERE task_id = $1`, task).Scan(&facts))
+	assert.Equal(t, 1, facts, "corrections live in job_consumption_corrections; the 033 fact key is untouched")
 
 	// The cost event line counts only rows no correction superseded, and
 	// carries no disposition (Dhanam's contract has no such field).
@@ -112,8 +117,9 @@ func firstCreated(t *testing.T, r *dispatchRig, id string) (at time.Time) {
 
 func TestPrintJobCompletionRecordsActuals(t *testing.T) {
 	r := newDispatchRig(t)
-	person := r.userToken(t, "operator")
-	_, item := r.newStockedMaterial(t, person, "FIL-PLA-GRY", "filament", "g", 500)
+	person := r.userToken(t, "operator") // shop-floor writes stay open to any signed-in user
+	admin := r.userToken(t, "admin")
+	_, item := r.newStockedMaterial(t, admin, "FIL-PLA-GRY", "filament", "g", 500)
 	task := r.seedTask(t, boxSpecs)
 	var profile uuid.UUID
 	require.NoError(t, r.admin.QueryRow(`INSERT INTO material_profiles (tenant_id, name, material_type, diameter, density)
@@ -146,7 +152,7 @@ func TestPrintJobCompletionRecordsActuals(t *testing.T) {
 	// With the class aliased and the operator's weighed actual, a failed
 	// print: the actual is recorded with its disposition and relieves stock.
 	plaID := r.call(t, person, http.MethodGet, "/v1/inventory/materials?search=FIL-PLA-GRY", nil, http.StatusOK)["data"].([]any)[0].(map[string]any)["id"].(string)
-	r.call(t, person, http.MethodPost, "/v1/inventory/materials/"+plaID+"/aliases", map[string]any{"alias": "PLA"}, http.StatusCreated)
+	r.call(t, admin, http.MethodPost, "/v1/inventory/materials/"+plaID+"/aliases", map[string]any{"alias": "PLA"}, http.StatusCreated)
 	pj2 := newPrintJob("printing")
 	out = r.call(t, person, http.MethodPost, "/v1/print-jobs/"+pj2+"/complete",
 		map[string]any{"material_quantity": 9, "material_unit": "g", "disposition": "failed_print"}, http.StatusOK)
@@ -171,4 +177,75 @@ func TestPrintJobCompletionRecordsActuals(t *testing.T) {
 		map[string]any{"disposition": "lost"}, http.StatusBadRequest)
 	assert.Equal(t, http.StatusForbidden, r.do(http.MethodPost, "/v1/print-jobs/"+pj+"/complete",
 		r.machineToken(t, "pravara-mes:jobs", nil), nil).Code, "people only")
+}
+
+// Finding 6: only the job's effective row may be corrected; a correction of
+// an estimate or an older actual would override a later real actual.
+// Also: a queued print job cannot be completed, and an already completed
+// one does not silently ignore a different report.
+func TestCorrectionTargetsTheEffectiveRowAndCompletionRefusals(t *testing.T) {
+	r := newDispatchRig(t)
+	admin := r.userToken(t, "admin")
+	operator := r.userToken(t, "operator")
+	mID, item := r.newStockedMaterial(t, admin, "FIL-PLA-ORG", "filament", "g", 500)
+	r.call(t, admin, http.MethodPost, "/v1/inventory/materials/"+mID+"/aliases", map[string]any{"alias": "PLA"}, http.StatusCreated)
+	task := r.seedTask(t, boxSpecs)
+	var profile uuid.UUID
+	require.NoError(t, r.admin.QueryRow(`INSERT INTO material_profiles (tenant_id, name, material_type, diameter, density)
+		VALUES ($1, 'PLA orange', 'PLA', 1.75, 1.24) RETURNING id`, r.tenantID).Scan(&profile))
+	newPrintJob := func(status string, actualMM any) string {
+		var id string
+		require.NoError(t, r.admin.QueryRow(`INSERT INTO print_jobs (tenant_id, material_id, job_name, status, task_id,
+			estimated_filament_g, actual_filament_mm, started_at)
+			VALUES ($1, $2, 'bracket', $3, $4, 12.5, $5, NOW() - interval '1 hour') RETURNING id`,
+			r.tenantID, profile, status, task, actualMM).Scan(&id))
+		return id
+	}
+
+	// The printer's actual (4000 mm ≈ 11.9 g) is effective over the estimate.
+	pj := newPrintJob("printing", 4000)
+	out := r.call(t, operator, http.MethodPost, "/v1/print-jobs/"+pj+"/complete", nil, http.StatusOK)
+	var estimateID, actualID string
+	for _, f := range out["consumption"].([]any) {
+		m := f.(map[string]any)
+		if m["kind"] != "material" {
+			continue
+		}
+		if m["basis"] == "estimate" {
+			estimateID = m["id"].(string)
+		} else {
+			actualID = m["id"].(string)
+		}
+	}
+	require.NotEmpty(t, estimateID)
+	require.NotEmpty(t, actualID)
+	before := r.onHand(t, item)
+	refused := r.call(t, operator, http.MethodPost, "/v1/jobs/consumption/"+estimateID+"/corrections", map[string]any{"quantity": 30},
+		http.StatusConflict)
+	assert.Equal(t, "not_effective", refused["error"])
+	assert.Equal(t, actualID, refused["effective_id"])
+	assert.Equal(t, before, r.onHand(t, item), "a refused correction moves nothing")
+	r.call(t, operator, http.MethodPost, "/v1/jobs/consumption/"+actualID+"/corrections", map[string]any{"quantity": 13}, http.StatusCreated)
+	assert.Equal(t, 487.0, r.onHand(t, item))
+
+	// A queued print job has not printed: it cannot be completed.
+	assert.Equal(t, "print_job_not_started", errCode(r.call(t, operator, http.MethodPost,
+		"/v1/print-jobs/"+newPrintJob("pending", nil)+"/complete", nil, http.StatusConflict)))
+
+	// An already completed job: a different disposition or weighed quantity
+	// is refused and points at the correction route; the same report is a
+	// no-op.
+	pj2 := newPrintJob("printing", nil)
+	r.call(t, operator, http.MethodPost, "/v1/print-jobs/"+pj2+"/complete",
+		map[string]any{"material_quantity": 9, "material_unit": "g"}, http.StatusOK)
+	r.call(t, operator, http.MethodPost, "/v1/print-jobs/"+pj2+"/complete",
+		map[string]any{"material_quantity": 9, "material_unit": "g"}, http.StatusOK)
+	differs := r.call(t, operator, http.MethodPost, "/v1/print-jobs/"+pj2+"/complete",
+		map[string]any{"disposition": "scrap"}, http.StatusConflict)
+	assert.Equal(t, "disposition_differs", differs["error"])
+	assert.Contains(t, differs["correct_with"], "/corrections")
+	again := r.call(t, operator, http.MethodPost, "/v1/print-jobs/"+pj2+"/complete",
+		map[string]any{"material_quantity": 10, "material_unit": "g"}, http.StatusConflict)
+	assert.Equal(t, "already_recorded", again["error"])
+	assert.Contains(t, again["correct_with"], "/corrections")
 }

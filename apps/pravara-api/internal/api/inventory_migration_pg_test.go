@@ -124,26 +124,34 @@ func TestMigration035BackfillIsDeterministic(t *testing.T) {
 	}
 }
 
-// Migration 036 down deletes correction rows (the 033 fact key cannot hold
-// them) and removes the columns; up again restores them. Corrections must
-// supersede a row of the same job, kind and material.
+// Migration 036 down drops the corrections and the disposition column; up
+// again restores them. A correction supersedes its own fact or a correction
+// of the same fact, keeping the fact's unit family.
 func TestMigration036CorrectionsDownAndUp(t *testing.T) {
 	scratch := newScratchDatabase(t)
 	tid, job := "33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"
 	_, err := scratch.Exec(`INSERT INTO tenants (id, name, slug) VALUES ($1, 'Synthetic three', 'syn-three')`, tid)
 	require.NoError(t, err)
-	var orig string
+	var orig, other string
 	require.NoError(t, scratch.QueryRow(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
 		basis, source, occurred_at) VALUES ($1, 'task', $2, 'material', 'FIL-X', 5, 'g', 'actual', 'operator', NOW()) RETURNING id`,
 		tid, job).Scan(&orig))
-	_, err = scratch.Exec(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
-		basis, source, occurred_at, supersedes_id) VALUES ($1, 'task', $2, 'material', 'FIL-Y', 6, 'g', 'actual', 'operator', NOW(), $3)`,
-		tid, job, orig)
-	require.ErrorContains(t, err, "same tenant, job, kind and material")
-	_, err = scratch.Exec(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
-		basis, source, occurred_at, supersedes_id, disposition)
-		VALUES ($1, 'task', $2, 'material', 'FIL-X', 6, 'g', 'actual', 'operator', NOW(), $3, 'scrap')`, tid, job, orig)
-	require.NoError(t, err)
+	require.NoError(t, scratch.QueryRow(`INSERT INTO job_consumption (tenant_id, job_kind, job_id, kind, material_code, quantity, unit,
+		basis, source, occurred_at) VALUES ($1, 'task', $2, 'material', 'FIL-Y', 5, 'g', 'actual', 'operator', NOW()) RETURNING id`,
+		tid, job).Scan(&other))
+	correct := func(supersedes, unit string) error {
+		_, err := scratch.Exec(`INSERT INTO job_consumption_corrections (tenant_id, consumption_id, supersedes_id, quantity, unit, disposition)
+			VALUES ($1, $2, $3, 6, $4, 'scrap')`, tid, orig, supersedes, unit)
+		return err
+	}
+	require.ErrorContains(t, correct(other, "g"), "supersedes the corrected fact")
+	require.ErrorContains(t, correct(orig, "min"), "unit family")
+	require.NoError(t, correct(orig, "g"))
+	var n int
+	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM job_consumption_facts WHERE job_id = $1`, job).Scan(&n))
+	assert.Equal(t, 3, n, "two facts and one correction through the view")
+	_, err = scratch.Exec(`UPDATE job_consumption_corrections SET quantity = 7`)
+	require.ErrorContains(t, err, "append-only")
 
 	files, err := filepath.Glob("../db/migrations/036_*.sql")
 	require.NoError(t, err)
@@ -156,14 +164,42 @@ func TestMigration036CorrectionsDownAndUp(t *testing.T) {
 		require.NoError(t, err, filepath.Base(f))
 	}
 	exec(files[0])
-	var n, cols int
+	var cols, tables int
 	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM job_consumption`).Scan(&n))
-	assert.Equal(t, 1, n, "the correction row is deleted, the original stays")
+	assert.Equal(t, 2, n, "recorded facts stay")
 	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_name = 'job_consumption'
-		AND column_name IN ('supersedes_id', 'disposition')`).Scan(&cols))
+		AND column_name = 'disposition'`).Scan(&cols))
 	assert.Zero(t, cols)
+	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM information_schema.tables
+		WHERE table_name IN ('job_consumption_corrections', 'job_consumption_facts')`).Scan(&tables))
+	assert.Zero(t, tables)
 	exec(files[1])
 	var disposition string
 	require.NoError(t, scratch.QueryRow(`SELECT disposition FROM job_consumption WHERE id = $1`, orig).Scan(&disposition))
 	assert.Equal(t, "good", disposition)
+}
+
+// Migration 036 must not break the code it is applied under: production
+// migrations are applied by hand, so 036 may run before this code deploys,
+// or the code may roll back after it. The insert of PR A / main (an ON
+// CONFLICT on the 033 fact key, no predicate) must keep working.
+func TestMigration036KeepsTheOlderInsertWorking(t *testing.T) {
+	scratch := newScratchDatabase(t)
+	tid, job := "55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666"
+	_, err := scratch.Exec(`INSERT INTO tenants (id, name, slug) VALUES ($1, 'Synthetic five', 'syn-five')`, tid)
+	require.NoError(t, err)
+	olderInsert := `
+		INSERT INTO job_consumption (id, tenant_id, job_kind, job_id, dispatch_id, print_job_id, task_id,
+			order_id, machine_id, kind, material_code, material_lot, quantity, unit, basis, source, note,
+			recorded_by, occurred_at)
+		VALUES (gen_random_uuid(), $1, 'task', $2, NULL, NULL, NULL, NULL, NULL, 'material', 'FIL-X', NULL, 5, 'g',
+			'actual', 'operator', NULL, NULL, NOW())
+		ON CONFLICT (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, ''))) DO NOTHING
+		RETURNING created_at`
+	var created time.Time
+	require.NoError(t, scratch.QueryRow(olderInsert, tid, job).Scan(&created), "the older insert under 036")
+	assert.ErrorIs(t, scratch.QueryRow(olderInsert, tid, job).Scan(&created), sql.ErrNoRows, "a replay is still a no-op")
+	var n int
+	require.NoError(t, scratch.QueryRow(`SELECT count(*) FROM job_consumption WHERE job_id = $1`, job).Scan(&n))
+	assert.Equal(t, 1, n)
 }

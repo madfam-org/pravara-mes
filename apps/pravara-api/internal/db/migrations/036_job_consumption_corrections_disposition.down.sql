@@ -1,33 +1,14 @@
--- 036 (down): remove corrections and disposition. Correction rows are
--- DELETED (the 033 fact key cannot hold them), and the stock movements they
--- posted stay in inventory_transactions with a reference_id that no longer
--- resolves; quantity_on_hand is not rewound. Export corrections first if
--- they matter. Disposition is dropped.
+-- 036 (down): remove corrections and disposition. Corrections are dropped
+-- with their table (export them first if they matter); the stock movements
+-- they posted stay in inventory_transactions with a reference_id that no
+-- longer resolves, and quantity_on_hand is not rewound. Disposition is
+-- dropped. job_consumption's fact key was never changed, so nothing else
+-- needs restoring.
 BEGIN;
 
-DROP TRIGGER IF EXISTS trg_job_consumption_correction_target ON job_consumption;
-DROP FUNCTION IF EXISTS job_consumption_correction_target();
-
-ALTER TABLE job_consumption DROP CONSTRAINT IF EXISTS job_consumption_supersedes_id_fkey;
-
--- One tenant at a time with the tenant set (FORCE ROW LEVEL SECURITY
--- applies to the migration owner too).
-DO $$
-DECLARE
-    tid uuid;
-BEGIN
-    FOR tid IN SELECT id FROM tenants ORDER BY id
-    LOOP
-        PERFORM set_config('app.current_tenant_id', tid::text, true);
-        DELETE FROM job_consumption WHERE tenant_id = tid AND supersedes_id IS NOT NULL;
-    END LOOP;
-    PERFORM set_config('app.current_tenant_id', '', true);
-END $$;
-
-DROP INDEX IF EXISTS ux_job_consumption_supersedes;
-DROP INDEX IF EXISTS ux_job_consumption_fact;
-CREATE UNIQUE INDEX ux_job_consumption_fact ON job_consumption
-    (tenant_id, job_kind, job_id, kind, basis, source, (COALESCE(material_code, '')));
+DROP VIEW IF EXISTS job_consumption_facts;
+DROP TABLE IF EXISTS job_consumption_corrections;
+DROP FUNCTION IF EXISTS job_consumption_corrections_check();
 
 CREATE OR REPLACE FUNCTION job_consumption_append_only() RETURNS trigger
     LANGUAGE plpgsql AS $$
@@ -57,9 +38,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
-ALTER TABLE job_consumption DROP CONSTRAINT IF EXISTS job_consumption_correction_check;
 ALTER TABLE job_consumption DROP CONSTRAINT IF EXISTS job_consumption_disposition_check;
 ALTER TABLE job_consumption DROP COLUMN IF EXISTS disposition;
-ALTER TABLE job_consumption DROP COLUMN IF EXISTS supersedes_id;
 
 COMMIT;
