@@ -34,6 +34,19 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Next.js inlines NEXT_PUBLIC_* into the browser bundle at build time, so they
+# must be present here. Without these ARGs the workflow's build-args were
+# silently dropped and the shipped bundle called http://localhost:4500.
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_JANUA_URL
+ARG NEXT_PUBLIC_REALTIME_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_JANUA_URL=${NEXT_PUBLIC_JANUA_URL}
+ENV NEXT_PUBLIC_REALTIME_URL=${NEXT_PUBLIC_REALTIME_URL}
+
+# Fail the image build rather than ship a bundle that points at localhost.
+RUN test -n "$NEXT_PUBLIC_API_URL" || (echo "NEXT_PUBLIC_API_URL build-arg is required" >&2; exit 1)
+
 RUN npm run build
 
 # -----------------------------------------------------------------------------
