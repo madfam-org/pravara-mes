@@ -252,8 +252,11 @@ var inventoryCols = []string{"id", "tenant_id", "sku", "name", "category", "desc
 func TestMCPInventoryLevelsAreQuantitiesOnly(t *testing.T) {
 	r := newMCPRig(t, true)
 	now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC)
+	// Fixed ids: a random UUID can contain "250" and trip the unit-cost check below.
+	ids := map[string]uuid.UUID{"FIL-PLA": uuid.MustParse("6d1f3c3e-7a44-4b0e-9c1d-2e8f4a6b7c90"),
+		"FIL-PLA-XL": uuid.MustParse("8e3a1d7f-4c6b-4f19-a0d3-5b7c9e1f3a64")}
 	item := func(sku string) []driver.Value {
-		return []driver.Value{uuid.New(), r.tenantID, sku, "PLA black 1 kg", nil, "secret note", "g", 1000.0, 100.0, 900.0, 200.0,
+		return []driver.Value{ids[sku], r.tenantID, sku, "PLA black 1 kg", nil, "secret note", "g", 1000.0, 100.0, 900.0, 200.0,
 			500.0, "fs-1", 250.0, "MXN", []byte(`{"supplier":"someone"}`), now, now}
 	}
 

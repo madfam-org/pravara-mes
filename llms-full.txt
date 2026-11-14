@@ -45,7 +45,13 @@ gap or incident link.
   with `pravara-cogs:read` only; read tools `mes_job_consumption` and
   `mes_inventory_levels` (quantities only, no money), each the same read as
   its HTTP route; coverage contract `MCPCoverage()` with a CI drift guard.
-  See `docs/operations/native-mcp.md`.
+  See `docs/operations/native-mcp.md`. Cost events
+  (`internal/costevents`): job consumption pushed to Dhanam's
+  `POST /v1/cost-events` as quantity-only `consumption` events (source
+  `pravara`, never money; Dhanam values them, ruling C12), through the
+  tenant-scoped outbox `cost_event_outbox` (migration 034), off unless
+  `PRAVARA_COST_EVENTS_ENABLED=true` (owner only). See
+  `docs/operations/cost-events.md`.
 - `apps/telemetry-worker` (Go): MQTT telemetry ingest and machine command
   dispatch.
 - `apps/pravara-ui` (Next 15.5), `apps/pravara-landing` (Next 15.5, public

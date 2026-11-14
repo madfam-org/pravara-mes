@@ -148,6 +148,31 @@ var (
 		[]string{"result"},
 	)
 
+	// CostEventsTotal counts job-consumption cost events sent to Dhanam
+	// (internal/costevents) by result: delivered, dhanam_rejected,
+	// contract_rejected (never sent) and retry.
+	CostEventsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "cost_events_total",
+			Help:      "Job-consumption cost events by delivery result",
+		},
+		[]string{"result"},
+	)
+
+	// CostEventsReady is 1 while the cost-events emitter runs, 0 otherwise
+	// (switch off, or switched on but configuration problems kept it from
+	// starting: the log names them).
+	CostEventsReady = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "cost_events_ready",
+			Help:      "1 while the cost-events emitter runs, 0 otherwise",
+		},
+	)
+
 	// ForgeSightReferenceItemsTotal counts ForgeSight webhook items by outcome.
 	// ForgeSight data is reference only: no outcome writes inventory cost or
 	// stock ("reference" = accepted and logged; "ignored_missing_id" = no

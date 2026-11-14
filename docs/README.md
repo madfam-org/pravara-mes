@@ -16,6 +16,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
 | [operations/fabrication-dispatch.md](./operations/fabrication-dispatch.md) | Matchmaking, dispatch (render → slice → start_job) and the passport updater |
 | [operations/job-consumption.md](./operations/job-consumption.md) | Per-job consumption (quantities only), stock relief, order engagement and the consumption read |
+| [operations/cost-events.md](./operations/cost-events.md) | Job consumption to Dhanam as quantity-only cost events (off by default): event shape, outbox and delivery, settings, owner steps, migration 034 |
 | [operations/native-mcp.md](./operations/native-mcp.md) | Native MCP (`POST /mcp`, off by default): cost-ledger read tools, scope `pravara-cogs:read`, gates, coverage contract, owner enablement |
 | [operations/sparkplug-broker-and-enrollment.md](./operations/sparkplug-broker-and-enrollment.md) | Broker HTTP auth/ACL, edge enrollment, primary host and EMQX configuration |
 | [deploy/edge/README.md](../deploy/edge/README.md) | Site box kit: machine adapter as the Sparkplug B edge node |

@@ -154,6 +154,16 @@ PRAVARA_REDIS_PORT=6379
 PRAVARA_MCP_ENABLED=false
 PRAVARA_MCP_RATE_PER_MINUTE=60
 PRAVARA_MCP_BURST=10
+
+# Job consumption to Dhanam as quantity-only cost events: off by default;
+# only the owner turns it on (docs/operations/cost-events.md)
+PRAVARA_COST_EVENTS_ENABLED=false
+PRAVARA_COST_EVENTS_DRY_RUN=false
+PRAVARA_COST_EVENTS_TENANT_ID=
+PRAVARA_COST_EVENTS_START_DATE=
+PRAVARA_COST_EVENTS_DHANAM_URL=
+PRAVARA_COST_EVENTS_CLIENT_ID=
+PRAVARA_COST_EVENTS_CLIENT_SECRET=
 ```
 
 ## Services
@@ -371,6 +381,10 @@ Quantities only, no cost. Rules: [docs/operations/job-consumption.md](docs/opera
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
+
+### Cost events to Dhanam
+
+Pravara pushes each completed job's material consumption to Dhanam's `POST /v1/cost-events` as quantity-only `cost.event.v1` `consumption` events (source `pravara`; never an amount, currency or FX: Dhanam values consumption). Deterministic ids (a correction updates the same event), a durable tenant-scoped outbox (`cost_event_outbox`, migration 034) with retry and backoff, a dry run, Janua `client_credentials` with scope `dhanam-cost-events:write`. **Off by default:** `PRAVARA_COST_EVENTS_ENABLED` unset → nothing is built or sent; the owner turns it on. Details and owner steps: [docs/operations/cost-events.md](docs/operations/cost-events.md).
 
 ### Native MCP (agents)
 
