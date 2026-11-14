@@ -68,6 +68,9 @@ type mcpConsumptionRow struct {
 	Note           string     `json:"note,omitempty"`
 	OccurredAt     time.Time  `json:"occurred_at"`
 	CreatedAt      time.Time  `json:"created_at"`
+	Disposition    string     `json:"disposition"`
+	SupersedesID   *uuid.UUID `json:"supersedes_id,omitempty"`
+	SupersededBy   *uuid.UUID `json:"superseded_by,omitempty"`
 }
 
 // mcpInventoryLevel is the MCP projection of repositories.InventoryItem:
@@ -176,7 +179,8 @@ func (t *mcpTools) jobConsumption(ctx context.Context, req mcp.Request) (any, er
 		row := mcpConsumptionRow{ID: r.ID, JobKind: r.JobKind, JobID: r.JobID, DispatchID: r.DispatchID,
 			PrintJobID: r.PrintJobID, TaskID: r.TaskID, OrderID: r.OrderID, MachineID: r.MachineID, Kind: r.Kind,
 			MaterialCode: r.MaterialCode, RegistryCode: r.RegistryCode, MaterialLot: r.MaterialLot, Quantity: r.Quantity, Unit: r.Unit,
-			Basis: r.Basis, Source: r.Source, Note: r.Note, OccurredAt: r.OccurredAt, CreatedAt: r.CreatedAt}
+			Basis: r.Basis, Source: r.Source, Note: r.Note, OccurredAt: r.OccurredAt, CreatedAt: r.CreatedAt,
+			Disposition: r.Disposition, SupersedesID: r.SupersedesID, SupersededBy: r.SupersededBy}
 		if seesSlugs {
 			row.EngagementSlug = r.EngagementSlug
 		}
@@ -323,6 +327,9 @@ func jobConsumptionRowSchema() map[string]any {
 			"note":            str("How the quantity was derived"),
 			"occurred_at":     str("When the job completed", "format", "date-time"),
 			"created_at":      str("When the fact was recorded", "format", "date-time"),
+			"disposition":     map[string]any{"type": "string", "enum": []string{"good", "scrap", "failed_print"}},
+			"supersedes_id":   uuidRef("The row this operator correction replaces"),
+			"superseded_by":   uuidRef("The correction that replaced this row (it no longer counts)"),
 		}}
 }
 

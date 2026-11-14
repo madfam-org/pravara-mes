@@ -2104,6 +2104,78 @@
                 }
             }
         },
+        "/jobs/consumption/{id}/corrections": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Append-only: stores a new operator actual of the same job, kind and material that supersedes the row (supersedes_id); history is never updated. The correction becomes the job's effective quantity and the stock relieved for the job moves by the difference (an adjustment). A row is corrected once: correct the latest correction to change it again (409 already_superseded names it). Only the job's effective row of the material may be corrected (409 not_effective with effective_id and correct_with). Corrections are stored in job_consumption_corrections and read through job_consumption_facts. disposition (good, scrap, failed_print) is kept in Pravara and not sent to the cost ledger (its contract has no such field).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Correct a recorded consumption row",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Consumption row ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Correction",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CorrectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{consumption, superseded, stock_movements}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_id or validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "consumption_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "already_superseded {error, message, superseded_by} or not_effective {error, message, effective_id, correct_with}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/machines": {
             "get": {
                 "security": [
@@ -3893,6 +3965,77 @@
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/print-jobs/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "An operator marks a print job finished (status completed, completed_at now unless set): a record only, nothing is sent to any machine. Its consumption is then recorded (ConsumptionService.RecordPrintJob): slicer estimates, printer-reported actuals already on the job, machine time, and, when material_quantity is given, the operator's actual material (material_unit g, mm, ml or sheet; material_code defaults to the print profile's material type). disposition (good, scrap, failed_print) applies to the material recorded. Calling it again on a completed job records nothing new. A cancelled or failed print job is refused (409 print_job_closed), and so is a queued one (pending or preparing: 409 print_job_not_started). On a completed job a report that differs from what is recorded is refused: 409 disposition_differs or already_recorded, with effective_id and correct_with.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Mark a print job finished and record its actual consumption",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Print job ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Operator's report",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.PrintJobCompletionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{print_job_id, marked_completed, consumption, created, stock_movements, material_recorded}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_id or validation_error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "print_job_not_found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "print_job_closed, print_job_not_started, disposition_differs or already_recorded",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -6026,7 +6169,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Records an operator-reported actual (basis actual, source operator) for a task: material with material_code and unit g, mm, ml or sheet, or machine time with unit min. It belongs to the task's latest completed dispatch when there is one. When material_code is the SKU of an inventory item in the same unit, stock relieved for the job is brought to this actual (an adjustment against the slicer estimate already relieved). The same actual can be reported once per job and material (409 already_recorded).",
+                "description": "Records an operator-reported actual (basis actual, source operator) for a task: material with material_code and unit g, mm, ml or sheet, or machine time with unit min. It belongs to the task's latest completed dispatch when there is one. When material_code is the SKU of an inventory item in the same unit, stock relieved for the job is brought to this actual (an adjustment against the slicer estimate already relieved). The same actual can be reported once per job and material: a second report is 409 already_recorded, whose correct_with names the route that corrects the stored row (POST /v1/jobs/consumption/{id}/corrections). disposition (good, scrap, failed_print; default good) is kept in Pravara.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6897,6 +7040,10 @@
                 "dispatch_id": {
                     "type": "string"
                 },
+                "disposition": {
+                    "description": "Disposition is good, scrap or failed_print (migration 036).",
+                    "type": "string"
+                },
                 "engagement_slug": {
                     "description": "EngagementSlug is read from the order at query time (List only).",
                     "type": "string"
@@ -6945,6 +7092,13 @@
                     "type": "string"
                 },
                 "source": {
+                    "type": "string"
+                },
+                "superseded_by": {
+                    "type": "string"
+                },
+                "supersedes_id": {
+                    "description": "SupersedesID is the row this correction replaces; SupersededBy is the\ncorrection that replaced this row (read only: List and Get).",
                     "type": "string"
                 },
                 "task_id": {
@@ -7577,6 +7731,10 @@
                 "unit"
             ],
             "properties": {
+                "disposition": {
+                    "description": "Disposition is good (default), scrap or failed_print (ruling I5).",
+                    "type": "string"
+                },
                 "material_code": {
                     "description": "MaterialCode is required for material (unit g, mm, ml or sheet): the\ninventory SKU when the material is stocked. Omit it for machine time\n(unit min).",
                     "type": "string"
@@ -7610,6 +7768,28 @@
                     "type": "string"
                 },
                 "to_unit": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CorrectionRequest": {
+            "type": "object",
+            "required": [
+                "quantity"
+            ],
+            "properties": {
+                "disposition": {
+                    "description": "Disposition: good, scrap or failed_print (default: the corrected row's).",
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "unit": {
+                    "description": "Unit defaults to the corrected row's unit.",
                     "type": "string"
                 }
             }
@@ -8443,6 +8623,23 @@
                     "minimum": 1
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.PrintJobCompletionRequest": {
+            "type": "object",
+            "properties": {
+                "disposition": {
+                    "type": "string"
+                },
+                "material_code": {
+                    "type": "string"
+                },
+                "material_quantity": {
+                    "type": "number"
+                },
+                "material_unit": {
                     "type": "string"
                 }
             }

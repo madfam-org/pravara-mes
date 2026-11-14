@@ -422,6 +422,11 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		// Job consumption (quantities only): consumption_handlers.go
 		v1.GET("/jobs/consumption", consumptionHandler.List)
 		v1.GET("/jobs/consumption/coverage", consumptionHandler.Coverage)
+		// Operator corrections (append-only) and print-job completion
+		// (consumption_correction_handlers.go): records only, no machine
+		// is told anything.
+		v1.POST("/jobs/consumption/:id/corrections", consumptionHandler.Correct)
+		v1.POST("/print-jobs/:id/complete", consumptionHandler.CompletePrintJob)
 
 		// --- fabrication dispatch (MES-1 §5-§7): dispatch_handlers.go ---
 		registerDispatchRoutes(v1, database, cfg, log, publisher, deps.Dispatch)

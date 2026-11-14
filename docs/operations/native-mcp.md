@@ -58,7 +58,7 @@ name (`mes.job_consumption`, `mes.inventory_levels`).
 
 | Tool | Arguments | Returns | Same read as |
 | --- | --- | --- | --- |
-| `mes_job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source, the material's `registry_code` and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
+| `mes_job_consumption` | `from`, `to` (RFC 3339, required; `from` inclusive, `to` exclusive), `task_id?`, `order_id?`, `engagement_slug?`, `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: per-job material (g, mm, ml, sheet) and machine time (min), with basis, source, disposition, corrections (`supersedes_id`, `superseded_by`), the material's `registry_code` and the order's engagement slug | `GET /v1/jobs/consumption` (same filter parser and repository) |
 | `mes_inventory_levels` | `material_code?` (exact SKU), `limit?` (1–1000, default 100), `offset?` | `{data, total, limit, offset}`: SKU, name, category, unit, on hand, reserved, available, reorder point, and the linked material registry entry (`material_id`, `material_code`) | `GET /v1/inventory` (same repository; `material_code` is the search narrowed to the exact SKU) |
 
 What the tools leave out:
@@ -96,6 +96,7 @@ families (`/v1/jobs`, `/v1/inventory`, `/v1/tasks/:id/consumption`,
 | `GET /v1/jobs/consumption/coverage` | EXEMPTED: a data-quality gate over the same rows (each row carries `registry_code`) |
 | `GET /v1/inventory/materials`, `…/materials/:id`, `…/materials/unlinked`, `…/conversion-gaps`, `…/receipts`, `…/receipts/:id`, `…/counts`, `…/counts/:id` | EXEMPTED: registry reference data and records for people (RFC 0058 wave 1); reasons in `MCPCoverage()` |
 | `POST`/`PATCH` registry, alias, conversion, receipt and count routes | EXEMPTED: writes, people only |
+| `POST /v1/jobs/consumption/:id/corrections`, `POST /v1/print-jobs/:id/complete` | EXEMPTED: writes that move stock, people only (neither reaches a machine) |
 
 The drift guard (`mcp_coverage_test.go`) fails CI when:
 - a route in those families is added without an entry;

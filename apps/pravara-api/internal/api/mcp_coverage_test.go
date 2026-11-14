@@ -213,7 +213,7 @@ func TestMCPSlugsFollowTheHTTPScopes(t *testing.T) {
 	mock.ExpectQuery(`SELECT count`).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery(`ORDER BY c.occurred_at`).WillReturnRows(sqlmock.NewRows(consumptionCols).AddRow(uuid.New(), uuid.New(),
 		"task", uuid.New(), nil, nil, nil, uuid.New(), nil, "machine_time", "", "", 3.0, "min", "actual", "printer", "", nil,
-		now, now, "eng-alpha", ""))
+		now, now, "good", nil, uuid.New(), "eng-alpha", "", nil))
 	out, err := tools.jobConsumption(context.Background(), mcp.Request{Caller: cogs, Args: args})
 	require.NoError(t, err)
 	page := out.(mcpPage[mcpConsumptionRow])

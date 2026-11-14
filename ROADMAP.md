@@ -253,11 +253,16 @@ is not built.
       switch off (item 24); Pravara stays quantities-only;
     - filling `orders.engagement_slug` from Cotiza intake or PhyndCRM (it is
       set by hand today), together with item 1;
-    - a print-job completion path that calls
-      `ConsumptionService.RecordPrintJob` (nothing marks print jobs completed
-      today);
-    - operator corrections of a reported actual (today: 409, then the
-      inventory adjust endpoint);
+    - ~~a print-job completion path that calls
+      `ConsumptionService.RecordPrintJob`~~: wave 1 PR B, an operator marks
+      the print job finished (`POST /v1/print-jobs/:id/complete`; a record,
+      never a machine command). Still open: no machine adapter reports print
+      completion to the API;
+    - ~~operator corrections of a reported actual~~: wave 1 PR B, append-only
+      (`POST /v1/jobs/consumption/:id/corrections`), with disposition
+      `good`/`scrap`/`failed_print` (I5) kept in Pravara. Open for the owner:
+      Dhanam's contract has no disposition field, so scrap is not
+      distinguishable in the ledger until it gains one;
     - ~~the ForgeSight webhook's writes to inventory~~: done. ForgeSight prices
       are market benchmarks, not cost, and the cost ledger values consumption;
       the webhook still authenticates and verifies its signature, then logs

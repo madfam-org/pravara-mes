@@ -382,6 +382,8 @@ Quantities only, no cost. Rules: [docs/operations/job-consumption.md](docs/opera
 |--------|----------|-------------|
 | GET | `/v1/jobs/consumption` | Per-job material and machine-minute rows (`actual`/`estimate`), with the order's `engagement_slug` and the material's `registry_code`; filters `from`, `to`, `task_id`, `order_id`, `engagement_slug` |
 | GET | `/v1/jobs/consumption/coverage` | Material rows with and without a registry code, and the unresolved codes |
+| POST | `/v1/jobs/consumption/:id/corrections` | Append-only operator correction of a recorded row (people only; moves stock by the difference) |
+| POST | `/v1/print-jobs/:id/complete` | An operator marks a print job finished and its actual consumption is recorded (people only; reaches no machine) |
 
 ### Inventory registry, receipts and counts (RFC 0058 wave 1)
 

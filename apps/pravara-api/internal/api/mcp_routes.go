@@ -80,6 +80,7 @@ var mcpCOGSPathPrefixes = []string{
 	"/v1/jobs",
 	"/v1/inventory",
 	"/v1/tasks/:id/consumption",
+	"/v1/print-jobs",
 	"/v1/match",
 	"/v1/dispatches",
 	"/v1/machines/:id/command",
@@ -104,8 +105,11 @@ func MCPCoverage() map[string]MCPRouteCoverage {
 	exempt := func(reason string) MCPRouteCoverage { return MCPRouteCoverage{Exempt: reason} }
 	return map[string]MCPRouteCoverage{
 		// Job consumption.
-		k(get, "/v1/jobs/consumption"):       covered(MCPToolJobConsumption),
-		k(post, "/v1/tasks/:id/consumption"): exempt("write: an operator actual moves stock; people only"),
+		k(get, "/v1/jobs/consumption"):                  covered(MCPToolJobConsumption),
+		k(post, "/v1/tasks/:id/consumption"):            exempt("write: an operator actual moves stock; people only"),
+		k(post, "/v1/jobs/consumption/:id/corrections"): exempt("write: an operator correction moves stock; people only"),
+		k(post, "/v1/print-jobs/:id/complete"): exempt("write: an operator marks a print job finished and its " +
+			"consumption moves stock; people only (it reaches no machine)"),
 		// Inventory (quantities only over MCP; cost fields stay on HTTP).
 		k(get, "/v1/inventory"):             covered(MCPToolInventoryLevels),
 		k(get, "/v1/inventory/:id"):         covered(MCPToolInventoryLevels),
