@@ -16,8 +16,8 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { beforeEach, afterEach } from 'vitest'
 import {
   usePravaraSession,
-  pravaraSignIn,
-  pravaraSignOut,
+  signOutOfPravara,
+  usePravaraSignOut,
   rolesFromClaims,
   currentAccessToken,
   resetSessionProbeForTests,
@@ -196,14 +196,72 @@ describe('rolesFromClaims', () => {
   })
 })
 
-describe('pravaraSignIn', () => {
-  it('is a function', () => {
-    expect(typeof pravaraSignIn).toBe('function')
+describe('signOutOfPravara', () => {
+  const assign = vi.fn()
+  const original = window.location
+
+  beforeEach(() => {
+    assign.mockReset()
+    localStorage.clear()
+    localStorage.setItem('janua_access_token', 'a')
+    localStorage.setItem('janua_refresh_token', 'r')
+    localStorage.setItem('janua_token_expires_at', '1')
+    localStorage.setItem('unrelated', 'keep')
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: original })
+  })
+
+  it('signs out through the client, clears the session and goes to the sign-in page', async () => {
+    const client = { signOut: vi.fn().mockResolvedValue(undefined) }
+    await signOutOfPravara(client)
+    expect(client.signOut).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('janua_access_token')).toBeNull()
+    expect(localStorage.getItem('janua_refresh_token')).toBeNull()
+    expect(localStorage.getItem('janua_token_expires_at')).toBeNull()
+    expect(localStorage.getItem('unrelated')).toBe('keep')
+    expect(assign).toHaveBeenCalledWith('/login')
+  })
+
+  it('never navigates to the identity service', async () => {
+    await signOutOfPravara({ signOut: vi.fn().mockResolvedValue(undefined) }, { callbackUrl: '/login' })
+    expect(assign).toHaveBeenCalledTimes(1)
+    expect(String(assign.mock.calls[0][0])).not.toMatch(/^https?:/)
+  })
+
+  it('still clears the session and leaves when the client fails', async () => {
+    const client = { signOut: vi.fn().mockRejectedValue(new Error('network')) }
+    await expect(signOutOfPravara(client)).resolves.toBeUndefined()
+    expect(localStorage.getItem('janua_access_token')).toBeNull()
+    expect(localStorage.getItem('janua_refresh_token')).toBeNull()
+    expect(assign).toHaveBeenCalledWith('/login')
+  })
+
+  it('works with no client at all', async () => {
+    await signOutOfPravara(null)
+    expect(localStorage.getItem('janua_access_token')).toBeNull()
+    expect(assign).toHaveBeenCalledWith('/login')
+  })
+
+  it('honours a callback address', async () => {
+    await signOutOfPravara(null, { callbackUrl: '/login?from=settings' })
+    expect(assign).toHaveBeenCalledWith('/login?from=settings')
   })
 })
 
-describe('pravaraSignOut', () => {
-  it('is a function', () => {
-    expect(typeof pravaraSignOut).toBe('function')
+describe('usePravaraSignOut', () => {
+  it('signs out with the provider client', async () => {
+    const assign = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } })
+    const client = { signOut: vi.fn().mockResolvedValue(undefined) }
+    mockUseJanua.mockReturnValue({ client })
+    const { result } = renderHook(() => usePravaraSignOut())
+    await act(async () => { await result.current() })
+    expect(client.signOut).toHaveBeenCalledTimes(1)
+    expect(assign).toHaveBeenCalledWith('/login')
+    Object.defineProperty(window, 'location', { configurable: true, value: original })
   })
 })

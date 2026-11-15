@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  pravaraSignOut: vi.fn(),
+  usePravaraSignOut: () => vi.fn(),
 }))
 
 vi.mock('next/link', () => ({

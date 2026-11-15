@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { pravaraSignOut } from "@/lib/auth";
+import { usePravaraSignOut } from "@/lib/auth";
 import {
   LayoutDashboard,
   Kanban,
@@ -64,6 +64,8 @@ export function Sidebar({
   onNavigate,
 }: SidebarProps) {
   const pathname = usePathname();
+  const signOut = usePravaraSignOut();
+  const [signingOut, setSigningOut] = useState(false);
   const [collapsedState, setCollapsed] = useState(false);
   const collapsed = collapsible && collapsedState;
 
@@ -144,15 +146,21 @@ export function Sidebar({
           {collapsed && <span className="sr-only">Settings</span>}
         </Link>
         <button
-          onClick={() => pravaraSignOut({ callbackUrl: "/login" })}
+          type="button"
+          disabled={signingOut}
+          onClick={() => {
+            setSigningOut(true);
+            void signOut({ callbackUrl: "/login" });
+          }}
           className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           )}
           aria-label="Sign out of your account"
+          aria-busy={signingOut}
           title={collapsed ? "Sign out" : undefined}
         >
           <LogOut className="h-5 w-5 shrink-0" aria-hidden="true" />
-          {!collapsed && <span>Sign out</span>}
+          {!collapsed && <span>{signingOut ? "Signing out…" : "Sign out"}</span>}
           {collapsed && <span className="sr-only">Sign out</span>}
         </button>
 
