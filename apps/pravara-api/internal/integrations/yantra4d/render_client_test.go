@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,4 +78,89 @@ func TestSidecarFailsClosed(t *testing.T) {
 	bad = good()
 	bad.Generator.Source.TreeSHA256 = "short"
 	assert.Error(t, CheckSidecar(bad, part))
+}
+
+// yantra4d answers 200 "success" with the failed part simply absent. The
+// client reports that as a retryable failure carrying yantra4d's reason.
+func TestRenderWithNoPartsIsARetryableFailure(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	y.FailingRenders = 1
+	_, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	var re *remote.Error
+	require.ErrorAs(t, err, &re)
+	assert.True(t, re.Retryable)
+	assert.Contains(t, re.Message, "render returned no parts")
+	assert.Contains(t, re.Message, "ERROR: Render timed out while waiting for completion")
+
+	// The next attempt succeeds.
+	resp, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	require.NoError(t, err)
+	assert.Len(t, resp.Parts, 1)
+}
+
+func TestLogExcerpt(t *testing.T) {
+	assert.Equal(t, "", LogExcerpt(""))
+	assert.Equal(t, "", LogExcerpt("  \n "))
+	assert.Equal(t, ": queued [body] Error: boom", LogExcerpt("queued\n[body]   Error: boom\n"))
+
+	long := strings.Repeat("x", 500) + " the end"
+	got := LogExcerpt(long)
+	assert.True(t, strings.HasPrefix(got, ": …"))
+	assert.True(t, strings.HasSuffix(got, "the end"), "the end of the log is kept: that is where a failure is reported")
+	assert.LessOrEqual(t, len([]rune(got)), 303)
+}
+
+// The excerpt is stored in a PostgreSQL text column and returned by the API,
+// and it is another service's output.
+func TestLogExcerptIsSafeToStore(t *testing.T) {
+	// Cut on a character boundary: 400 two-byte characters, kept tail of 300.
+	got := LogExcerpt(strings.Repeat("ñ", 400))
+	assert.True(t, utf8.ValidString(got), "never split a multi-byte character")
+	assert.Equal(t, ": …"+strings.Repeat("ñ", 300), got)
+
+	// Invalid UTF-8 and control characters are dropped; NUL would be refused by PostgreSQL.
+	got = LogExcerpt("ok\x00 \xff\xfe bad \x1b[31mred\x1b[0m \u0007 end")
+	assert.True(t, utf8.ValidString(got))
+	assert.NotContains(t, got, "\x00")
+	assert.NotContains(t, got, "\x1b")
+	assert.Equal(t, ": ok bad [31mred[0m end", got)
+
+	// Only junk: nothing to say.
+	assert.Equal(t, "", LogExcerpt("\x00\xff\x01"))
+}
+
+// On a cache hit yantra4d serves an artifact made earlier; its Last-Modified
+// says when. The sidecar fetch reports it so dispatch can judge freshness by
+// the artifact, not by the request.
+func TestFetchSidecarReportsWhenTheArtifactWasMade(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	resp, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	require.NoError(t, err)
+
+	doc, _, err := c.FetchSidecar(context.Background(), resp.Parts[0])
+	require.NoError(t, err)
+	assert.True(t, doc.ArtifactModified.IsZero(), "unknown when yantra4d sends no Last-Modified")
+
+	made := time.Date(2026, 11, 13, 8, 30, 0, 0, time.UTC)
+	y.Set(func(y *dispatchfakes.Yantra4D) { y.ArtifactModified = made })
+	doc, _, err = c.FetchSidecar(context.Background(), resp.Parts[0])
+	require.NoError(t, err)
+	assert.True(t, doc.ArtifactModified.Equal(made))
+}
+
+func TestRenderRequestCarriesIgnoreCacheOnlyWhenAsked(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	req := RenderRequest{Project: "motor-soft-mount", Mode: "assembled", Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"}
+	_, err := c.Render(context.Background(), req)
+	require.NoError(t, err)
+	_, sent := y.Requests[0]["ignore_cache"]
+	assert.False(t, sent, "an ordinary render may be answered from yantra4d's cache")
+
+	req.IgnoreCache = true
+	_, err = c.Render(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, true, y.Requests[1]["ignore_cache"])
 }

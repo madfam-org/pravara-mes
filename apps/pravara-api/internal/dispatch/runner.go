@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -122,6 +125,10 @@ func (s *Service) step(ctx context.Context, d *repositories.DispatchJob) {
 		s.releaseQuietly(ctx, d, "dispatch failed: "+serr.code)
 		log.WithField("code", serr.code).Error("dispatch failed: " + serr.msg)
 	}
+	// The message can quote another service. A text column refuses invalid
+	// UTF-8 and NUL; a refused save would replay this hop forever without
+	// spending an attempt.
+	d.ErrorMessage = storableText(d.ErrorMessage)
 	err := s.inTenant(ctx, d.TenantID, func(ctx context.Context) error { return s.Dispatch.Save(ctx, d, s.owner) })
 	if errors.Is(err, repositories.ErrLeaseLost) {
 		log.Warn("dispatch lease lost; another runner owns it")
@@ -234,4 +241,20 @@ func (s *Service) recordDelivery(ctx context.Context, row repositories.PassportO
 	if err != nil {
 		log.WithError(err).Error("passport: failed to record the delivery attempt")
 	}
+}
+
+// storableText makes text safe for a PostgreSQL text column: valid UTF-8, no
+// NUL or other control characters except whitespace, and a bounded length.
+func storableText(text string) string {
+	text = strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || (unicode.IsControl(r) && !unicode.IsSpace(r)) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(text, ""))
+	const maxRunes = 2000
+	if runes := []rune(text); len(runes) > maxRunes {
+		text = string(runes[:maxRunes]) + "…"
+	}
+	return text
 }

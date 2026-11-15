@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/remote"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/machineclients"
@@ -37,7 +39,7 @@ type Client struct {
 	tokens  *machineclients.TokenSource
 }
 
-// NewClient creates a client for baseURL (e.g. https://yantra4d.madfam.io).
+// NewClient creates a client for baseURL (e.g. https://api.yantra4d.com).
 func NewClient(baseURL string, tokens *machineclients.TokenSource, httpClient *http.Client) (*Client, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -56,6 +58,10 @@ type RenderRequest struct {
 	Mode         string         `json:"mode"`
 	Parameters   map[string]any `json:"parameters"`
 	ExportFormat string         `json:"export_format"`
+	// IgnoreCache asks yantra4d to render again instead of answering from
+	// its cache. A cached answer can point at an artifact that is about to
+	// be deleted (it is collected 24 hours after it was first made).
+	IgnoreCache bool `json:"ignore_cache,omitempty"`
 }
 
 // Part is one rendered part of the envelope (GOC-1 §5 fields included).
@@ -71,9 +77,12 @@ type Part struct {
 
 // RenderResponse is the synchronous render envelope.
 type RenderResponse struct {
-	Status          string `json:"status"`
-	Parts           []Part `json:"parts"`
-	RequestID       string `json:"request_id"`
+	Status    string `json:"status"`
+	Parts     []Part `json:"parts"`
+	RequestID string `json:"request_id"`
+	// Log is yantra4d's render log. A part that failed or timed out is left
+	// out of Parts while Status stays "success"; its reason is only here.
+	Log             string `json:"log"`
 	GeneratorOutput *struct {
 		FormatVersion   string `json:"format_version"`
 		Complete        bool   `json:"complete"`
@@ -117,7 +126,38 @@ func (c *Client) Render(ctx context.Context, req RenderRequest) (*RenderResponse
 		return nil, &remote.Error{Service: service, Op: "render", Status: resp.StatusCode,
 			Message: fmt.Sprintf("render status %q", out.Status), Retryable: true}
 	}
+	// yantra4d answers 200 "success" even when every part failed or timed
+	// out: the parts are simply absent. Nothing to slice is not a success.
+	if len(out.Parts) == 0 {
+		return nil, &remote.Error{Service: service, Op: "render", Status: resp.StatusCode,
+			Message: "render returned no parts" + LogExcerpt(out.Log), Retryable: true}
+	}
 	return &out, nil
+}
+
+// LogExcerpt returns the end of a render log as a suffix for an error
+// message ("" when the log is empty). The end is where a failure is reported.
+//
+// The result is stored (a dispatch's error message is a text column) and
+// returned by the API, and the log is another service's output: it is made
+// valid UTF-8, stripped of control characters (PostgreSQL refuses NUL in
+// text), collapsed to one line and cut on a character boundary.
+func LogExcerpt(log string) string {
+	log = strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || (unicode.IsControl(r) && !unicode.IsSpace(r)) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(log, ""))
+	log = strings.Join(strings.Fields(log), " ")
+	if log == "" {
+		return ""
+	}
+	const maxRunes = 300
+	if runes := []rune(log); len(runes) > maxRunes {
+		log = "…" + string(runes[len(runes)-maxRunes:])
+	}
+	return ": " + log
 }
 
 // Sidecar is the subset of a GOC-1 variables.json document pravara records.
@@ -138,7 +178,11 @@ type Sidecar struct {
 			TreeSHA256 string `json:"tree_sha256"`
 		} `json:"source"`
 	} `json:"generator"`
-	Geometry []struct {
+	// ArtifactModified is the sidecar file's Last-Modified, when yantra4d
+	// sends one: when the render was actually made, which on a cache hit is
+	// earlier than the request. Zero when unknown. Not part of the document.
+	ArtifactModified time.Time `json:"-"`
+	Geometry         []struct {
 		Path      string `json:"path"`
 		MediaType string `json:"media_type"`
 		SHA256    string `json:"sha256"`
@@ -178,6 +222,9 @@ func (c *Client) FetchSidecar(ctx context.Context, part Part) (*Sidecar, string,
 	sum := sha256.Sum256(raw)
 	if err := CheckSidecar(&doc, part); err != nil {
 		return nil, "", err
+	}
+	if modified, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
+		doc.ArtifactModified = modified.UTC()
 	}
 	return &doc, hex.EncodeToString(sum[:]), nil
 }

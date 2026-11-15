@@ -88,7 +88,13 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		PassportAttempts:   cfg.Dispatch.PassportMaxAttempts,
 		RequireBoundingBox: cfg.Dispatch.RequireBoundingBox,
 		MatchWait:          time.Duration(cfg.Dispatch.MatchWaitSeconds) * time.Second,
+		RenderFreshFor:     time.Duration(cfg.Dispatch.RenderFreshForSeconds) * time.Second,
 	}, log)
+	// yantra4d deletes a render 24 hours after it was made. A window at or
+	// beyond that reuses renders that no longer exist.
+	if fresh := time.Duration(cfg.Dispatch.RenderFreshForSeconds) * time.Second; fresh >= 24*time.Hour {
+		return nil, fmt.Errorf("dispatch.render_fresh_for_seconds %d: must be under 86400, yantra4d's artifact lifetime", cfg.Dispatch.RenderFreshForSeconds)
+	}
 	switch cfg.Dispatch.RenderFormat {
 	case "", "3mf", "stl":
 	default:

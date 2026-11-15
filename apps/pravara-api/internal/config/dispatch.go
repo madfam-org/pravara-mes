@@ -21,6 +21,11 @@ type DispatchConfig struct {
 	// ReservationTTLSeconds is how long a matched machine is held before the
 	// command is enqueued. Each completed hop extends it.
 	ReservationTTLSeconds int `mapstructure:"reservation_ttl_seconds"`
+	// RenderFreshForSeconds is how long a render kept across a re-match is
+	// reused. Yantra4D deletes render artifacts after 24 hours, on a pod
+	// restart, and renames them on every release, so an older render is
+	// requested again instead of handing fabrication-prep a dead URL.
+	RenderFreshForSeconds int `mapstructure:"render_fresh_for_seconds"`
 	// CommandHoldSeconds is how long the reservation is held after start_job is
 	// enqueued, until the job completes or the command fails.
 	CommandHoldSeconds int `mapstructure:"command_hold_seconds"`
@@ -92,13 +97,16 @@ func setDispatchDefaults(v *viper.Viper) {
 	v.SetDefault("dispatch.enabled", false)
 	v.SetDefault("dispatch.render_format", "3mf")
 	v.SetDefault("dispatch.reservation_ttl_seconds", 900)
+	v.SetDefault("dispatch.render_fresh_for_seconds", 6*3600)
 	v.SetDefault("dispatch.command_hold_seconds", 6*3600)
 	v.SetDefault("dispatch.max_attempts", 5)
 	v.SetDefault("dispatch.match_wait_seconds", 86400)
 	v.SetDefault("dispatch.poll_interval_seconds", 10)
 	v.SetDefault("dispatch.passport_max_attempts", 20)
 	v.SetDefault("dispatch.require_bounding_box", false)
-	v.SetDefault("dispatch.yantra4d_api_url", "https://yantra4d.madfam.io")
+	// Yantra4D's API host (yantra4d enclii.yaml). yantra4d.madfam.io, the
+	// default until 2026-11-14, does not resolve.
+	v.SetDefault("dispatch.yantra4d_api_url", "https://api.yantra4d.com")
 	v.SetDefault("dispatch.fabrication_prep_api_url", "https://fabrication-prep-api.madfam.io")
 	v.SetDefault("dispatch.asset_shells_api_url", "https://asset-shells-api.madfam.io")
 
@@ -110,6 +118,7 @@ func bindDispatchEnv(v *viper.Viper) {
 	_ = v.BindEnv("dispatch.enabled", "DISPATCH_ENABLED")
 	_ = v.BindEnv("dispatch.render_format", "DISPATCH_RENDER_FORMAT")
 	_ = v.BindEnv("dispatch.reservation_ttl_seconds", "DISPATCH_RESERVATION_TTL_SECONDS")
+	_ = v.BindEnv("dispatch.render_fresh_for_seconds", "DISPATCH_RENDER_FRESH_FOR_SECONDS")
 	_ = v.BindEnv("dispatch.command_hold_seconds", "DISPATCH_COMMAND_HOLD_SECONDS")
 	_ = v.BindEnv("dispatch.max_attempts", "DISPATCH_MAX_ATTEMPTS")
 	_ = v.BindEnv("dispatch.match_wait_seconds", "DISPATCH_MATCH_WAIT_SECONDS")

@@ -2,9 +2,12 @@ package dispatch
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +21,8 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/yantra4d"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/matchmaking"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+
+	"github.com/sirupsen/logrus"
 )
 
 // MatchRecord is stored in dispatch_jobs.match_result.
@@ -43,6 +48,16 @@ type RenderBundle struct {
 	TreeSHA256      string `json:"tree_sha256"`
 	Complete        bool   `json:"complete"`
 	Engine          string `json:"engine"`
+	// RenderedAt is when the artifact was made, as far as pravara can tell:
+	// the artifact's Last-Modified when yantra4d sends one (a cached answer
+	// points at an older artifact), else when pravara received the answer.
+	// URL and VariablesURL are only good for a while after it
+	// (Settings.RenderFreshFor).
+	RenderedAt time.Time `json:"rendered_at,omitzero"`
+	// PreviousSHA256 is set when a render was requested again and the same
+	// instance came back with different bytes: yantra4d does not promise that
+	// a re-render reproduces them (RFC 0059 S2, S3).
+	PreviousSHA256 string `json:"previous_sha256,omitempty"`
 }
 
 // SliceRecord is stored in dispatch_jobs.slice_result. Signed URLs are not
@@ -232,20 +247,36 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	if serr := s.holdReservation(ctx, d, s.cfg.ReservationTTL); serr != nil {
 		return serr
 	}
-	if len(d.RenderBundle) > 0 { // rendered before a re-match
-		d.Status = repositories.DispatchRendered
-		return nil
+	// A render made before a re-match is kept while its URLs are still good.
+	// An older one is requested again; it must be the same design instance.
+	var earlier *RenderBundle
+	if len(d.RenderBundle) > 0 {
+		kept, err := decode[RenderBundle](d.RenderBundle)
+		switch {
+		case err != nil || kept == nil:
+			// Rendering again is right; doing it without the earlier
+			// instance to compare against must not pass unnoticed.
+			s.log.WithError(err).WithField("dispatch_id", d.ID).
+				Warn("dispatch: the kept render could not be read; rendering again without comparing it to the earlier one")
+		case renderIsFresh(*kept, s.now(), s.cfg.RenderFreshFor):
+			d.Status = repositories.DispatchRendered
+			return nil
+		default:
+			earlier = kept
+		}
 	}
 	_, spec, serr := s.loadTask(ctx, d)
 	if serr != nil {
 		return serr
 	}
+	// Rendering again because the kept render is too old: bypass yantra4d's
+	// cache, or it answers with the same artifact that is about to expire.
 	resp, err := s.Renderer.Render(ctx, yantra4d.RenderRequest{Project: spec.Cartridge, Mode: spec.Mode,
-		Parameters: spec.Parameters, ExportFormat: s.cfg.RenderFormat})
+		Parameters: spec.Parameters, ExportFormat: s.cfg.RenderFormat, IgnoreCache: len(d.RenderBundle) > 0})
 	if err != nil {
 		return fromRemote("render_failed", err)
 	}
-	part, serr := pickPart(resp.Parts, spec.Part)
+	part, serr := pickPart(resp.Parts, spec.Part, resp.Log)
 	if serr != nil {
 		return serr
 	}
@@ -267,22 +298,94 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	default:
 		return terminal("render_format_unsliceable", "fabrication-prep slices model/stl or model/3mf, got %q", part.MediaType)
 	}
-	d.RenderBundle = encode(RenderBundle{Part: part.Type, URL: s.Renderer.AbsoluteURL(part.URL), SHA256: part.SHA256,
+	bundle := RenderBundle{Part: part.Type, URL: s.Renderer.AbsoluteURL(part.URL), SHA256: part.SHA256,
 		MediaType: part.MediaType, InstanceID: sidecar.InstanceID, VariablesURL: s.Renderer.AbsoluteURL(part.VariablesURL),
 		SidecarSHA256: sidecarSHA, VariablesSHA256: sidecar.VariablesSHA256, TreeSHA256: sidecar.Generator.Source.TreeSHA256,
-		Complete: sidecar.Complete, Engine: sidecar.Generator.Engine})
+		Complete: sidecar.Complete, Engine: sidecar.Generator.Engine, RenderedAt: artifactTime(sidecar.ArtifactModified, s.now())}
+	if earlier != nil {
+		if earlier.InstanceID != "" && earlier.InstanceID != bundle.InstanceID {
+			return terminal("render_instance_changed",
+				"the design instance changed between renders (%s, then %s); dispatch again to make the new one",
+				earlier.InstanceID, bundle.InstanceID)
+		}
+		// Keep the trail across more than one re-render.
+		bundle.PreviousSHA256 = earlier.PreviousSHA256
+		if earlier.SHA256 != "" && earlier.SHA256 != bundle.SHA256 {
+			bundle.PreviousSHA256 = earlier.SHA256
+			s.log.WithFields(logrus.Fields{"dispatch_id": d.ID, "instance_id": bundle.InstanceID,
+				"previous_sha256": earlier.SHA256, "sha256": bundle.SHA256}).
+				Warn("dispatch: the same design instance rendered to different bytes; using the new render")
+		}
+	}
+	d.RenderBundle = encode(bundle)
 	d.Status = repositories.DispatchRendered
 	return nil
 }
 
-func pickPart(parts []yantra4d.Part, want string) (*yantra4d.Part, *stepError) {
+// artifactTime is when a render's artifact was made: yantra4d's Last-Modified
+// when it is known and not in the future, else now.
+func artifactTime(modified, now time.Time) time.Time {
+	if modified.IsZero() || modified.After(now) {
+		return now
+	}
+	return modified.UTC()
+}
+
+// renderIsFresh reports whether a kept render's URLs can still be handed on.
+// A render with no timestamp (recorded before RenderedAt existed) is not.
+func renderIsFresh(bundle RenderBundle, now time.Time, freshFor time.Duration) bool {
+	if bundle.RenderedAt.IsZero() {
+		return false
+	}
+	age := now.Sub(bundle.RenderedAt)
+	return age >= 0 && age < freshFor
+}
+
+// failedPartLine matches the line yantra4d writes to its render log for a
+// part that failed or timed out: "[<part>] ERROR: <reason>"
+// (yantra4d render_orchestrator.py). Such a part is left out of the answer
+// while the answer stays 200 "success".
+var failedPartLine = regexp.MustCompile(`(?m)^\[([^\]\n]+)\] ERROR:`)
+
+// failedParts lists the parts yantra4d's render log reports as failed.
+func failedParts(renderLog string) []string {
+	var parts []string
+	for _, m := range failedPartLine.FindAllStringSubmatch(renderLog, -1) {
+		parts = append(parts, m[1])
+	}
+	return parts
+}
+
+// pickPart selects the part to make from a render answer.
+//
+// yantra4d leaves a failed part out of an otherwise successful answer, and
+// says so only in its log. So what is missing is judged with the log:
+//
+//   - the wanted part is absent and the log reports it (or reports nothing
+//     came back at all): a failed render, retried within the attempt budget;
+//   - the wanted part is absent and nothing failed: the mode has no such
+//     part, which no retry fixes;
+//   - no part was named and the log reports a failure: the answer is
+//     incomplete, so the one part that did come back is not "the only part".
+//     Making it would make a part nobody chose.
+func pickPart(parts []yantra4d.Part, want, renderLog string) (*yantra4d.Part, *stepError) {
+	failed := failedParts(renderLog)
 	if want != "" {
 		for i := range parts {
 			if parts[i].Type == want {
 				return &parts[i], nil
 			}
 		}
-		return nil, terminal("render_part_missing", "render returned no part %q", want)
+		for _, f := range failed {
+			if f == want {
+				return nil, retryable("render_part_missing", "yantra4d failed to render part %q%s", want, yantra4d.LogExcerpt(renderLog))
+			}
+		}
+		return nil, terminal("render_part_missing", "render returned no part %q; the mode does not produce it", want)
+	}
+	if len(failed) > 0 {
+		return nil, retryable("render_incomplete", "yantra4d left %d part(s) out of the render (%s)%s",
+			len(failed), strings.Join(failed, ", "), yantra4d.LogExcerpt(renderLog))
 	}
 	if len(parts) != 1 {
 		return nil, terminal("render_part_ambiguous", "the mode renders %d parts; set the order item's specifications.part", len(parts))
@@ -302,9 +405,11 @@ func (s *Service) stageSliceSubmit(ctx context.Context, d *repositories.Dispatch
 		return terminal("state_incomplete", "dispatch lacks its match, render or requirements")
 	}
 	sel := match.Selected.Selection
-	// The key changes with the machine (its profiles change the request), so
-	// a re-match never collides with the earlier job.
-	key := fmt.Sprintf("pravara-dispatch:%s:%s", d.ID, d.MachineID.String()[:8])
+	// The key changes with the machine (its profiles change the request) and
+	// with the render (a re-render after a re-match changes the input's URL
+	// and digests), so a re-match never reuses a key with another body, which
+	// fabrication-prep refuses for good (409).
+	key := sliceIdempotencyKey(d.ID, *d.MachineID, *bundle)
 	job, err := s.Slicer.CreateSliceJob(ctx, fabprep.SliceJobRequest{
 		Input: fabprep.Input{URL: bundle.URL, SHA256: bundle.SHA256, MediaType: bundle.MediaType,
 			Variables: &fabprep.Ref{URL: bundle.VariablesURL, SHA256: bundle.SidecarSHA256}},
@@ -531,4 +636,11 @@ func (s *Service) recheck(ctx context.Context, d *repositories.DispatchJob) *ste
 		return retryable("machine_no_longer_eligible", "%s", reason)
 	}
 	return nil
+}
+
+// sliceIdempotencyKey names one slice request: this dispatch, on this
+// machine, of this render. Equal requests get equal keys.
+func sliceIdempotencyKey(dispatchID, machineID uuid.UUID, bundle RenderBundle) string {
+	sum := sha256.Sum256([]byte(bundle.URL + "\n" + bundle.SHA256 + "\n" + bundle.VariablesURL + "\n" + bundle.SidecarSHA256))
+	return fmt.Sprintf("pravara-dispatch:%s:%s:%s", dispatchID, machineID.String()[:8], hex.EncodeToString(sum[:6]))
 }

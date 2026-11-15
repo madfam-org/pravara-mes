@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Client is one registered Janua confidential client.
@@ -108,23 +109,48 @@ type Yantra4D struct {
 	Sidecar    []byte
 	mu         sync.Mutex
 	Requests   []map[string]any
+	// FailingRenders is how many of the next render requests answer the way
+	// yantra4d does when a part fails: 200 "success" with no parts.
+	FailingRenders int
+	// InstanceSalt changes the instance id the next render reports (a
+	// design that changed while a dispatch waited).
+	InstanceSalt string
+	// ArtifactModified, when set, is sent as the artifact's Last-Modified:
+	// a cache hit on an artifact rendered earlier.
+	ArtifactModified time.Time
+	cartridge, mode  string
 }
 
-// NewYantra4D starts the fake. treeSHA must start with the type shell's tree16.
-func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D {
-	y := &Yantra4D{TreeSHA256: treeSHA, Part: part, Format: "3mf", Geometry: []byte("PK\x03\x04 fake 3mf bytes for " + cartridge)}
-	geo := Digest(y.Geometry)
-	instance := Digest([]byte(cartridge + mode + part))
+// Set changes what the next render serves, under the fake's lock.
+func (y *Yantra4D) Set(change func(*Yantra4D)) {
+	y.mu.Lock()
+	defer y.mu.Unlock()
+	change(y)
+}
+
+// describe builds the sidecar and digests of the render the fake would serve
+// now, from its current Geometry and InstanceSalt. Call with mu held.
+func (y *Yantra4D) describe() (geo, instance string, sidecar []byte) {
+	geo = Digest(y.Geometry)
+	instance = Digest([]byte(y.cartridge + y.mode + y.Part + y.InstanceSalt))
 	doc := map[string]any{
 		"format": "hyperobjects.generator-output", "format_version": "1.0.0", "kind": "solid",
-		"generator": map[string]any{"platform": "yantra4d", "cartridge": cartridge, "mode": mode, "part": part,
-			"engine": "cadquery", "source": map[string]any{"tree_sha256": treeSHA}},
+		"generator": map[string]any{"platform": "yantra4d", "cartridge": y.cartridge, "mode": y.mode, "part": y.Part,
+			"engine": "cadquery", "source": map[string]any{"tree_sha256": y.TreeSHA256}},
 		"variables":        []any{map[string]any{"id": "size", "value": 40, "type": "number", "source": "request"}},
 		"variables_sha256": Digest([]byte("vars")), "complete": true, "instance_id": instance,
 		"geometry": []any{map[string]any{"path": "x.3mf", "media_type": "model/3mf", "sha256": geo,
 			"bytes": len(y.Geometry), "units": "mm", "role": "primary"}},
 	}
-	y.Sidecar, _ = json.Marshal(doc)
+	sidecar, _ = json.Marshal(doc)
+	return geo, instance, sidecar
+}
+
+// NewYantra4D starts the fake. treeSHA must start with the type shell's tree16.
+func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D {
+	y := &Yantra4D{TreeSHA256: treeSHA, Part: part, Format: "3mf", cartridge: cartridge, mode: mode,
+		Geometry: []byte("PK\x03\x04 fake 3mf bytes for " + cartridge)}
+	_, _, y.Sidecar = y.describe()
 	y.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if Audience(r) != "yantra4d-api" {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "missing or wrong token"})
@@ -141,14 +167,38 @@ func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D 
 				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "parameters must be nested; export_format " + y.Format})
 				return
 			}
+			y.mu.Lock()
+			failing := y.FailingRenders > 0
+			if failing {
+				y.FailingRenders--
+			}
+			geo, instance, sidecar := y.describe()
+			if !failing {
+				y.Sidecar = sidecar // the sidecar of the render just served
+			}
+			y.mu.Unlock()
+			if failing {
+				// What yantra4d does when a part fails or times out: 200,
+				// "success", the part absent and the reason only in the log
+				// (render_orchestrator.py: "[<part>] ERROR: …").
+				writeJSON(w, http.StatusOK, map[string]any{"status": "success", "request_id": "r1", "parts": []any{},
+					"log": "render queued\n[" + part + "] ERROR: Render timed out while waiting for completion\n"})
+				return
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"status": "success", "request_id": "r1",
 				"parts": []any{map[string]any{"type": part, "url": "/static/" + cartridge + "_" + part + ".3mf",
 					"size_bytes": len(y.Geometry), "sha256": geo, "media_type": "model/3mf", "instance_id": instance,
 					"variables_url": "/static/" + cartridge + "_" + part + ".3mf.variables.json"}},
 				"generator_output": map[string]any{"format_version": "1.0.0", "complete": true, "variables_sha256": Digest([]byte("vars"))}})
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, ".variables.json"):
+			y.mu.Lock()
+			sidecar, modified := y.Sidecar, y.ArtifactModified
+			y.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(y.Sidecar)
+			if !modified.IsZero() {
+				w.Header().Set("Last-Modified", modified.UTC().Format(http.TimeFormat))
+			}
+			_, _ = w.Write(sidecar)
 		default:
 			http.NotFound(w, r)
 		}
