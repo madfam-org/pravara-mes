@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/remote"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/machineclients"
@@ -131,16 +133,27 @@ func (c *Client) Render(ctx context.Context, req RenderRequest) (*RenderResponse
 
 // LogExcerpt returns the end of a render log as a suffix for an error
 // message ("" when the log is empty). The end is where a failure is reported.
+//
+// The result is stored (a dispatch's error message is a text column) and
+// returned by the API, and the log is another service's output: it is made
+// valid UTF-8, stripped of control characters (PostgreSQL refuses NUL in
+// text), collapsed to one line and cut on a character boundary.
 func LogExcerpt(log string) string {
-	log = strings.TrimSpace(log)
+	log = strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || (unicode.IsControl(r) && !unicode.IsSpace(r)) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(log, ""))
+	log = strings.Join(strings.Fields(log), " ")
 	if log == "" {
 		return ""
 	}
-	const max = 300
-	if len(log) > max {
-		log = "…" + log[len(log)-max:]
+	const maxRunes = 300
+	if runes := []rune(log); len(runes) > maxRunes {
+		log = "…" + string(runes[len(runes)-maxRunes:])
 	}
-	return ": " + strings.Join(strings.Fields(log), " ")
+	return ": " + log
 }
 
 // Sidecar is the subset of a GOC-1 variables.json document pravara records.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,9 +103,29 @@ func TestLogExcerpt(t *testing.T) {
 	assert.Equal(t, "", LogExcerpt(""))
 	assert.Equal(t, "", LogExcerpt("  \n "))
 	assert.Equal(t, ": queued [body] Error: boom", LogExcerpt("queued\n[body]   Error: boom\n"))
+
 	long := strings.Repeat("x", 500) + " the end"
 	got := LogExcerpt(long)
 	assert.True(t, strings.HasPrefix(got, ": …"))
 	assert.True(t, strings.HasSuffix(got, "the end"), "the end of the log is kept: that is where a failure is reported")
-	assert.LessOrEqual(t, len(got), 320)
+	assert.LessOrEqual(t, len([]rune(got)), 303)
+}
+
+// The excerpt is stored in a PostgreSQL text column and returned by the API,
+// and it is another service's output.
+func TestLogExcerptIsSafeToStore(t *testing.T) {
+	// Cut on a character boundary: 400 two-byte characters, kept tail of 300.
+	got := LogExcerpt(strings.Repeat("ñ", 400))
+	assert.True(t, utf8.ValidString(got), "never split a multi-byte character")
+	assert.Equal(t, ": …"+strings.Repeat("ñ", 300), got)
+
+	// Invalid UTF-8 and control characters are dropped; NUL would be refused by PostgreSQL.
+	got = LogExcerpt("ok\x00 \xff\xfe bad \x1b[31mred\x1b[0m \u0007 end")
+	assert.True(t, utf8.ValidString(got))
+	assert.NotContains(t, got, "\x00")
+	assert.NotContains(t, got, "\x1b")
+	assert.Equal(t, ": ok bad [31mred[0m end", got)
+
+	// Only junk: nothing to say.
+	assert.Equal(t, "", LogExcerpt("\x00\xff\x01"))
 }
