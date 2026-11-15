@@ -27,6 +27,12 @@ physical jobs (orders, tasks, machines, telemetry, quality).
   code registry, aliases, unit conversions, receipts with invoice evidence,
   batch lots linked to stock, physical counts, conversion gaps (migration
   035), and the HTTP contract the inventory screens consume.
+- `docs/operations/schema-guard.md` — the API is not ready until the
+  database records every migration its build embeds; what to do when a
+  rollout waits (`SCHEMA_GUARD`, default `enforce`).
+- `docs/operations/sign-in-tokens.md` — which bearer tokens the API accepts:
+  machine tokens, people's sign-in tokens and `pravara-mes:<role>`
+  application roles.
 - `docs/operations/cost-events.md` — job consumption pushed to Dhanam as
   quantity-only `cost.event.v1` `consumption` events (off unless
   `PRAVARA_COST_EVENTS_ENABLED=true`, owner-run): durable outbox

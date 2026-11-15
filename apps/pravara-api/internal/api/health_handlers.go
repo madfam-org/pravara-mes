@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"runtime"
 	"time"
@@ -13,10 +14,29 @@ import (
 
 var startTime = time.Now()
 
+// schemaChecker is the schema guard as the health endpoints use it.
+type schemaChecker interface {
+	Status(ctx context.Context) db.SchemaStatus
+}
+
 // HealthHandler handles health check endpoints.
 type HealthHandler struct {
 	db  *db.DB
 	log *logrus.Logger
+
+	// schema is nil when the guard is off. enforceSchema makes a database
+	// that is behind this build a reason to be not ready; without it the
+	// state is only reported.
+	schema        schemaChecker
+	enforceSchema bool
+}
+
+// WithSchemaGuard makes the handler report, and when enforce is set act on,
+// the comparison between this build's migrations and the database's.
+func (h *HealthHandler) WithSchemaGuard(guard schemaChecker, enforce bool) *HealthHandler {
+	h.schema = guard
+	h.enforceSchema = enforce
+	return h
 }
 
 // NewHealthHandler creates a new health handler.
@@ -81,6 +101,25 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	}
 	response.Components["database"] = dbHealth
 
+	// Check that the database has every migration this build requires.
+	if h.schema != nil && h.db != nil {
+		status := h.schema.Status(c.Request.Context())
+		schemaHealth := ComponentHealth{Status: "healthy"}
+		if status.Behind() {
+			schemaHealth.Status = "behind"
+			// Which migrations are missing is in the log, not on this
+			// public endpoint.
+			schemaHealth.Details = map[string]any{
+				"reason":             status.Reason(),
+				"missing_migrations": len(status.Missing),
+			}
+			if h.enforceSchema {
+				response.Status = "degraded"
+			}
+		}
+		response.Components["schema"] = schemaHealth
+	}
+
 	// Check runtime
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
@@ -142,6 +181,21 @@ func (h *HealthHandler) Readiness(c *gin.Context) {
 			"reason": "database_unavailable",
 		})
 		return
+	}
+
+	// The database must have every migration this build was made with.
+	// Migrations are applied by hand, so a new image can arrive first; it
+	// then stays out of service, and the previous one keeps serving, until
+	// they are applied. Checked again on the next probe.
+	if h.schema != nil && h.enforceSchema {
+		if status := h.schema.Status(c.Request.Context()); status.Behind() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status":             "not_ready",
+				"reason":             status.Reason(),
+				"missing_migrations": len(status.Missing),
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

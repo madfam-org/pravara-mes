@@ -40,7 +40,7 @@ owner through `infra/db/migrate.sh`.
 | `CREATEDB`, `CREATEROLE`, `REPLICATION` | no | not needed |
 | `CONNECTION LIMIT` | 60 in production | covers the API and worker pools; see the connection-budget precondition |
 | Table privileges | `SELECT, INSERT, UPDATE, DELETE` | DML only; no `TRUNCATE` (it ignores RLS), no DDL |
-| `schema_migrations` | none | migration tracking stays with the owner |
+| `schema_migrations` | `SELECT` only, from `infra/db/roles/pravara_app_grants.sql` | the API's [schema guard](./schema-guard.md) reads it; recording a migration stays with the owner |
 
 ## Production rollout (state and plan)
 
