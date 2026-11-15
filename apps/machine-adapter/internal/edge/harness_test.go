@@ -115,7 +115,7 @@ func startBroker(t *testing.T) *testBroker {
 	}
 	b := &testBroker{server: s, port: port, caFile: caFile, acl: hook}
 	t.Cleanup(func() {
-		_ = s.Close()
+		_ = simulator.CloseBroker(s)
 		hook.mu.Lock()
 		defer hook.mu.Unlock()
 		if len(hook.denied) > 0 {

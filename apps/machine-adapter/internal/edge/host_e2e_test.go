@@ -243,7 +243,7 @@ func TestPrimaryHostAndEdgeNodeEndToEnd(t *testing.T) {
 	if err := server.Serve(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = server.Close() })
+	t.Cleanup(func() { _ = simulator.CloseBroker(server) })
 	brokerURL := fmt.Sprintf("ssl://127.0.0.1:%d", port)
 	pool, _ := os.ReadFile(caFile)
 	tlsCfg := &tls.Config{ServerName: "broker.test", MinVersion: tls.VersionTLS12, RootCAs: poolFrom(t, pool)}

@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/command"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/mqtttest"
 )
 
 // The end-to-end command channel test needs a throwaway Redis
@@ -56,7 +57,7 @@ func startTestBroker(t *testing.T) string {
 	require.NoError(t, server.AddHook(new(auth.AllowHook), nil))
 	require.NoError(t, server.AddListener(listeners.NewTCP(listeners.Config{ID: "e2e", Address: addr})))
 	go func() { _ = server.Serve() }()
-	t.Cleanup(func() { _ = server.Close() })
+	t.Cleanup(func() { _ = mqtttest.CloseBroker(server) })
 	return "tcp://" + addr
 }
 
