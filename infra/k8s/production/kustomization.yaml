@@ -100,6 +100,6 @@ images:
 - name: redis
   newName: docker.io/library/redis
   newTag: 7-alpine
-- digest: sha256:52d0b86ac4fd92e9eca0b4c32262d91c33739b1b2be9f430e0c01ba14f01dc42
+- digest: sha256:af3cf14a22a155e375843fd38b1fc417ed9ddba60c44e4b552dbc82ef4b9d6c0
   name: telemetry-worker
   newName: ghcr.io/madfam-org/telemetry-worker
