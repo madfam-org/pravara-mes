@@ -58,6 +58,10 @@ type RenderRequest struct {
 	Mode         string         `json:"mode"`
 	Parameters   map[string]any `json:"parameters"`
 	ExportFormat string         `json:"export_format"`
+	// IgnoreCache asks yantra4d to render again instead of answering from
+	// its cache. A cached answer can point at an artifact that is about to
+	// be deleted (it is collected 24 hours after it was first made).
+	IgnoreCache bool `json:"ignore_cache,omitempty"`
 }
 
 // Part is one rendered part of the envelope (GOC-1 §5 fields included).
@@ -174,7 +178,11 @@ type Sidecar struct {
 			TreeSHA256 string `json:"tree_sha256"`
 		} `json:"source"`
 	} `json:"generator"`
-	Geometry []struct {
+	// ArtifactModified is the sidecar file's Last-Modified, when yantra4d
+	// sends one: when the render was actually made, which on a cache hit is
+	// earlier than the request. Zero when unknown. Not part of the document.
+	ArtifactModified time.Time `json:"-"`
+	Geometry         []struct {
 		Path      string `json:"path"`
 		MediaType string `json:"media_type"`
 		SHA256    string `json:"sha256"`
@@ -214,6 +222,9 @@ func (c *Client) FetchSidecar(ctx context.Context, part Part) (*Sidecar, string,
 	sum := sha256.Sum256(raw)
 	if err := CheckSidecar(&doc, part); err != nil {
 		return nil, "", err
+	}
+	if modified, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
+		doc.ArtifactModified = modified.UTC()
 	}
 	return &doc, hex.EncodeToString(sum[:]), nil
 }

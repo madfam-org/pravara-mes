@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatchfakes"
 )
 
 func (r *dispatchRig) create(t *testing.T, task uuid.UUID) uuid.UUID {
@@ -98,38 +101,69 @@ func TestDispatchRechecksTheMachineBeforeStartJob(t *testing.T) {
 	assert.Len(t, r.fabprep.Jobs, 2, "sliced again for the new machine (new idempotency key)")
 }
 
-// A render kept across a re-match is only reused while yantra4d still serves
-// it. An older one (here: stamped a day ago) is requested again, and a render
-// that yantra4d answers without its part is retried, not failed.
-func TestDispatchRerendersAStaleRenderAfterARematch(t *testing.T) {
-	r := newDispatchRig(t)
-	busy := r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+// staleRematch takes a dispatch to "sliced", makes its machine busy so it goes
+// back to matching, and ages its kept render by a day (yantra4d keeps a
+// render for 24 hours). It returns the dispatch id and its row before the
+// re-match.
+func staleRematch(t *testing.T, r *dispatchRig, machine uuid.UUID) (uuid.UUID, *repositories.DispatchJob) {
+	t.Helper()
 	id := r.create(t, r.seedTask(t, boxSpecs))
 	r.runUntil(t, id, repositories.DispatchSliced)
 	require.Len(t, r.yantra.Requests, 1)
 	first := r.dispatch(t, id)
 
-	// The machine becomes busy: the dispatch goes back to matching.
-	_, err := r.admin.Exec(`UPDATE machine_live_state SET state_status = 'printing' WHERE machine_id = $1`, busy)
+	_, err := r.admin.Exec(`UPDATE machine_live_state SET state_status = 'printing' WHERE machine_id = $1`, machine)
 	require.NoError(t, err)
 	r.svc.RunOnce(context.Background())
 	require.Equal(t, repositories.DispatchQueued, r.dispatch(t, id).Status)
 
-	// A day passes before another machine is free.
 	_, err = r.admin.Exec(`UPDATE dispatch_jobs SET render_bundle = jsonb_set(render_bundle, '{rendered_at}', to_jsonb($2::text))
 		WHERE id = $1`, id, time.Now().UTC().Add(-24*time.Hour).Format(time.RFC3339))
 	require.NoError(t, err)
+	return id, first
+}
 
-	// yantra4d first answers "success" with the part missing (a timeout).
-	r.yantra.FailingRenders = 1
+// sliceKeys returns the distinct idempotency keys fabrication-prep received.
+func sliceKeys(r *dispatchRig) []string {
+	seen := map[string]bool{}
+	for _, job := range r.fabprep.Jobs {
+		seen[job.Key] = true
+	}
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func bundleOf(t *testing.T, d *repositories.DispatchJob) map[string]any {
+	t.Helper()
+	var bundle map[string]any
+	require.NoError(t, json.Unmarshal(d.RenderBundle, &bundle))
+	return bundle
+}
+
+// A render kept across a re-match is only reused while yantra4d still serves
+// it. A day-old one is requested again, past yantra4d's cache, and an answer
+// in which yantra4d left every part out is retried, not failed.
+func TestDispatchRerendersAStaleRenderAfterARematch(t *testing.T) {
+	r := newDispatchRig(t)
+	busy := r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+	id, first := staleRematch(t, r, busy)
+
+	r.yantra.Set(func(y *dispatchfakes.Yantra4D) { y.FailingRenders = 1 })
 	r.seedMachine(t, "voron-02", "idle", "tpu-95a")
 	r.due(t)
 	d := r.runUntil(t, id, repositories.DispatchCommandEnqueued)
 
-	assert.Len(t, r.yantra.Requests, 3, "rendered again (one failed answer, one good) instead of reusing the day-old render")
-	var before, after map[string]any
-	require.NoError(t, json.Unmarshal(first.RenderBundle, &before))
-	require.NoError(t, json.Unmarshal(d.RenderBundle, &after))
+	require.Len(t, r.yantra.Requests, 3, "rendered again (one empty answer, one good) instead of reusing the day-old render")
+	_, firstBypassed := r.yantra.Requests[0]["ignore_cache"]
+	assert.False(t, firstBypassed, "the first render may come from yantra4d's cache")
+	assert.Equal(t, true, r.yantra.Requests[1]["ignore_cache"], "a re-render must not be answered with the expiring artifact")
+	assert.Equal(t, true, r.yantra.Requests[2]["ignore_cache"])
+
+	before, after := bundleOf(t, first), bundleOf(t, d)
 	assert.Equal(t, before["instance_id"], after["instance_id"], "the same design instance")
 	assert.Equal(t, before["sha256"], after["sha256"])
 	stamped, err := time.Parse(time.RFC3339Nano, after["rendered_at"].(string))
@@ -137,6 +171,65 @@ func TestDispatchRerendersAStaleRenderAfterARematch(t *testing.T) {
 	assert.WithinDuration(t, time.Now(), stamped, time.Minute, "the new render carries its own time")
 	_, changed := after["previous_sha256"]
 	assert.False(t, changed, "the bytes did not change, so nothing is recorded as superseded")
+}
+
+// The same machine frees up again and the re-render comes back with other
+// bytes for the same design instance (yantra4d does not promise to reproduce
+// them). The dispatch must go on with the new render: the slice request has a
+// new body, so it needs a new idempotency key, or fabrication-prep refuses it
+// for good.
+func TestDispatchRerenderOnTheSameMachineWithChangedBytes(t *testing.T) {
+	r := newDispatchRig(t)
+	machine := r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+	id, first := staleRematch(t, r, machine)
+	firstKeys := sliceKeys(r)
+	require.Len(t, firstKeys, 1)
+
+	r.yantra.Set(func(y *dispatchfakes.Yantra4D) {
+		y.Geometry = append([]byte(nil), append(y.Geometry, " rebuilt"...)...)
+	})
+	_, err := r.admin.Exec(`UPDATE machine_live_state SET state_status = 'idle' WHERE machine_id = $1`, machine)
+	require.NoError(t, err)
+	r.due(t)
+	d := r.runUntil(t, id, repositories.DispatchCommandEnqueued)
+	require.Equal(t, machine, *d.MachineID, "matched to the same machine again")
+
+	before, after := bundleOf(t, first), bundleOf(t, d)
+	assert.Equal(t, before["instance_id"], after["instance_id"])
+	assert.NotEqual(t, before["sha256"], after["sha256"], "the re-render produced other bytes")
+	assert.Equal(t, before["sha256"], after["previous_sha256"], "the superseded digest is kept")
+
+	keys := sliceKeys(r)
+	require.Len(t, keys, 2, "sliced again from the new render, under a new idempotency key (a new body needs one)")
+	for _, key := range keys {
+		assert.True(t, strings.HasPrefix(key, "pravara-dispatch:"+id.String()+":"+machine.String()[:8]+":"), key)
+	}
+}
+
+// The design changed while the dispatch waited: the re-render is another
+// instance. Making it under the first one's records would be wrong, so the
+// dispatch stops and says to dispatch again.
+func TestDispatchStopsWhenTheDesignInstanceChangedWhileItWaited(t *testing.T) {
+	r := newDispatchRig(t)
+	machine := r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+	id, _ := staleRematch(t, r, machine)
+
+	r.yantra.Set(func(y *dispatchfakes.Yantra4D) { y.InstanceSalt = "edited" })
+	r.seedMachine(t, "voron-02", "idle", "tpu-95a")
+	r.due(t)
+	d := r.runUntil(t, id, repositories.DispatchFailed)
+
+	assert.Equal(t, "render_instance_changed", d.ErrorCode)
+	assert.Contains(t, d.ErrorMessage, "dispatch again")
+	require.NotNil(t, d.ErrorRetryable)
+	assert.False(t, *d.ErrorRetryable)
+	assert.Len(t, r.fabprep.Jobs, 1, "nothing was sliced from the changed design")
+	var commands int
+	require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM task_commands`).Scan(&commands))
+	assert.Zero(t, commands, "no start_job was issued")
+	var held int
+	require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM machine_reservations WHERE dispatch_id = $1 AND released_at IS NULL`, id).Scan(&held))
+	assert.Zero(t, held, "the machine is released")
 }
 
 // Content errors are terminal with the callee's reason; the completion must

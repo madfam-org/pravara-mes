@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -90,7 +91,7 @@ func TestRenderWithNoPartsIsARetryableFailure(t *testing.T) {
 	require.ErrorAs(t, err, &re)
 	assert.True(t, re.Retryable)
 	assert.Contains(t, re.Message, "render returned no parts")
-	assert.Contains(t, re.Message, "Render timed out after 120s")
+	assert.Contains(t, re.Message, "ERROR: Render timed out while waiting for completion")
 
 	// The next attempt succeeds.
 	resp, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
@@ -128,4 +129,38 @@ func TestLogExcerptIsSafeToStore(t *testing.T) {
 
 	// Only junk: nothing to say.
 	assert.Equal(t, "", LogExcerpt("\x00\xff\x01"))
+}
+
+// On a cache hit yantra4d serves an artifact made earlier; its Last-Modified
+// says when. The sidecar fetch reports it so dispatch can judge freshness by
+// the artifact, not by the request.
+func TestFetchSidecarReportsWhenTheArtifactWasMade(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	resp, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	require.NoError(t, err)
+
+	doc, _, err := c.FetchSidecar(context.Background(), resp.Parts[0])
+	require.NoError(t, err)
+	assert.True(t, doc.ArtifactModified.IsZero(), "unknown when yantra4d sends no Last-Modified")
+
+	made := time.Date(2026, 11, 13, 8, 30, 0, 0, time.UTC)
+	y.Set(func(y *dispatchfakes.Yantra4D) { y.ArtifactModified = made })
+	doc, _, err = c.FetchSidecar(context.Background(), resp.Parts[0])
+	require.NoError(t, err)
+	assert.True(t, doc.ArtifactModified.Equal(made))
+}
+
+func TestRenderRequestCarriesIgnoreCacheOnlyWhenAsked(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	req := RenderRequest{Project: "motor-soft-mount", Mode: "assembled", Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"}
+	_, err := c.Render(context.Background(), req)
+	require.NoError(t, err)
+	_, sent := y.Requests[0]["ignore_cache"]
+	assert.False(t, sent, "an ordinary render may be answered from yantra4d's cache")
+
+	req.IgnoreCache = true
+	_, err = c.Render(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, true, y.Requests[1]["ignore_cache"])
 }

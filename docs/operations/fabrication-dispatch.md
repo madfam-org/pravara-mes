@@ -81,22 +81,40 @@ Pravara stores the render's **address and digests**, not its bytes: the part's U
 `sha256`, the GOC-1 `instance_id`, and the sidecar's URL and digest. fabrication-prep fetches
 the bytes from yantra4d and checks them against the digest.
 
-yantra4d deletes render artifacts after 24 hours and on a pod restart, and renames them on every
-release. So:
+yantra4d deletes render artifacts 24 hours after they were made and on a pod restart, renames
+them on every release, and answers a repeated request from its cache with the same artifact. So:
 
-- A render is stamped `rendered_at`. A dispatch that goes back to matching reuses its render only
-  while it is younger than `DISPATCH_RENDER_FRESH_FOR_SECONDS`. An older one, or one recorded
-  before the stamp existed, is requested again.
-- The new render must be the **same design instance** (`instance_id`). If it is not, the design
-  changed while the dispatch waited and it fails with `render_instance_changed`; dispatch again to
-  make the new one.
-- If the same instance comes back with **different bytes**, the dispatch continues with the new
-  render, records the earlier digest as `previous_sha256`, and logs a warning. yantra4d does not
-  promise that a re-render reproduces bytes.
-- yantra4d answers `200 "success"` with a failed or timed-out part simply left out. Pravara treats
-  an answer with no parts, or without the part it asked for (`render_part_missing`), as a failure
-  to retry within `DISPATCH_MAX_ATTEMPTS`, and puts the end of yantra4d's render log in the
-  error.
+- **A render is stamped `rendered_at` with the artifact's own time**: the `Last-Modified` yantra4d
+  sends with the sidecar when there is one (a cached answer points at an older artifact), else the
+  time Pravara received the answer.
+- **A dispatch that goes back to matching reuses its render only while it is fresh**
+  (`DISPATCH_RENDER_FRESH_FOR_SECONDS`). An older one, one with no stamp, or one that cannot be
+  read is requested again, with `ignore_cache` so yantra4d makes a new artifact instead of
+  returning the expiring one.
+- **The new render must be the same design instance** (`instance_id`). If it is not, the design
+  changed while the dispatch waited: it fails with `render_instance_changed` and says to dispatch
+  again.
+- **The same instance may come back with different bytes.** yantra4d does not promise that a
+  re-render reproduces them. The dispatch continues with the new render, keeps the earlier digest
+  as `previous_sha256`, and logs a warning.
+- **The slice request's idempotency key names the render as well as the machine**
+  (`pravara-dispatch:<dispatch>:<machine>:<render>`), so slicing again after a re-render, even on
+  the same machine, is a new request and not a reused key with another body.
+
+### Parts yantra4d leaves out
+
+yantra4d answers `200 "success"` with a failed or timed-out part simply absent, and writes
+`[<part>] ERROR: <reason>` in its render log. Pravara reads that line:
+
+| Situation | Outcome |
+|---|---|
+| No parts came back | `render_failed`, retried |
+| The wanted part is absent and the log reports it failed | `render_part_missing`, retried, with the end of the log |
+| The wanted part is absent and nothing failed | `render_part_missing`, terminal: the mode does not produce it |
+| No part was named and the log reports a failed part | `render_incomplete`, retried. The part that did come back is **not** taken as "the only part" |
+| No part was named and several came back | `render_part_ambiguous`, terminal |
+
+Retries spend `DISPATCH_MAX_ATTEMPTS`.
 
 **Not done:** Pravara does not yet keep the manufacturing bytes themselves (owner ruling S12 of
 2026-11-14). That needs an object store, which Pravara has configured names for and no code. Until
@@ -111,7 +129,7 @@ holds them.
 | `DISPATCH_ENABLED` | `false` | Turns on dispatch and the runner. The dry run works either way. |
 | `DISPATCH_RENDER_FORMAT` | `3mf` | `3mf` or `stl` (what fabrication-prep slices). |
 | `DISPATCH_RESERVATION_TTL_SECONDS` | `900` | Reservation before start_job; extended by each hop. |
-| `DISPATCH_RENDER_FRESH_FOR_SECONDS` | `21600` | How long a render kept across a re-match is reused before it is requested again. Keep it well under yantra4d's 24-hour artifact lifetime. |
+| `DISPATCH_RENDER_FRESH_FOR_SECONDS` | `21600` | How long a render kept across a re-match is reused before it is requested again. Must be under 86400 (yantra4d's artifact lifetime); the service refuses to start otherwise. |
 | `DISPATCH_COMMAND_HOLD_SECONDS` | `21600` | Reservation after start_job, until the job ends. |
 | `DISPATCH_MATCH_WAIT_SECONDS` | `86400` | How long to wait for an eligible machine. |
 | `DISPATCH_MAX_ATTEMPTS` | `5` | Retries of retryable failures. |

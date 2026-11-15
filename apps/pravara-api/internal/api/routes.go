@@ -3,6 +3,7 @@ package api
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -595,7 +596,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 // Yantra4D's public API host when a hand-built Config leaves it empty.
 func yantra4dBaseURL(cfg *config.Config) string {
 	if cfg != nil && cfg.Dispatch.YantraAPIURL != "" {
-		return cfg.Dispatch.YantraAPIURL
+		return strings.TrimRight(cfg.Dispatch.YantraAPIURL, "/")
 	}
 	return "https://api.yantra4d.com"
 }

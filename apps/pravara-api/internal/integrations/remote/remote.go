@@ -137,8 +137,11 @@ func StatusError(service, op string, resp *http.Response) *Error {
 	if e.Message == "" {
 		e.Message = strings.TrimSpace(string(body))
 	}
-	if len(e.Message) > 300 {
-		e.Message = e.Message[:300]
+	// Another service's text: keep it valid UTF-8 and cut it on a character
+	// boundary (it is stored in a text column and returned by the API).
+	e.Message = strings.ToValidUTF8(e.Message, "")
+	if runes := []rune(e.Message); len(runes) > 300 {
+		e.Message = string(runes[:300])
 	}
 	return e
 }
