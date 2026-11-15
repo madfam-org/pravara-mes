@@ -82,7 +82,7 @@ func (b *Bambu) Close() {
 		b.ftps.Close()
 	}
 	if b.server != nil {
-		_ = b.server.Close()
+		_ = CloseBroker(b.server)
 	}
 }
 

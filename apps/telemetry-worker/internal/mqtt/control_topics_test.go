@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/telemetry-worker/internal/mqtttest"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -91,7 +92,7 @@ func startBroker(t *testing.T) (host string, port int) {
 	require.NoError(t, server.AddHook(new(auth.AllowHook), nil))
 	require.NoError(t, server.AddListener(listeners.NewTCP(listeners.Config{ID: "test", Address: addr})))
 	go func() { _ = server.Serve() }()
-	t.Cleanup(func() { _ = server.Close() })
+	t.Cleanup(func() { _ = mqtttest.CloseBroker(server) })
 
 	h, p, err := net.SplitHostPort(addr)
 	require.NoError(t, err)
