@@ -110,6 +110,13 @@ Regenerate or repair these files with
   `PRAVARA_COST_EVENTS_ENABLED=true`, and **only the owner turns it on**.
   The wire rules are pinned to Dhanam contract v1.1 in
   `internal/costevents/contract.go`; change them only with Dhanam's contract.
+- **Migrations and deploys.** A merge to `main` is the production deploy, and
+  production migrations are applied by hand. `pravara-api` therefore stays
+  **not ready** until the database records every migration its build embeds
+  (`internal/db/schema_guard.go`, `docs/operations/schema-guard.md`); the
+  previous pod keeps serving meanwhile. Write every migration to be
+  compatible with the code before it, apply it before merging when you can,
+  and never record a version in `schema_migrations` without running its file.
   Owner steps: `docs/operations/cost-events.md`; follow-ups: ROADMAP item 24.
 - **Pending work.** The one canonical list is ROADMAP.md
   [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead).

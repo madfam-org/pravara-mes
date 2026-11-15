@@ -92,20 +92,26 @@ spec:
             capabilities:
               drop:
                 - ALL
+          # Liveness and startup ask only whether the process is up.
+          # Readiness also asks whether the database has every migration
+          # this image was built with (docs/operations/schema-guard.md): an
+          # image that arrives before its migration stays alive and not
+          # ready, the previous pod keeps serving, and the rollout finishes
+          # by itself once the migration is applied.
           startupProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 4500
             failureThreshold: 12
             periodSeconds: 5
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 4500
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 4500
             periodSeconds: 30
           volumeMounts:

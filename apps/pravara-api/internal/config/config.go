@@ -92,7 +92,19 @@ type DatabaseConfig struct {
 	MaxConnections  int    `mapstructure:"max_connections"`
 	MaxIdleConns    int    `mapstructure:"max_idle_connections"`
 	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime"`
+	// SchemaGuard decides what happens when the database lacks a migration
+	// this build was made with: "enforce" (default) keeps the instance not
+	// ready, "warn" only logs and reports it on /health, "off" does not
+	// look. See docs/operations/schema-guard.md.
+	SchemaGuard string `mapstructure:"schema_guard"`
 }
+
+// Schema guard modes (DatabaseConfig.SchemaGuard).
+const (
+	SchemaGuardEnforce = "enforce"
+	SchemaGuardWarn    = "warn"
+	SchemaGuardOff     = "off"
+)
 
 // RedisConfig holds Redis connection settings.
 type RedisConfig struct {
@@ -217,6 +229,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.max_connections", 25)
 	v.SetDefault("database.max_idle_connections", 5)
 	v.SetDefault("database.conn_max_lifetime", 300)
+	v.SetDefault("database.schema_guard", SchemaGuardEnforce)
 
 	// OIDC defaults
 	v.SetDefault("oidc.issuer", "https://auth.madfam.io")
@@ -271,6 +284,7 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("database.url", "DATABASE_URL")
 	v.BindEnv("database.max_connections", "DATABASE_MAX_CONNECTIONS")
 	v.BindEnv("database.max_idle_connections", "DATABASE_MAX_IDLE_CONNECTIONS")
+	v.BindEnv("database.schema_guard", "SCHEMA_GUARD")
 
 	v.BindEnv("redis.url", "REDIS_URL")
 

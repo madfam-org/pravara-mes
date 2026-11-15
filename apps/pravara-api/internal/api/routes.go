@@ -85,6 +85,13 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 
 	// Initialize handlers
 	healthHandler := NewHealthHandler(database, log)
+	// Schema guard: a build stays not ready until the database has every
+	// migration it was made with (docs/operations/schema-guard.md). Off when
+	// the mode is empty, as in tests that build their own Config.
+	if mode := cfg.Database.SchemaGuard; database != nil && (mode == config.SchemaGuardEnforce || mode == config.SchemaGuardWarn) {
+		guard := db.NewSchemaGuard(database.DB, db.RequiredMigrations(), log)
+		healthHandler.WithSchemaGuard(guard, mode == config.SchemaGuardEnforce)
+	}
 	orderHandler := NewOrderHandler(orderRepo, orderItemRepo, log)
 	taskHandler := NewTaskHandler(taskRepo, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
