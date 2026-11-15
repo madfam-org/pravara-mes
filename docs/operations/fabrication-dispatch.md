@@ -75,6 +75,35 @@ record is append-only. Passport deliveries are rows of `passport_outbox`;
 a failed publish keeps the row and retries, and content the service rejects
 (400/409/422) is marked failed and kept.
 
+## What the render step keeps, and for how long
+
+Pravara stores the render's **address and digests**, not its bytes: the part's URL, its
+`sha256`, the GOC-1 `instance_id`, and the sidecar's URL and digest. fabrication-prep fetches
+the bytes from yantra4d and checks them against the digest.
+
+yantra4d deletes render artifacts after 24 hours and on a pod restart, and renames them on every
+release. So:
+
+- A render is stamped `rendered_at`. A dispatch that goes back to matching reuses its render only
+  while it is younger than `DISPATCH_RENDER_FRESH_FOR_SECONDS`. An older one, or one recorded
+  before the stamp existed, is requested again.
+- The new render must be the **same design instance** (`instance_id`). If it is not, the design
+  changed while the dispatch waited and it fails with `render_instance_changed`; dispatch again to
+  make the new one.
+- If the same instance comes back with **different bytes**, the dispatch continues with the new
+  render, records the earlier digest as `previous_sha256`, and logs a warning. yantra4d does not
+  promise that a re-render reproduces bytes.
+- yantra4d answers `200 "success"` with a failed or timed-out part simply left out. Pravara treats
+  an answer with no parts, or without the part it asked for (`render_part_missing`), as a failure
+  to retry within `DISPATCH_MAX_ATTEMPTS`, and puts the end of yantra4d's render log in the
+  error.
+
+**Not done:** Pravara does not yet keep the manufacturing bytes themselves (owner ruling S12 of
+2026-11-14). That needs an object store, which Pravara has configured names for and no code. Until
+then, a render older than yantra4d's lifetime can only be made again, never fetched again, and a
+passport's geometry digest names bytes that only exist while yantra4d or fabrication-prep still
+holds them.
+
 ## Configuration
 
 | Variable | Default | Meaning |
@@ -82,12 +111,14 @@ a failed publish keeps the row and retries, and content the service rejects
 | `DISPATCH_ENABLED` | `false` | Turns on dispatch and the runner. The dry run works either way. |
 | `DISPATCH_RENDER_FORMAT` | `3mf` | `3mf` or `stl` (what fabrication-prep slices). |
 | `DISPATCH_RESERVATION_TTL_SECONDS` | `900` | Reservation before start_job; extended by each hop. |
+| `DISPATCH_RENDER_FRESH_FOR_SECONDS` | `21600` | How long a render kept across a re-match is reused before it is requested again. Keep it well under yantra4d's 24-hour artifact lifetime. |
 | `DISPATCH_COMMAND_HOLD_SECONDS` | `21600` | Reservation after start_job, until the job ends. |
 | `DISPATCH_MATCH_WAIT_SECONDS` | `86400` | How long to wait for an eligible machine. |
 | `DISPATCH_MAX_ATTEMPTS` | `5` | Retries of retryable failures. |
 | `DISPATCH_POLL_INTERVAL_SECONDS` | `10` | Runner tick and slice-job poll interval. |
 | `DISPATCH_PASSPORT_MAX_ATTEMPTS` | `20` | Delivery attempts per passport row. |
-| `YANTRA4D_API_URL`, `FABRICATION_PREP_API_URL`, `ASSET_SHELLS_API_URL` | production hosts | Service base URLs. |
+| `YANTRA4D_API_URL` | `https://api.yantra4d.com` | yantra4d's API. The default until 2026-11-14, `yantra4d.madfam.io`, does not resolve. |
+| `FABRICATION_PREP_API_URL`, `ASSET_SHELLS_API_URL` | `fabrication-prep-api.madfam.io`, `asset-shells-api.madfam.io` | Service base URLs. Neither service is deployed yet, so these hosts are unverified. |
 | `JANUA_TOKEN_URL` | Janua token endpoint | client_credentials endpoint. |
 | `ASSET_SHELLS_PUBLISHER_TENANTS` | `madfam=ASSET_SHELLS_PUBLISHER_MADFAM_ECOSYSTEM` | pravara tenant slug → environment prefix of its asset-shells publisher client. |
 

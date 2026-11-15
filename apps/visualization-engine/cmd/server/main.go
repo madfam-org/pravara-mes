@@ -75,7 +75,7 @@ func init() {
 	viper.SetDefault("storage.region", "auto")
 
 	// Yantra4D integration
-	viper.SetDefault("yantra4d.base_url", "https://yantra4d.madfam.io")
+	viper.SetDefault("yantra4d.base_url", "https://api.yantra4d.com")
 	viper.SetDefault("yantra4d.timeout", 120)
 }
 

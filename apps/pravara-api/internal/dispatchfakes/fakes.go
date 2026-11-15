@@ -108,6 +108,9 @@ type Yantra4D struct {
 	Sidecar    []byte
 	mu         sync.Mutex
 	Requests   []map[string]any
+	// FailingRenders is how many of the next render requests answer the way
+	// yantra4d does when a part fails: 200 "success" with no parts.
+	FailingRenders int
 }
 
 // NewYantra4D starts the fake. treeSHA must start with the type shell's tree16.
@@ -139,6 +142,19 @@ func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D 
 			y.mu.Unlock()
 			if _, nested := body["parameters"].(map[string]any); !nested || body["export_format"] != y.Format {
 				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "parameters must be nested; export_format " + y.Format})
+				return
+			}
+			y.mu.Lock()
+			failing := y.FailingRenders > 0
+			if failing {
+				y.FailingRenders--
+			}
+			y.mu.Unlock()
+			if failing {
+				// What yantra4d does when a part fails or times out: 200,
+				// "success", the part absent and the reason only in the log.
+				writeJSON(w, http.StatusOK, map[string]any{"status": "success", "request_id": "r1", "parts": []any{},
+					"log": "render queued\n[" + part + "] Error: Render timed out after 120s"})
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"status": "success", "request_id": "r1",

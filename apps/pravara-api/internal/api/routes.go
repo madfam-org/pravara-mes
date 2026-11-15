@@ -128,8 +128,8 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		hyperobjectMapper := services.NewHyperobjectMapper(productRepo, wiRepo, publisher, log)
 		yantra4dHandler = NewYantra4DHandler(
 			hyperobjectMapper,
-			"http://localhost:4502",      // viz-engine URL (override via config)
-			"https://yantra4d.madfam.io", // Yantra4D URL
+			"http://localhost:4502", // viz-engine URL (override via config)
+			yantra4dBaseURL(cfg),    // Yantra4D URL (same setting as dispatch)
 			log,
 		)
 	}
@@ -589,4 +589,13 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		centrifugoProxy.POST("/auth", realtimeHandler.AuthConnect)
 		centrifugoProxy.POST("/subscribe", realtimeHandler.AuthSubscribe)
 	}
+}
+
+// yantra4dBaseURL is the Yantra4D API address: the dispatch setting, or
+// Yantra4D's public API host when a hand-built Config leaves it empty.
+func yantra4dBaseURL(cfg *config.Config) string {
+	if cfg != nil && cfg.Dispatch.YantraAPIURL != "" {
+		return cfg.Dispatch.YantraAPIURL
+	}
+	return "https://api.yantra4d.com"
 }

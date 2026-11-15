@@ -37,7 +37,7 @@ type Client struct {
 	tokens  *machineclients.TokenSource
 }
 
-// NewClient creates a client for baseURL (e.g. https://yantra4d.madfam.io).
+// NewClient creates a client for baseURL (e.g. https://api.yantra4d.com).
 func NewClient(baseURL string, tokens *machineclients.TokenSource, httpClient *http.Client) (*Client, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -71,9 +71,12 @@ type Part struct {
 
 // RenderResponse is the synchronous render envelope.
 type RenderResponse struct {
-	Status          string `json:"status"`
-	Parts           []Part `json:"parts"`
-	RequestID       string `json:"request_id"`
+	Status    string `json:"status"`
+	Parts     []Part `json:"parts"`
+	RequestID string `json:"request_id"`
+	// Log is yantra4d's render log. A part that failed or timed out is left
+	// out of Parts while Status stays "success"; its reason is only here.
+	Log             string `json:"log"`
 	GeneratorOutput *struct {
 		FormatVersion   string `json:"format_version"`
 		Complete        bool   `json:"complete"`
@@ -117,7 +120,27 @@ func (c *Client) Render(ctx context.Context, req RenderRequest) (*RenderResponse
 		return nil, &remote.Error{Service: service, Op: "render", Status: resp.StatusCode,
 			Message: fmt.Sprintf("render status %q", out.Status), Retryable: true}
 	}
+	// yantra4d answers 200 "success" even when every part failed or timed
+	// out: the parts are simply absent. Nothing to slice is not a success.
+	if len(out.Parts) == 0 {
+		return nil, &remote.Error{Service: service, Op: "render", Status: resp.StatusCode,
+			Message: "render returned no parts" + LogExcerpt(out.Log), Retryable: true}
+	}
 	return &out, nil
+}
+
+// LogExcerpt returns the end of a render log as a suffix for an error
+// message ("" when the log is empty). The end is where a failure is reported.
+func LogExcerpt(log string) string {
+	log = strings.TrimSpace(log)
+	if log == "" {
+		return ""
+	}
+	const max = 300
+	if len(log) > max {
+		log = "…" + log[len(log)-max:]
+	}
+	return ": " + strings.Join(strings.Fields(log), " ")
 }
 
 // Sidecar is the subset of a GOC-1 variables.json document pravara records.

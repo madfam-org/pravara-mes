@@ -92,6 +92,9 @@ type Settings struct {
 	RequireBoundingBox bool
 	// MatchWait bounds how long a dispatch waits for an eligible machine.
 	MatchWait time.Duration
+	// RenderFreshFor is how long a render kept across a re-match is reused
+	// before it is requested again (yantra4d's artifacts expire).
+	RenderFreshFor time.Duration
 }
 
 func (s *Settings) defaults() {
@@ -100,6 +103,9 @@ func (s *Settings) defaults() {
 	}
 	if s.RenderFormat == "" {
 		s.RenderFormat = "3mf"
+	}
+	if s.RenderFreshFor <= 0 {
+		s.RenderFreshFor = 6 * time.Hour
 	}
 	if s.ReservationTTL <= 0 {
 		s.ReservationTTL = 15 * time.Minute

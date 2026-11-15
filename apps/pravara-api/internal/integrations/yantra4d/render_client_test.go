@@ -77,3 +77,34 @@ func TestSidecarFailsClosed(t *testing.T) {
 	bad.Generator.Source.TreeSHA256 = "short"
 	assert.Error(t, CheckSidecar(bad, part))
 }
+
+// yantra4d answers 200 "success" with the failed part simply absent. The
+// client reports that as a retryable failure carrying yantra4d's reason.
+func TestRenderWithNoPartsIsARetryableFailure(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	y.FailingRenders = 1
+	_, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	var re *remote.Error
+	require.ErrorAs(t, err, &re)
+	assert.True(t, re.Retryable)
+	assert.Contains(t, re.Message, "render returned no parts")
+	assert.Contains(t, re.Message, "Render timed out after 120s")
+
+	// The next attempt succeeds.
+	resp, err := c.Render(context.Background(), RenderRequest{Project: "motor-soft-mount", Mode: "assembled",
+		Parameters: map[string]any{"size": 40}, ExportFormat: "3mf"})
+	require.NoError(t, err)
+	assert.Len(t, resp.Parts, 1)
+}
+
+func TestLogExcerpt(t *testing.T) {
+	assert.Equal(t, "", LogExcerpt(""))
+	assert.Equal(t, "", LogExcerpt("  \n "))
+	assert.Equal(t, ": queued [body] Error: boom", LogExcerpt("queued\n[body]   Error: boom\n"))
+	long := strings.Repeat("x", 500) + " the end"
+	got := LogExcerpt(long)
+	assert.True(t, strings.HasPrefix(got, ": …"))
+	assert.True(t, strings.HasSuffix(got, "the end"), "the end of the log is kept: that is where a failure is reported")
+	assert.LessOrEqual(t, len(got), 320)
+}

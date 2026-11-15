@@ -88,6 +88,7 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		PassportAttempts:   cfg.Dispatch.PassportMaxAttempts,
 		RequireBoundingBox: cfg.Dispatch.RequireBoundingBox,
 		MatchWait:          time.Duration(cfg.Dispatch.MatchWaitSeconds) * time.Second,
+		RenderFreshFor:     time.Duration(cfg.Dispatch.RenderFreshForSeconds) * time.Second,
 	}, log)
 	switch cfg.Dispatch.RenderFormat {
 	case "", "3mf", "stl":

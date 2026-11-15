@@ -18,6 +18,8 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/yantra4d"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/matchmaking"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
+
+	"github.com/sirupsen/logrus"
 )
 
 // MatchRecord is stored in dispatch_jobs.match_result.
@@ -43,6 +45,13 @@ type RenderBundle struct {
 	TreeSHA256      string `json:"tree_sha256"`
 	Complete        bool   `json:"complete"`
 	Engine          string `json:"engine"`
+	// RenderedAt is when yantra4d produced this render. URL and VariablesURL
+	// are only good for a while after it (Settings.RenderFreshFor).
+	RenderedAt time.Time `json:"rendered_at,omitempty"`
+	// PreviousSHA256 is set when a render was requested again and the same
+	// instance came back with different bytes: yantra4d does not promise that
+	// a re-render reproduces them (RFC 0059 S2, S3).
+	PreviousSHA256 string `json:"previous_sha256,omitempty"`
 }
 
 // SliceRecord is stored in dispatch_jobs.slice_result. Signed URLs are not
@@ -232,9 +241,18 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	if serr := s.holdReservation(ctx, d, s.cfg.ReservationTTL); serr != nil {
 		return serr
 	}
-	if len(d.RenderBundle) > 0 { // rendered before a re-match
-		d.Status = repositories.DispatchRendered
-		return nil
+	// A render made before a re-match is kept while its URLs are still good.
+	// An older one is requested again; it must be the same design instance.
+	var earlier *RenderBundle
+	if len(d.RenderBundle) > 0 {
+		kept, err := decode[RenderBundle](d.RenderBundle)
+		if err == nil && kept != nil {
+			if renderIsFresh(*kept, s.now(), s.cfg.RenderFreshFor) {
+				d.Status = repositories.DispatchRendered
+				return nil
+			}
+			earlier = kept
+		}
 	}
 	_, spec, serr := s.loadTask(ctx, d)
 	if serr != nil {
@@ -245,7 +263,7 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	if err != nil {
 		return fromRemote("render_failed", err)
 	}
-	part, serr := pickPart(resp.Parts, spec.Part)
+	part, serr := pickPart(resp.Parts, spec.Part, resp.Log)
 	if serr != nil {
 		return serr
 	}
@@ -267,22 +285,50 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	default:
 		return terminal("render_format_unsliceable", "fabrication-prep slices model/stl or model/3mf, got %q", part.MediaType)
 	}
-	d.RenderBundle = encode(RenderBundle{Part: part.Type, URL: s.Renderer.AbsoluteURL(part.URL), SHA256: part.SHA256,
+	bundle := RenderBundle{Part: part.Type, URL: s.Renderer.AbsoluteURL(part.URL), SHA256: part.SHA256,
 		MediaType: part.MediaType, InstanceID: sidecar.InstanceID, VariablesURL: s.Renderer.AbsoluteURL(part.VariablesURL),
 		SidecarSHA256: sidecarSHA, VariablesSHA256: sidecar.VariablesSHA256, TreeSHA256: sidecar.Generator.Source.TreeSHA256,
-		Complete: sidecar.Complete, Engine: sidecar.Generator.Engine})
+		Complete: sidecar.Complete, Engine: sidecar.Generator.Engine, RenderedAt: s.now()}
+	if earlier != nil {
+		if earlier.InstanceID != "" && earlier.InstanceID != bundle.InstanceID {
+			return terminal("render_instance_changed",
+				"the design instance changed between renders (%s, then %s); dispatch again to make the new one",
+				earlier.InstanceID, bundle.InstanceID)
+		}
+		if earlier.SHA256 != "" && earlier.SHA256 != bundle.SHA256 {
+			bundle.PreviousSHA256 = earlier.SHA256
+			s.log.WithFields(logrus.Fields{"dispatch_id": d.ID, "instance_id": bundle.InstanceID,
+				"previous_sha256": earlier.SHA256, "sha256": bundle.SHA256}).
+				Warn("dispatch: the same design instance rendered to different bytes; using the new render")
+		}
+	}
+	d.RenderBundle = encode(bundle)
 	d.Status = repositories.DispatchRendered
 	return nil
 }
 
-func pickPart(parts []yantra4d.Part, want string) (*yantra4d.Part, *stepError) {
+// renderIsFresh reports whether a kept render's URLs can still be handed on.
+// A render with no timestamp (recorded before RenderedAt existed) is not.
+func renderIsFresh(bundle RenderBundle, now time.Time, freshFor time.Duration) bool {
+	if bundle.RenderedAt.IsZero() {
+		return false
+	}
+	age := now.Sub(bundle.RenderedAt)
+	return age >= 0 && age < freshFor
+}
+
+// pickPart selects the part to make from a render answer. yantra4d leaves a
+// part that failed or timed out out of an otherwise successful answer, so a
+// missing part is retried (within the dispatch's attempt budget) rather than
+// treated as a part that does not exist; renderLog carries yantra4d's reason.
+func pickPart(parts []yantra4d.Part, want, renderLog string) (*yantra4d.Part, *stepError) {
 	if want != "" {
 		for i := range parts {
 			if parts[i].Type == want {
 				return &parts[i], nil
 			}
 		}
-		return nil, terminal("render_part_missing", "render returned no part %q", want)
+		return nil, retryable("render_part_missing", "render returned no part %q%s", want, yantra4d.LogExcerpt(renderLog))
 	}
 	if len(parts) != 1 {
 		return nil, terminal("render_part_ambiguous", "the mode renders %d parts; set the order item's specifications.part", len(parts))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -95,6 +96,47 @@ func TestDispatchRechecksTheMachineBeforeStartJob(t *testing.T) {
 	assert.Equal(t, other, *d.MachineID)
 	assert.Len(t, r.yantra.Requests, 1, "render not repeated")
 	assert.Len(t, r.fabprep.Jobs, 2, "sliced again for the new machine (new idempotency key)")
+}
+
+// A render kept across a re-match is only reused while yantra4d still serves
+// it. An older one (here: stamped a day ago) is requested again, and a render
+// that yantra4d answers without its part is retried, not failed.
+func TestDispatchRerendersAStaleRenderAfterARematch(t *testing.T) {
+	r := newDispatchRig(t)
+	busy := r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+	id := r.create(t, r.seedTask(t, boxSpecs))
+	r.runUntil(t, id, repositories.DispatchSliced)
+	require.Len(t, r.yantra.Requests, 1)
+	first := r.dispatch(t, id)
+
+	// The machine becomes busy: the dispatch goes back to matching.
+	_, err := r.admin.Exec(`UPDATE machine_live_state SET state_status = 'printing' WHERE machine_id = $1`, busy)
+	require.NoError(t, err)
+	r.svc.RunOnce(context.Background())
+	require.Equal(t, repositories.DispatchQueued, r.dispatch(t, id).Status)
+
+	// A day passes before another machine is free.
+	_, err = r.admin.Exec(`UPDATE dispatch_jobs SET render_bundle = jsonb_set(render_bundle, '{rendered_at}', to_jsonb($2::text))
+		WHERE id = $1`, id, time.Now().UTC().Add(-24*time.Hour).Format(time.RFC3339))
+	require.NoError(t, err)
+
+	// yantra4d first answers "success" with the part missing (a timeout).
+	r.yantra.FailingRenders = 1
+	r.seedMachine(t, "voron-02", "idle", "tpu-95a")
+	r.due(t)
+	d := r.runUntil(t, id, repositories.DispatchCommandEnqueued)
+
+	assert.Len(t, r.yantra.Requests, 3, "rendered again (one failed answer, one good) instead of reusing the day-old render")
+	var before, after map[string]any
+	require.NoError(t, json.Unmarshal(first.RenderBundle, &before))
+	require.NoError(t, json.Unmarshal(d.RenderBundle, &after))
+	assert.Equal(t, before["instance_id"], after["instance_id"], "the same design instance")
+	assert.Equal(t, before["sha256"], after["sha256"])
+	stamped, err := time.Parse(time.RFC3339Nano, after["rendered_at"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now(), stamped, time.Minute, "the new render carries its own time")
+	_, changed := after["previous_sha256"]
+	assert.False(t, changed, "the bytes did not change, so nothing is recorded as superseded")
 }
 
 // Content errors are terminal with the callee's reason; the completion must
