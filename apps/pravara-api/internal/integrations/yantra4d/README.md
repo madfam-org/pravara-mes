@@ -25,16 +25,19 @@ Both run anonymously, on Yantra4D's guest tier, against project
 tier may not use CadQuery) at 2 × 2 cells, exported as STL (the only format the
 guest tier may export). They check:
 
-- **success**: the render answers `success`, the part is present, the
-  artifact downloads from the configured https origin, its sha256 equals the
-  answer's, and the GOC-1 sidecar matches (instance id, variables digest,
+- **success**: the render answers `success`, the part is present, its URLs
+  pass `OriginURL` (the configured https origin), the artifact downloads
+  through `OpenArtifact` (the path dispatch keeps bytes through: origin
+  checked, no redirects followed), its sha256 equals the answer's, and the GOC-1 sidecar matches (instance id, variables digest,
   primary geometry digest). A second identical render with `ignore_cache` is
   compared with the first: same instance id required, same digest reported
   (reproducibility is logged, not asserted);
 - **fail closed**: an unknown project (`404`), and an export format the
   guest tier may not use (`3mf`, `403`) are errors. An unknown part is an
   error from the visualization client; for this client the test checks the
-  part is absent and not reported failed, which `pickPart` refuses.
+  part is absent and not reported failed, which `pickPart` refuses. A
+  protocol-relative URL and a plain-http URL on the live host are refused
+  with `url_off_origin` before any request is made.
 
 The guest tier allows 10 renders an hour per address. The two tests make
 seven counted renders between them (an unknown project is answered before
