@@ -271,7 +271,7 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 			// Recorded before pravara kept bytes: keep them now, while
 			// the URLs are still good.
 			if !keptComplete(*kept) {
-				if serr := s.keepRender(ctx, d.TenantID, kept, nil, nil); serr != nil {
+				if serr := s.keepWithLease(ctx, d, kept, nil, nil); serr != nil {
 					return serr
 				}
 				d.RenderBundle = encode(kept)
@@ -345,7 +345,7 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 		}
 	}
 	// Keep the bytes before anything is made from them.
-	if serr := s.keepRender(ctx, d.TenantID, &bundle, sidecar.Raw, part.SizeBytes); serr != nil {
+	if serr := s.keepWithLease(ctx, d, &bundle, sidecar.Raw, part.SizeBytes); serr != nil {
 		return serr
 	}
 	if earlier != nil {
@@ -431,6 +431,9 @@ func pickPart(parts []yantra4d.Part, want, renderLog string) (*yantra4d.Part, *s
 func (s *Service) stageSliceSubmit(ctx context.Context, d *repositories.DispatchJob) *stepError {
 	if serr := s.holdReservation(ctx, d, s.cfg.ReservationTTL); serr != nil {
 		return serr
+	}
+	if s.rewindUnkept(d) {
+		return nil
 	}
 	match, err1 := decode[MatchRecord](d.MatchResult)
 	bundle, err2 := decode[RenderBundle](d.RenderBundle)
@@ -520,6 +523,9 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 		return terminal("state_incomplete", "dispatch lacks its slice result or machine")
 	}
 	if d.Status == repositories.DispatchSliced {
+		if s.rewindUnkept(d) {
+			return nil
+		}
 		if serr := s.recheck(ctx, d); serr != nil {
 			return serr
 		}
@@ -553,6 +559,13 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 			}
 			return terminal("command_"+cmd.Status, "start_job %s: %s", cmd.Status, msg)
 		}
+	}
+	// No ledger row means nothing was appended (the row is written first), so
+	// an unkept render can still be sent back. A ledger row (pending) may
+	// already be on the stream and is re-sent from the ledger after a
+	// DBIRTH: rewinding then would issue a second start_job, so it goes on.
+	if cmd == nil && s.rewindUnkept(d) {
+		return nil
 	}
 	// Fresh signed URL: the one from slicing may have expired.
 	job, err := s.Slicer.GetSliceJob(ctx, rec.JobID)

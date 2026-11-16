@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -168,8 +167,7 @@ func TestKeepRenderStoreConflictIsTerminal(t *testing.T) {
 	r := newKeepRig(t, 0)
 	b, raw, size := r.render(t)
 	// Something else is already at the content address of the geometry.
-	_, err := r.store.Put(context.Background(), r.key(t, b.SHA256), strings.NewReader("not the geometry"), 16, b.SHA256, "")
-	require.NoError(t, err)
+	r.store.PutRaw(r.key(t, b.SHA256), []byte("not the geometry"), b.SHA256)
 	serr := r.svc.keepRender(context.Background(), r.tenant, &b, raw, size)
 	require.NotNil(t, serr)
 	assert.Equal(t, "artifact_store_conflict", serr.code)
@@ -271,4 +269,24 @@ func TestKeptComplete(t *testing.T) {
 	assert.True(t, keptComplete(b))
 	b.SHA256 = "b"
 	assert.False(t, keptComplete(b), "kept bytes of another render do not count")
+}
+
+// A store failure's message is stored on the dispatch, which tenants read:
+// it names what failed, never the endpoint or the bucket.
+func TestKeepRenderStoreErrorsAreScrubbed(t *testing.T) {
+	r := newKeepRig(t, 0)
+	b, raw, size := r.render(t)
+	s3, err := artifactstore.NewS3(artifactstore.Config{Backend: artifactstore.BackendR2, EndpointURL: "http://127.0.0.1:1",
+		BucketName: "pravara-dispatch-artifacts-private", AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret"}, nil)
+	require.NoError(t, err)
+	s3.CallTimeout = 5 * time.Second
+	r.svc.Store = s3
+	serr := r.svc.keepRender(context.Background(), r.tenant, &b, raw, size)
+	require.NotNil(t, serr)
+	assert.Equal(t, "artifact_store_failed", serr.code)
+	assert.True(t, serr.retryable)
+	for _, leak := range []string{"127.0.0.1", "pravara-dispatch-artifacts-private", "tenants/", "placeholder"} {
+		assert.NotContains(t, serr.msg, leak)
+	}
+	assert.Contains(t, serr.msg, "the artifact store could not be reached")
 }

@@ -22,8 +22,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/remote"
 )
 
@@ -45,6 +47,68 @@ type KeptObject struct {
 	Bytes     int64     `json:"bytes"`
 	MediaType string    `json:"media_type"`
 	KeptAt    time.Time `json:"kept_at"`
+}
+
+// keepBudget bounds the whole keep step: the geometry download (and the
+// sidecar's, for a render kept late), each bounded by the yantra4d client's
+// own timeout, and two store writes, each bounded by the store's call timeout
+// (artifactstore.DefaultCallTimeout). The step stops when the budget is
+// spent, whatever its parts would allow.
+const keepBudget = 12 * time.Minute
+
+// keepLease is the runner's lease on a dispatch during the keep step: the
+// budget plus a margin for saving the outcome, so no other runner claims the
+// dispatch while it is being kept.
+const keepLease = keepBudget + 3*time.Minute
+
+// prepareKeep extends the runner's lease and the machine reservation to cover
+// the keep step, and returns the context bounded by keepBudget.
+func (s *Service) prepareKeep(ctx context.Context, d *repositories.DispatchJob) (context.Context, context.CancelFunc, *stepError) {
+	err := s.inTenant(ctx, d.TenantID, func(ctx context.Context) error {
+		return s.Dispatch.ExtendLease(ctx, d.ID, s.owner, keepLease)
+	})
+	if errors.Is(err, repositories.ErrLeaseLost) {
+		return nil, nil, retryable("lease_lost", "another runner took the dispatch over")
+	}
+	if err != nil {
+		return nil, nil, retryable("database", "%v", err)
+	}
+	if serr := s.holdReservation(ctx, d, keepLease+s.cfg.ReservationTTL); serr != nil {
+		return nil, nil, serr
+	}
+	kctx, cancel := context.WithTimeout(ctx, keepBudget)
+	return kctx, cancel, nil
+}
+
+// keepWithLease is keepRender for a dispatch the runner holds: the lease and
+// the machine reservation are extended to cover the step, which is bounded
+// by keepBudget.
+func (s *Service) keepWithLease(ctx context.Context, d *repositories.DispatchJob, b *RenderBundle, sidecarRaw []byte, declaredSize *int64) *stepError {
+	kctx, cancel, serr := s.prepareKeep(ctx, d)
+	if serr != nil {
+		return serr
+	}
+	defer cancel()
+	return s.keepRender(kctx, d.TenantID, b, sidecarRaw, declaredSize)
+}
+
+// rewindUnkept enforces RFC 0059 S12 before work goes onward to slicing or
+// to a machine: a dispatch whose render bytes are not kept (one recorded
+// before pravara kept bytes) goes back to the render stage, and true is
+// returned. That stage keeps the bytes while the render is fresh and renders
+// again (and keeps) when it is not, so nothing is sliced or started from
+// bytes pravara does not hold. A slice already made from the same render is
+// found again by its idempotency key.
+func (s *Service) rewindUnkept(d *repositories.DispatchJob) bool {
+	if b, err := decode[RenderBundle](d.RenderBundle); err == nil && keptComplete(*b) {
+		return false
+	}
+	s.log.WithFields(logrus.Fields{"dispatch_id": d.ID, "status": d.Status}).
+		Warn("dispatch: the render's bytes are not kept; going back to the render stage to keep them before going on")
+	d.SliceResult = nil
+	d.CommandID = nil
+	d.Status = repositories.DispatchReserved
+	return true
 }
 
 // keptComplete reports whether a bundle holds both kinds for its own digests.
@@ -162,11 +226,16 @@ func (s *Service) put(ctx context.Context, tenantID uuid.UUID, kind string, body
 		return nil, terminal("render_digest_invalid", "the %s digest: %v", kind, err)
 	}
 	if _, err := s.Store.Put(ctx, key, body, size, digest, mediaType); err != nil {
+		// The full error names the endpoint and bucket: logged here only.
+		// What is stored on the dispatch (tenants read it) is scrubbed.
+		s.log.WithError(err).WithFields(logrus.Fields{"tenant_id": tenantID, "kind": kind, "sha256": digest}).
+			Error("dispatch: keeping bytes in the artifact store failed")
 		if errors.Is(err, artifactstore.ErrConflict) {
 			return nil, terminal("artifact_store_conflict",
-				"the stored object at %s is not the %s being kept (sha256 %s, %d bytes); the kept record needs a look", key, kind, digest, size)
+				"the object already stored for this %s (sha256 %s, %d bytes) is not these bytes or has no recorded digest; the kept record needs a look",
+				kind, digest, size)
 		}
-		return nil, retryable("artifact_store_failed", "storing the %s: %v", kind, err)
+		return nil, retryable("artifact_store_failed", "storing the %s: %s", kind, artifactstore.Describe(err))
 	}
 	return &KeptObject{Kind: kind, Key: key, SHA256: digest, Bytes: size, MediaType: mediaType, KeptAt: s.now()}, nil
 }
