@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -114,13 +115,36 @@ func storeContract(t *testing.T, s Store) {
 	assert.Equal(t, data, got, "the first object is untouched")
 }
 
+// putChecks is what every Store must refuse besides the contract: bytes that
+// are not their declared digest.
+func putChecks(t *testing.T, s Store) {
+	ctx := context.Background()
+	data := []byte("declared " + uuid.NewString())
+	wrong := digest([]byte("something else"))
+	key, _ := Key(uuid.New(), wrong)
+	_, err := s.Put(ctx, key, bytes.NewReader(data), int64(len(data)), wrong, "")
+	require.Error(t, err, "a body that is not its declared sha256 is refused")
+	t.Logf("refused: %s", Describe(err))
+	_, err = s.Stat(ctx, key)
+	assert.ErrorIs(t, err, ErrNotFound, "nothing was stored")
+}
+
 func TestMemoryStoreContract(t *testing.T) {
 	m := NewMemory()
 	storeContract(t, m)
 	assert.Equal(t, 1, m.Writes)
+	putChecks(t, m)
+
+	// An object without a recorded digest is not "already stored": pravara
+	// cannot tell what it holds.
+	data := []byte("left by someone else")
+	key, _ := Key(uuid.New(), digest(data))
+	m.PutRaw(key, data, "")
+	_, err := m.Put(context.Background(), key, bytes.NewReader(data), int64(len(data)), digest(data), "")
+	assert.ErrorIs(t, err, ErrConflict)
 
 	m.PutErr = errors.New("bucket unavailable")
-	_, err := m.Put(context.Background(), "k", bytes.NewReader(nil), 0, digest(nil), "")
+	_, err = m.Put(context.Background(), "k", bytes.NewReader(nil), 0, digest(nil), "")
 	assert.Error(t, err)
 }
 
@@ -141,6 +165,16 @@ func TestS3StoreContractAgainstS3CompatibleServer(t *testing.T) {
 	_, err = store.client.CreateBucket(context.Background(), &s3.CreateBucketInput{Bucket: aws.String(bucket)})
 	require.NoError(t, err)
 	storeContract(t, store)
+	putChecks(t, store)
+
+	// An object without the sha256 metadata is a conflict, never "stored".
+	bare := []byte("no metadata " + uuid.NewString())
+	bareKey, _ := Key(uuid.New(), digest(bare))
+	_, err = store.client.PutObject(context.Background(), &s3.PutObjectInput{Bucket: aws.String(bucket), Key: aws.String(bareKey),
+		Body: bytes.NewReader(bare)})
+	require.NoError(t, err)
+	_, err = store.Put(context.Background(), bareKey, bytes.NewReader(bare), int64(len(bare)), digest(bare), "")
+	assert.ErrorIs(t, err, ErrConflict)
 
 	// An object another writer stored first is found and left alone.
 	data := []byte("written first " + uuid.NewString())
@@ -159,4 +193,25 @@ func TestS3StoreContractAgainstS3CompatibleServer(t *testing.T) {
 		Body: bytes.NewReader([]byte("other")), IfNoneMatch: aws.String("*")})
 	require.Error(t, err)
 	assert.Equal(t, 412, status(err))
+}
+
+// Store errors reach a dispatch's error message, which tenants read: the
+// description never carries the endpoint, bucket or key.
+func TestDescribeHidesTheEndpoint(t *testing.T) {
+	store, err := NewS3(Config{Backend: BackendR2, EndpointURL: "http://127.0.0.1:1", BucketName: "secret-bucket-name",
+		AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret"}, nil)
+	require.NoError(t, err)
+	store.CallTimeout = 5 * time.Second
+	data := []byte("x")
+	key, _ := Key(uuid.New(), digest(data))
+	_, err = store.Put(context.Background(), key, bytes.NewReader(data), 1, digest(data), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "127.0.0.1", "the full error (logged server-side) names the endpoint")
+	safe := Describe(err)
+	for _, leak := range []string{"127.0.0.1", "secret-bucket-name", key, "tenants/"} {
+		assert.NotContains(t, safe, leak)
+	}
+	assert.Equal(t, "the artifact store could not be reached", safe)
+	assert.Equal(t, "the artifact store did not answer in time", Describe(context.DeadlineExceeded))
+	assert.Equal(t, "the object already stored at this content address differs", Describe(ErrConflict))
 }

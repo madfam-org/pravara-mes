@@ -2,6 +2,9 @@ package artifactstore
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -97,10 +100,24 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// DefaultCallTimeout bounds one store call (a Put with its Stat, a Stat, or
+// opening an object). A dispatch hop holds a lease while it waits on these.
+const DefaultCallTimeout = 2 * time.Minute
+
 // S3 is a Store on an S3-compatible bucket (Cloudflare R2 in production).
 type S3 struct {
 	client *s3.Client
 	bucket string
+	// CallTimeout bounds each call (DefaultCallTimeout when zero). Reading
+	// an opened object's body is bounded by the caller's context.
+	CallTimeout time.Duration
+}
+
+func (s *S3) timeout() time.Duration {
+	if s.CallTimeout > 0 {
+		return s.CallTimeout
+	}
+	return DefaultCallTimeout
 }
 
 // NewS3 creates the store. httpClient may be nil.
@@ -129,6 +146,12 @@ func NewS3(c Config, httpClient *http.Client) (*S3, error) {
 // Put implements Store. The write is conditional (If-None-Match: *), so two
 // writers racing on one key never replace an object.
 func (s *S3) Put(ctx context.Context, key string, body io.ReadSeeker, size int64, digest, mediaType string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout())
+	defer cancel()
+	raw, err := hex.DecodeString(digest)
+	if err != nil || len(raw) != sha256.Size {
+		return false, fmt.Errorf("artifact store: %q is not a hex sha256", digest)
+	}
 	if existing, err := s.Stat(ctx, key); err == nil {
 		if same(existing, size, digest) {
 			return false, nil
@@ -144,11 +167,13 @@ func (s *S3) Put(ctx context.Context, key string, body io.ReadSeeker, size int64
 		ContentLength: aws.Int64(size),
 		Metadata:      map[string]string{metaSHA256: digest},
 		IfNoneMatch:   aws.String("*"),
+		// The server checks the body against it and refuses other bytes.
+		ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(raw)),
 	}
 	if mediaType != "" {
 		in.ContentType = aws.String(mediaType)
 	}
-	_, err := s.client.PutObject(ctx, in)
+	_, err = s.client.PutObject(ctx, in)
 	if status(err) == http.StatusPreconditionFailed {
 		// Someone stored it first: fine when it is these bytes.
 		existing, serr := s.Stat(ctx, key)
@@ -167,20 +192,45 @@ func (s *S3) Put(ctx context.Context, key string, body io.ReadSeeker, size int64
 }
 
 // Open implements Store.
+// Opening is bounded by CallTimeout; reading the body by ctx, which the
+// caller sizes to the object.
 func (s *S3) Open(ctx context.Context, key string) (io.ReadCloser, *Info, error) {
-	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	callCtx, cancel := context.WithCancel(ctx)
+	timer := time.AfterFunc(s.timeout(), cancel)
+	out, err := s.client.GetObject(callCtx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
+		timer.Stop()
+		cancel()
 		if status(err) == http.StatusNotFound {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, fmt.Errorf("artifact store: get %s: %w", key, err)
 	}
-	return out.Body, &Info{Key: key, Size: aws.ToInt64(out.ContentLength), SHA256: out.Metadata[metaSHA256],
+	if !timer.Stop() {
+		cancel()
+		_ = out.Body.Close()
+		return nil, nil, fmt.Errorf("artifact store: get %s: %w", key, context.DeadlineExceeded)
+	}
+	return &cancelOnClose{ReadCloser: out.Body, cancel: cancel}, &Info{Key: key, Size: aws.ToInt64(out.ContentLength), SHA256: out.Metadata[metaSHA256],
 		MediaType: aws.ToString(out.ContentType)}, nil
+}
+
+// cancelOnClose ends an opened object's context when the body is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnClose) Close() error {
+	err := c.ReadCloser.Close()
+	c.cancel()
+	return err
 }
 
 // Stat implements Store.
 func (s *S3) Stat(ctx context.Context, key string) (*Info, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout())
+	defer cancel()
 	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
 		if status(err) == http.StatusNotFound {

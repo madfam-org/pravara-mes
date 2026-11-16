@@ -19,6 +19,7 @@ import (
 	"io"
 	"regexp"
 
+	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
 )
 
@@ -69,7 +70,37 @@ func Key(tenantID uuid.UUID, digest string) (string, error) {
 	return "tenants/" + tenantID.String() + "/sha256/" + digest, nil
 }
 
-// same reports whether an existing object is the one being put.
+// same reports whether an existing object is the one being put. An object
+// without a recorded digest is never "the same": pravara cannot tell what it
+// holds, so it is a conflict, not something already stored.
 func same(existing *Info, size int64, digest string) bool {
-	return existing.Size == size && (existing.SHA256 == "" || existing.SHA256 == digest)
+	return existing.Size == size && existing.SHA256 != "" && existing.SHA256 == digest
+}
+
+// Describe is a store error in words that are safe to store where tenants can
+// read them (a dispatch's error message): what went wrong and the HTTP status
+// or S3 error code, never the endpoint, bucket or key. Log the full error
+// server-side.
+func Describe(err error) string {
+	var api smithy.APIError
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrConflict):
+		return "the object already stored at this content address differs"
+	case errors.Is(err, ErrNotFound):
+		return "object not found"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "the artifact store did not answer in time"
+	case errors.Is(err, context.Canceled):
+		return "the request was cancelled"
+	case errors.As(err, &api):
+		if code := status(err); code != 0 {
+			return fmt.Sprintf("the artifact store answered HTTP %d (%s)", code, api.ErrorCode())
+		}
+		return "the artifact store answered " + api.ErrorCode()
+	case status(err) != 0:
+		return fmt.Sprintf("the artifact store answered HTTP %d", status(err))
+	}
+	return "the artifact store could not be reached"
 }

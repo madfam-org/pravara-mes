@@ -3,6 +3,9 @@ package artifactstore
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"io"
 	"sync"
 )
@@ -46,6 +49,11 @@ func (m *Memory) Put(_ context.Context, key string, body io.ReadSeeker, size int
 	}
 	if int64(len(data)) != size {
 		return false, io.ErrUnexpectedEOF
+	}
+	// What S3 does with x-amz-checksum-sha256: refuse bytes that are not
+	// the declared digest.
+	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != digest {
+		return false, errors.New("artifactstore: the body does not match its declared sha256")
 	}
 	m.objects[key] = memoryObject{data: data, sha256: digest, mediaType: mediaType}
 	m.Writes++
@@ -102,4 +110,12 @@ func (m *Memory) Tamper(key string, data []byte) {
 	o := m.objects[key]
 	o.data = append([]byte(nil), data...)
 	m.objects[key] = o
+}
+
+// PutRaw stores data at key with the given recorded digest ("" for none),
+// bypassing every check: an object some other writer left (tests).
+func (m *Memory) PutRaw(key string, data []byte, digest string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.objects[key] = memoryObject{data: append([]byte(nil), data...), sha256: digest}
 }
