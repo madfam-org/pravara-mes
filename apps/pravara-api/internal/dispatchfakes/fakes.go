@@ -133,7 +133,11 @@ type Yantra4D struct {
 	PartURL, VariablesURL string
 	// RedirectTo, when set, answers every GET (geometry and sidecar
 	// downloads) with 302 to this location.
-	RedirectTo      string
+	RedirectTo string
+	// BeforeRender, when set, runs at the start of every render request,
+	// outside the lock (e.g. to change the database while a runner steps a
+	// batch).
+	BeforeRender    func()
 	cartridge, mode string
 }
 
@@ -181,6 +185,12 @@ func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D 
 		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/render":
+			y.mu.Lock()
+			hook := y.BeforeRender
+			y.mu.Unlock()
+			if hook != nil {
+				hook()
+			}
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			y.mu.Lock()

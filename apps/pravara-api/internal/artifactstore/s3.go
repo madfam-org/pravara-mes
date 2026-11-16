@@ -44,6 +44,10 @@ type Config struct {
 	BucketName      string
 	AccessKeyID     string
 	SecretAccessKey string
+	// MaxAttempts caps the SDK's attempts per request (its default when
+	// zero). Not read from the environment: tests set 1 so an unreachable
+	// endpoint fails at once instead of backing off past their timeout.
+	MaxAttempts int
 }
 
 // Empty reports whether nothing at all is configured.
@@ -129,11 +133,12 @@ func NewS3(c Config, httpClient *http.Client) (*S3, error) {
 		httpClient = &http.Client{Timeout: 10 * time.Minute}
 	}
 	client := s3.New(s3.Options{
-		Region:       "auto", // R2 ignores the region; SigV4 needs one
-		BaseEndpoint: aws.String(strings.TrimRight(c.EndpointURL, "/")),
-		Credentials:  credentials.NewStaticCredentialsProvider(c.AccessKeyID, c.SecretAccessKey, ""),
-		UsePathStyle: true,
-		HTTPClient:   httpClient,
+		Region:           "auto", // R2 ignores the region; SigV4 needs one
+		BaseEndpoint:     aws.String(strings.TrimRight(c.EndpointURL, "/")),
+		Credentials:      credentials.NewStaticCredentialsProvider(c.AccessKeyID, c.SecretAccessKey, ""),
+		UsePathStyle:     true,
+		HTTPClient:       httpClient,
+		RetryMaxAttempts: c.MaxAttempts,
 		// Only the checksums S3 requires. pravara verifies sha256 itself on
 		// both sides, and R2 does not implement every optional checksum the
 		// SDK would otherwise add by default.

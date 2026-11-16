@@ -315,3 +315,53 @@ func TestDispatchTerminalFailures(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "task_without_order_item")
 	})
 }
+
+// A claimed batch is stepped one dispatch at a time. When another runner takes
+// a later dispatch over while an earlier one renders, this runner must not step
+// it: no render, no reservation change, no save over the other runner's lease.
+func TestDispatchSkipsAHopWhoseLeaseWasTakenOver(t *testing.T) {
+	r := newDispatchRig(t)
+	r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+	r.seedMachine(t, "voron-02", "idle", "tpu-95a")
+	a := r.create(t, r.seedTask(t, boxSpecs))
+	b := r.create(t, r.seedTask(t, boxSpecs))
+	// One pass claims both and moves each one hop: queued -> reserved.
+	r.due(t)
+	r.svc.RunOnce(context.Background())
+	require.Equal(t, repositories.DispatchReserved, r.dispatch(t, a).Status)
+	require.Equal(t, repositories.DispatchReserved, r.dispatch(t, b).Status)
+	r.due(t)
+
+	renders := func() int {
+		n := 0
+		r.yantra.Set(func(y *dispatchfakes.Yantra4D) { n = len(y.Requests) })
+		return n
+	}
+	start := renders()
+	var once bool
+	r.yantra.Set(func(y *dispatchfakes.Yantra4D) {
+		y.BeforeRender = func() {
+			if once {
+				return
+			}
+			once = true
+			// Another replica takes BOTH dispatches over while the first renders.
+			_, err := r.admin.Exec(`UPDATE dispatch_jobs SET lease_owner = 'other-runner',
+				lease_until = NOW() + interval '5 minutes' WHERE id IN ($1, $2)`, a, b)
+			require.NoError(t, err)
+		}
+	})
+	_, err := r.admin.Exec(`UPDATE dispatch_jobs SET lease_owner = NULL, lease_until = NULL WHERE id IN ($1, $2)`, a, b)
+	require.NoError(t, err)
+
+	r.svc.RunOnce(context.Background())
+
+	assert.Equal(t, 1, renders()-start, "only the dispatch stepped before the takeover rendered")
+	for _, id := range []uuid.UUID{a, b} {
+		var owner string
+		var status string
+		require.NoError(t, r.admin.QueryRow(`SELECT lease_owner, status FROM dispatch_jobs WHERE id = $1`, id).Scan(&owner, &status))
+		assert.Equal(t, "other-runner", owner, "the other runner keeps the lease")
+		assert.Equal(t, repositories.DispatchReserved, status)
+	}
+}

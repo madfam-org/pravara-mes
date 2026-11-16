@@ -199,9 +199,9 @@ func TestS3StoreContractAgainstS3CompatibleServer(t *testing.T) {
 // description never carries the endpoint, bucket or key.
 func TestDescribeHidesTheEndpoint(t *testing.T) {
 	store, err := NewS3(Config{Backend: BackendR2, EndpointURL: "http://127.0.0.1:1", BucketName: "secret-bucket-name",
-		AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret"}, nil)
+		AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret", MaxAttempts: 1}, nil)
 	require.NoError(t, err)
-	store.CallTimeout = 5 * time.Second
+	store.CallTimeout = 30 * time.Second
 	data := []byte("x")
 	key, _ := Key(uuid.New(), digest(data))
 	_, err = store.Put(context.Background(), key, bytes.NewReader(data), 1, digest(data), "")

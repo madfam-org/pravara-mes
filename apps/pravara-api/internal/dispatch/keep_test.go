@@ -277,9 +277,9 @@ func TestKeepRenderStoreErrorsAreScrubbed(t *testing.T) {
 	r := newKeepRig(t, 0)
 	b, raw, size := r.render(t)
 	s3, err := artifactstore.NewS3(artifactstore.Config{Backend: artifactstore.BackendR2, EndpointURL: "http://127.0.0.1:1",
-		BucketName: "pravara-dispatch-artifacts-private", AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret"}, nil)
+		BucketName: "pravara-dispatch-artifacts-private", AccessKeyID: "placeholder-id", SecretAccessKey: "placeholder-secret", MaxAttempts: 1}, nil)
 	require.NoError(t, err)
-	s3.CallTimeout = 5 * time.Second
+	s3.CallTimeout = 30 * time.Second
 	r.svc.Store = s3
 	serr := r.svc.keepRender(context.Background(), r.tenant, &b, raw, size)
 	require.NotNil(t, serr)
