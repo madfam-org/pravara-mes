@@ -123,19 +123,22 @@ func main() {
 		}
 	}
 
-	// Initialize Yantra4D client
-	y4dClient := yantra4d.NewClient(
+	// Initialize Yantra4D client (https only; a bad base URL disables the importer)
+	y4dClient, y4dErr := yantra4d.NewClient(
 		viper.GetString("yantra4d.base_url"),
 		time.Duration(viper.GetInt("yantra4d.timeout"))*time.Second,
 	)
 
 	// Initialize Yantra4D importer (requires S3 storage)
 	var y4dImporter *models.Yantra4DImporter
-	if storageClient != nil {
-		y4dImporter = models.NewYantra4DImporter(y4dClient, storageClient, log)
-		log.Info("Yantra4D importer initialized")
-	} else {
+	switch {
+	case y4dErr != nil:
+		log.WithError(y4dErr).Error("Yantra4D importer disabled: invalid yantra4d.base_url")
+	case storageClient == nil:
 		log.Warn("Yantra4D importer disabled: S3 storage not configured")
+	default:
+		y4dImporter = models.NewYantra4DImporter(y4dClient, storageClient, log)
+		log.WithField("base_url", y4dClient.BaseURL()).Info("Yantra4D importer initialized")
 	}
 
 	// Initialize services
@@ -534,7 +537,9 @@ func handleYantra4DImport(manager *models.Manager, importer *models.Yantra4DImpo
 			return
 		}
 
-		// Extract JWT from Authorization header
+		// Extract JWT from Authorization header. It is forwarded to Yantra4D,
+		// which honours it only when Janua issued it for Yantra4D's audience
+		// and otherwise treats the call as anonymous (guest tier: no GLB).
 		jwt := c.GetHeader("Authorization")
 		if len(jwt) > 7 && jwt[:7] == "Bearer " {
 			jwt = jwt[7:]
@@ -543,12 +548,9 @@ func handleYantra4DImport(manager *models.Manager, importer *models.Yantra4DImpo
 			return
 		}
 
-		opts := models.ImportOptions{
-			MachineType: req.MachineType,
-			Metadata:    map[string]string{"jwt": jwt},
-		}
+		opts := models.ImportOptions{MachineType: req.MachineType}
 
-		model, err := importer.ImportFull(c.Request.Context(), req.Slug, req.Params, jwt, opts)
+		model, err := importer.ImportFull(c.Request.Context(), req, jwt, opts)
 		if err != nil {
 			log.WithError(err).Error("Yantra4D import failed")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("import failed: %v", err)})
