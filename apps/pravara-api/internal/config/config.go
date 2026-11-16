@@ -29,6 +29,7 @@ type Config struct {
 	// --- fabrication dispatch (MES-1 §5-§7), see dispatch.go ---
 	Dispatch       DispatchConfig       `mapstructure:"dispatch"`
 	MachineClients MachineClientsConfig `mapstructure:"machine_clients"`
+	ArtifactStore  ArtifactStoreConfig  `mapstructure:"artifact_store"`
 	// --- end fabrication dispatch ---
 	// Edge: Sparkplug edge-node registry and broker auth (edge.go).
 	Edge EdgeConfig `mapstructure:"edge"`

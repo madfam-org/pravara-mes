@@ -86,6 +86,8 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(post, "/v1/match"):         jobsRead,
 		k(get, "/v1/dispatches"):     jobsRead,
 		k(get, "/v1/dispatches/:id"): jobsRead,
+		// The kept bytes of a dispatch's render (RFC 0059 S12): a read.
+		k(get, "/v1/dispatches/:id/artifacts/:kind"): jobsRead,
 		// --- end fabrication dispatch ---
 
 		// Job consumption reads for downstream cost ledgers (quantities only).

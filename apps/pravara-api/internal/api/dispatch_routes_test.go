@@ -23,7 +23,8 @@ import (
 
 func TestDispatchRoutesAreRegisteredAndDispatchIsHumanOnly(t *testing.T) {
 	routes := registeredV1Routes(t)
-	for _, key := range []string{"POST /v1/match", "POST /v1/dispatches", "GET /v1/dispatches", "GET /v1/dispatches/:id"} {
+	for _, key := range []string{"POST /v1/match", "POST /v1/dispatches", "GET /v1/dispatches", "GET /v1/dispatches/:id",
+		"GET /v1/dispatches/:id/artifacts/:kind"} {
 		assert.True(t, routes[key], key)
 	}
 	_, listed := MachineRouteScopes()["POST /v1/dispatches"]

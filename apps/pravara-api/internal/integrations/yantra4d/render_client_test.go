@@ -3,7 +3,10 @@ package yantra4d
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -42,7 +45,9 @@ func TestRenderAndSidecarWithTheMachineClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, dispatchfakes.Digest(y.Sidecar), sha)
 	assert.Equal(t, tree, doc.Generator.Source.TreeSHA256)
-	assert.True(t, strings.HasPrefix(c.AbsoluteURL(part.URL), y.Server.URL+"/static/"))
+	abs, err := c.OriginURL(part.URL)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(abs, y.Server.URL+"/static/"))
 }
 
 func TestWrongAudienceIsRejected(t *testing.T) {
@@ -163,4 +168,144 @@ func TestRenderRequestCarriesIgnoreCacheOnlyWhenAsked(t *testing.T) {
 	_, err = c.Render(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, true, y.Requests[1]["ignore_cache"])
+}
+
+// elsewhere is another host that must never be reached: it records every
+// request and whether it carried an Authorization header.
+type elsewhere struct {
+	server   *httptest.Server
+	mu       sync.Mutex
+	requests int
+	bearers  int
+}
+
+func newElsewhere(t *testing.T) *elsewhere {
+	e := &elsewhere{}
+	e.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.requests++
+		if r.Header.Get("Authorization") != "" {
+			e.bearers++
+		}
+		_, _ = w.Write([]byte("PK\x03\x04 from elsewhere"))
+	}))
+	t.Cleanup(e.server.Close)
+	return e
+}
+
+func (e *elsewhere) untouched(t *testing.T) {
+	t.Helper()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	assert.Zero(t, e.requests, "no request reached the other host")
+	assert.Zero(t, e.bearers, "no bearer left for the other host")
+}
+
+func offOrigin(t *testing.T, err error) {
+	t.Helper()
+	var re *remote.Error
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, CodeOffOrigin, re.Code)
+	assert.False(t, remote.IsRetryable(err))
+}
+
+func TestURLsFromAnAnswerStayOnYantra4DsOrigin(t *testing.T) {
+	c, y := setup(t, "yantra4d-api")
+	evil := newElsewhere(t)
+	evilHost := strings.TrimPrefix(evil.server.URL, "http://")
+	ctx := context.Background()
+
+	t.Run("off-origin part URL", func(t *testing.T) {
+		y.Set(func(y *dispatchfakes.Yantra4D) { y.PartURL = evil.server.URL + "/static/x.3mf" })
+		defer y.Set(func(y *dispatchfakes.Yantra4D) { y.PartURL = "" })
+		resp, err := c.Render(ctx, RenderRequest{Project: "motor-soft-mount", Mode: "assembled", ExportFormat: "3mf"})
+		require.NoError(t, err)
+		_, err = c.OriginURL(resp.Parts[0].URL)
+		offOrigin(t, err)
+		_, _, err = c.OpenArtifact(ctx, resp.Parts[0].URL)
+		offOrigin(t, err)
+		evil.untouched(t)
+	})
+
+	t.Run("off-origin sidecar URL", func(t *testing.T) {
+		y.Set(func(y *dispatchfakes.Yantra4D) { y.VariablesURL = evil.server.URL + "/static/x.3mf.variables.json" })
+		defer y.Set(func(y *dispatchfakes.Yantra4D) { y.VariablesURL = "" })
+		resp, err := c.Render(ctx, RenderRequest{Project: "motor-soft-mount", Mode: "assembled", ExportFormat: "3mf"})
+		require.NoError(t, err)
+		_, _, err = c.FetchSidecar(ctx, resp.Parts[0])
+		offOrigin(t, err)
+		_, _, err = c.OpenArtifact(ctx, resp.Parts[0].VariablesURL)
+		offOrigin(t, err)
+		evil.untouched(t)
+	})
+
+	t.Run("protocol-relative URL", func(t *testing.T) {
+		for _, ref := range []string{"//" + evilHost + "/static/x.3mf", "///" + evilHost + "/x", `\\` + evilHost + "/x"} {
+			got, err := c.OriginURL(ref)
+			if err == nil {
+				// A path that merely contains the other host's name is
+				// fine, as long as it resolves on yantra4d itself.
+				assert.True(t, strings.HasPrefix(got, y.Server.URL+"/"), "%q resolved to %q", ref, got)
+				continue
+			}
+			offOrigin(t, err)
+		}
+		_, err := c.OriginURL("//" + evilHost + "/static/x.3mf")
+		offOrigin(t, err)
+		_, _, err = c.OpenArtifact(ctx, "//"+evilHost+"/static/x.3mf")
+		offOrigin(t, err)
+		evil.untouched(t)
+	})
+
+	t.Run("credentials, other ports, empty", func(t *testing.T) {
+		port := y.Server.URL[strings.LastIndex(y.Server.URL, ":")+1:]
+		for _, ref := range []string{"http://user:pw@127.0.0.1:" + port + "/x", "http://127.0.0.1:1/x", ""} {
+			_, err := c.OriginURL(ref)
+			offOrigin(t, err)
+		}
+		got, err := c.OriginURL(y.Server.URL + "/static/a.3mf")
+		require.NoError(t, err, "an absolute URL on the origin itself is fine")
+		assert.Equal(t, y.Server.URL+"/static/a.3mf", got)
+	})
+
+	t.Run("redirect on download is not followed", func(t *testing.T) {
+		resp, err := c.Render(ctx, RenderRequest{Project: "motor-soft-mount", Mode: "assembled", ExportFormat: "3mf"})
+		require.NoError(t, err)
+		y.Set(func(y *dispatchfakes.Yantra4D) { y.RedirectTo = evil.server.URL + "/static/x.3mf" })
+		defer y.Set(func(y *dispatchfakes.Yantra4D) { y.RedirectTo = "" })
+		_, _, err = c.OpenArtifact(ctx, resp.Parts[0].URL)
+		var re *remote.Error
+		require.ErrorAs(t, err, &re)
+		assert.Equal(t, "redirect_refused", re.Code)
+		assert.Equal(t, http.StatusFound, re.Status)
+		assert.False(t, remote.IsRetryable(err))
+		_, _, err = c.FetchSidecar(ctx, resp.Parts[0])
+		require.ErrorAs(t, err, &re)
+		assert.Equal(t, "redirect_refused", re.Code)
+		evil.untouched(t)
+	})
+}
+
+// The client sends a machine bearer with every call: never in clear text,
+// except to a loopback test server.
+func TestNewClientRequiresHTTPS(t *testing.T) {
+	for _, ok := range []string{"https://api.yantra4d.example", "http://127.0.0.1:9", "http://localhost:9", "http://[::1]:9"} {
+		_, err := NewClient(ok, nil, nil)
+		assert.NoError(t, err, ok)
+	}
+	for _, bad := range []string{"http://api.yantra4d.example", "ftp://api.yantra4d.example", "api.yantra4d.example",
+		"https://user:pw@api.yantra4d.example", ""} {
+		_, err := NewClient(bad, nil, nil)
+		assert.Error(t, err, bad)
+	}
+
+	// Plain http on an https origin is a downgrade, refused.
+	c, err := NewClient("https://api.yantra4d.example", nil, nil)
+	require.NoError(t, err)
+	_, err = c.OriginURL("http://api.yantra4d.example/static/a.3mf")
+	offOrigin(t, err)
+	got, err := c.OriginURL("/static/a.3mf")
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.yantra4d.example/static/a.3mf", got)
 }

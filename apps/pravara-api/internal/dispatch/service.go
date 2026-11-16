@@ -3,7 +3,8 @@
 //	task → order item → product (cartridge, mode, parameters, type shell)
 //	  → RequirementProfile from the type shell (asset-shells)
 //	  → matchmaking v2 + a TTL reservation on the best idle machine
-//	  → yantra4d render bundle (geometry + GOC-1 variables.json)
+//	  → yantra4d render bundle (geometry + GOC-1 variables.json), whose
+//	    bytes pravara downloads, verifies and keeps (keep.go)
 //	  → fabrication-prep slice job with the machine's profiles (polled)
 //	  → re-check the machine, then start_job (signed URL + sha256) on the
 //	    durable command stream, ledger row committed first
@@ -22,11 +23,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/fabrication"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/integrations/assetshells"
@@ -50,7 +53,12 @@ var CompletionEventTypes = []string{"machine.job_completed", "task.job_completed
 type Renderer interface {
 	Render(ctx context.Context, req yantra4d.RenderRequest) (*yantra4d.RenderResponse, error)
 	FetchSidecar(ctx context.Context, part yantra4d.Part) (*yantra4d.Sidecar, string, error)
-	AbsoluteURL(ref string) string
+	// OriginURL resolves a URL from a render answer, refusing one that is
+	// not on yantra4d's own scheme and host (yantra4d.CodeOffOrigin).
+	OriginURL(ref string) (string, error)
+	// OpenArtifact downloads a render artifact (geometry or sidecar) so
+	// pravara can keep it (keep.go).
+	OpenArtifact(ctx context.Context, ref string) (io.ReadCloser, int64, error)
 }
 
 // Slicer is the fabrication-prep surface dispatch uses.
@@ -95,6 +103,8 @@ type Settings struct {
 	// RenderFreshFor is how long a render kept across a re-match is reused
 	// before it is requested again (yantra4d's artifacts expire).
 	RenderFreshFor time.Duration
+	// ArtifactMaxBytes bounds each download kept from yantra4d.
+	ArtifactMaxBytes int64
 }
 
 func (s *Settings) defaults() {
@@ -106,6 +116,9 @@ func (s *Settings) defaults() {
 	}
 	if s.RenderFreshFor <= 0 {
 		s.RenderFreshFor = 6 * time.Hour
+	}
+	if s.ArtifactMaxBytes <= 0 {
+		s.ArtifactMaxBytes = 256 << 20
 	}
 	if s.ReservationTTL <= 0 {
 		s.ReservationTTL = 15 * time.Minute
@@ -140,6 +153,9 @@ type Deps struct {
 	Clients   *machineclients.Set
 	// Consumption records what a completed job consumed (nil: not recorded).
 	Consumption *services.ConsumptionService
+	// Store keeps the manufacturing bytes of every render dispatched
+	// (keep.go). Required for dispatch to run.
+	Store artifactstore.Store
 }
 
 // Service is the dispatcher, matchmaker and passport updater.
@@ -174,6 +190,8 @@ func (s *Service) Unavailable() string {
 		return "the fabrication-prep machine client has no credentials (pravara-service-clients)"
 	case s.Renderer == nil || s.Slicer == nil || s.Shells == nil:
 		return "dispatch service clients are not configured"
+	case s.Store == nil:
+		return "the artifact store for the kept manufacturing bytes is not configured (pravara-dispatch-artifacts)"
 	}
 	return ""
 }

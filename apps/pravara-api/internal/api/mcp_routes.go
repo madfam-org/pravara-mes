@@ -141,11 +141,12 @@ func MCPCoverage() map[string]MCPRouteCoverage {
 		k(post, "/v1/inventory/counts/:id/lines"):          exempt("write: records a counted quantity; people only"),
 		k(post, "/v1/inventory/counts/:id/close"):          exempt("write: posts count adjustments; people only"),
 		// Fabrication dispatch and machine control.
-		k(post, "/v1/match"):                exempt("dispatch planning (a dry run), not a cost input"),
-		k(post, "/v1/dispatches"):           exempt("dispatch: ends in start_job on a printer (machine control, irreversible)"),
-		k(get, "/v1/dispatches"):            exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
-		k(get, "/v1/dispatches/:id"):        exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
-		k(post, "/v1/machines/:id/command"): exempt("machine control: moves equipment; people only"),
+		k(post, "/v1/match"):                         exempt("dispatch planning (a dry run), not a cost input"),
+		k(post, "/v1/dispatches"):                    exempt("dispatch: ends in start_job on a printer (machine control, irreversible)"),
+		k(get, "/v1/dispatches"):                     exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
+		k(get, "/v1/dispatches/:id"):                 exempt("dispatch control plane; the consumption it produces is mes_job_consumption"),
+		k(get, "/v1/dispatches/:id/artifacts/:kind"): exempt("the kept manufacturing bytes (geometry files), not a cost input"),
+		k(post, "/v1/machines/:id/command"):          exempt("machine control: moves equipment; people only"),
 		// Inbound webhook.
 		k(post, "/v1/webhooks/forgesight"): exempt("inbound webhook from ForgeSight, not a read"),
 	}

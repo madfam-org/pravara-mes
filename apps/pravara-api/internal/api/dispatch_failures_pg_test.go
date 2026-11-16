@@ -15,6 +15,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatch"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatchfakes"
 )
 
@@ -204,6 +205,22 @@ func TestDispatchRerenderOnTheSameMachineWithChangedBytes(t *testing.T) {
 	for _, key := range keys {
 		assert.True(t, strings.HasPrefix(key, "pravara-dispatch:"+id.String()+":"+machine.String()[:8]+":"), key)
 	}
+
+	// RFC 0059 S12: the new bytes are kept, and the earlier kept copy stays
+	// in the store and on the record (the manufacturing record is never
+	// deleted).
+	was, now := renderOf(t, first), renderOf(t, d)
+	require.Len(t, now.Kept, 2)
+	assert.Equal(t, now.SHA256, now.Kept[0].SHA256)
+	require.Len(t, now.SupersededKept, 2, "the earlier geometry and sidecar")
+	assert.Equal(t, was.Kept, now.SupersededKept)
+	for _, k := range append(append([]dispatch.KeptObject(nil), was.Kept...), now.Kept...) {
+		_, ok := r.store.Bytes(k.Key)
+		assert.True(t, ok, "%s %s still in the store", k.Kind, k.SHA256)
+	}
+	w := r.do(http.MethodGet, "/v1/dispatches/"+id.String()+"/artifacts/artifact?sha256="+was.SHA256, r.userToken(t, "operator"), nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, was.SHA256, hexSHA(w.Body.Bytes()), "the superseded geometry can still be read")
 }
 
 // The design changed while the dispatch waited: the re-render is another

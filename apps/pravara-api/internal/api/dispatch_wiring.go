@@ -3,11 +3,13 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
@@ -22,9 +24,59 @@ import (
 
 // BuildDispatchService wires fabrication dispatch from configuration: the
 // three Janua machine clients, the yantra4d / fabrication-prep / asset-shells
-// clients, the repositories and the durable command stream. A service built
-// with dispatch disabled still answers POST /v1/match.
+// clients, the artifact store for the kept bytes, the repositories and the
+// durable command stream. A service built with dispatch disabled still
+// answers POST /v1/match.
+//
+// With dispatch enabled, an artifact store that is missing or incomplete is a
+// configuration error: pravara does not dispatch bytes it cannot keep.
 func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub.Publisher, log *logrus.Logger) (*dispatch.Service, error) {
+	return buildDispatchService(cfg, database, publisher, nil, log)
+}
+
+// artifactStoreFromConfig builds the store from the Secret Enclii writes.
+// Nothing configured is nil (an error when dispatch is enabled); a partial or
+// unusable configuration is an error when dispatch is enabled and a warning
+// otherwise.
+func artifactStoreFromConfig(cfg *config.Config, log *logrus.Logger) (artifactstore.Store, error) {
+	c := artifactstore.Config{Backend: cfg.ArtifactStore.Backend, EndpointURL: cfg.ArtifactStore.EndpointURL,
+		BucketName: cfg.ArtifactStore.BucketName, AccessKeyID: cfg.ArtifactStore.AccessKeyID,
+		SecretAccessKey: cfg.ArtifactStore.SecretAccessKey}
+	if c.Empty() {
+		if cfg.Dispatch.Enabled {
+			return nil, fmt.Errorf("dispatch is enabled but the artifact store is not configured: %s come from the %s Secret (%s)",
+				strings.Join(c.Missing(), ", "), artifactSecret, artifactProvision)
+		}
+		return nil, nil
+	}
+	store, err := artifactstore.NewS3(c, nil)
+	if err != nil {
+		if cfg.Dispatch.Enabled {
+			return nil, fmt.Errorf("dispatch is enabled but %w (the %s Secret, %s)", err, artifactSecret, artifactProvision)
+		}
+		log.WithError(err).Warn("Artifact store misconfigured; ignored while dispatch is disabled")
+		return nil, nil
+	}
+	return store, nil
+}
+
+const (
+	artifactSecret    = "pravara-dispatch-artifacts"
+	artifactProvision = "enclii buckets create pravara-dispatch-artifacts --project pravara-mes --namespace pravara-mes --secret-name pravara-dispatch-artifacts"
+)
+
+// buildDispatchService is BuildDispatchService with an artifact store given
+// (tests); nil reads it from configuration.
+func buildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub.Publisher, store artifactstore.Store, log *logrus.Logger) (*dispatch.Service, error) {
+	if store == nil {
+		var err error
+		if store, err = artifactStoreFromConfig(cfg, log); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.Dispatch.ArtifactMaxBytes < 0 {
+		return nil, fmt.Errorf("dispatch.artifact_max_bytes %d: must be positive", cfg.Dispatch.ArtifactMaxBytes)
+	}
 	prefixes, err := cfg.MachineClients.TenantClientPrefixes()
 	if err != nil {
 		return nil, err
@@ -39,7 +91,7 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		AssetShellsTenantPrefixes:   prefixes,
 	}, &http.Client{Timeout: 15 * time.Second})
 
-	deps := dispatch.Deps{Clients: clients}
+	deps := dispatch.Deps{Clients: clients, Store: store}
 	if cfg.Dispatch.YantraAPIURL != "" {
 		c, err := yantra4d.NewClient(cfg.Dispatch.YantraAPIURL, clients.Yantra4D, httpClient)
 		if err != nil {
@@ -89,6 +141,7 @@ func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub
 		RequireBoundingBox: cfg.Dispatch.RequireBoundingBox,
 		MatchWait:          time.Duration(cfg.Dispatch.MatchWaitSeconds) * time.Second,
 		RenderFreshFor:     time.Duration(cfg.Dispatch.RenderFreshForSeconds) * time.Second,
+		ArtifactMaxBytes:   cfg.Dispatch.ArtifactMaxBytes,
 	}, log)
 	// yantra4d deletes a render 24 hours after it was made. A window at or
 	// beyond that reuses renders that no longer exist.
@@ -117,6 +170,7 @@ func registerDispatchRoutes(v1 *gin.RouterGroup, database *db.DB, cfg *config.Co
 			v1.POST("/dispatches", dispatchMisconfigured(err))
 			v1.GET("/dispatches", dispatchMisconfigured(err))
 			v1.GET("/dispatches/:id", dispatchMisconfigured(err))
+			v1.GET("/dispatches/:id/artifacts/:kind", dispatchMisconfigured(err))
 			return
 		}
 	}
@@ -126,6 +180,7 @@ func registerDispatchRoutes(v1 *gin.RouterGroup, database *db.DB, cfg *config.Co
 	v1.POST("/dispatches", h.Create)
 	v1.GET("/dispatches", h.List)
 	v1.GET("/dispatches/:id", h.Get)
+	v1.GET("/dispatches/:id/artifacts/:kind", h.Artifact)
 }
 
 func dispatchMisconfigured(err error) gin.HandlerFunc {

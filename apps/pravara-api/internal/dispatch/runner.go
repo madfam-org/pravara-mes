@@ -32,6 +32,11 @@ func (s *Service) Start(ctx context.Context) {
 		s.log.Info("Fabrication dispatch disabled; runner not started")
 		return
 	}
+	if s.Store == nil {
+		// Fail closed: a render that cannot be kept is not dispatched.
+		s.log.Error("Fabrication dispatch enabled without an artifact store; runner not started")
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(s.cfg.PollInterval)
 		defer ticker.Stop()

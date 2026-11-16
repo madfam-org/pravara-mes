@@ -1,14 +1,22 @@
 package api
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatch"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
@@ -186,4 +194,146 @@ func (h *DispatchHandler) Get(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+// Artifact is GET /v1/dispatches/:id/artifacts/:kind: the bytes pravara kept
+// of the dispatch's render (RFC 0059 S12), kind "artifact" (the geometry) or
+// "sidecar" (its GOC-1 variables.json). ?sha256= picks one of the kept or
+// superseded copies of that kind; without it, the current render's.
+//
+// Same access as GET /v1/dispatches/:id: the dispatch is read in the
+// caller's tenant scope, so another tenant's dispatch is 404. The bytes are
+// read back in full and checked against the recorded sha256 and size before
+// any of them is sent: a damaged copy is an error, never a download.
+func (h *DispatchHandler) Artifact(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "id is not a UUID"})
+		return
+	}
+	kind := c.Param("kind")
+	if kind != dispatch.KindArtifact && kind != dispatch.KindSidecar {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not_found", "message": "kind is artifact or sidecar"})
+		return
+	}
+	ctx := c.Request.Context()
+	d, err := h.dispatch.Get(ctx, id)
+	if err != nil {
+		h.log.WithError(err).Error("get dispatch")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error", "message": "failed to read dispatch"})
+		return
+	}
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not_found", "message": "dispatch not found"})
+		return
+	}
+	kept, ok := keptObject(d, kind, c.Query("sha256"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "artifact_not_kept", "message": "this dispatch has no kept " + kind + " with that digest"})
+		return
+	}
+	// The key is derived again from the dispatch's own tenant, never taken
+	// from the record, so a record can only point into its tenant's space.
+	key, err := artifactstore.Key(d.TenantID, kept.SHA256)
+	if err != nil || key != kept.Key {
+		h.log.WithField("dispatch_id", id).Error("dispatch: kept object key does not match its tenant and digest")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "artifact_record_invalid", "message": "the kept record is inconsistent"})
+		return
+	}
+	if h.svc.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "artifact_store_unavailable", "message": "the artifact store is not configured"})
+		return
+	}
+	f, serr := h.verifiedCopy(ctx, key, kept)
+	if serr != nil {
+		serr(c)
+		return
+	}
+	defer func() { _ = f.Close(); _ = os.Remove(f.Name()) }()
+	c.Header("X-Content-SHA256", kept.SHA256)
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s%s"`, kind, kept.SHA256[:16], keptExtension(kept.MediaType)))
+	c.Header("Cache-Control", "private, no-store")
+	media := kept.MediaType
+	if media == "" {
+		media = "application/octet-stream"
+	}
+	c.DataFromReader(http.StatusOK, kept.Bytes, media, f, nil)
+}
+
+// keptObject finds a kept object of a dispatch's render bundle.
+func keptObject(d *repositories.DispatchJob, kind, digest string) (dispatch.KeptObject, bool) {
+	if len(d.RenderBundle) == 0 {
+		return dispatch.KeptObject{}, false
+	}
+	var bundle dispatch.RenderBundle
+	if err := json.Unmarshal(d.RenderBundle, &bundle); err != nil {
+		return dispatch.KeptObject{}, false
+	}
+	current := bundle.SHA256
+	if kind == dispatch.KindSidecar {
+		current = bundle.SidecarSHA256
+	}
+	if digest == "" {
+		digest = current
+	}
+	for _, k := range append(append([]dispatch.KeptObject(nil), bundle.Kept...), bundle.SupersededKept...) {
+		if k.Kind == kind && k.SHA256 == digest {
+			return k, true
+		}
+	}
+	return dispatch.KeptObject{}, false
+}
+
+// verifiedCopy reads a kept object into a temporary file and checks its size
+// and sha256 against the record. On failure it returns the response to send.
+func (h *DispatchHandler) verifiedCopy(ctx context.Context, key string, kept dispatch.KeptObject) (*os.File, func(*gin.Context)) {
+	fail := func(status int, code, msg string) func(*gin.Context) {
+		return func(c *gin.Context) { c.JSON(status, gin.H{"error": code, "message": msg}) }
+	}
+	body, _, err := h.svc.Store.Open(ctx, key)
+	if errors.Is(err, artifactstore.ErrNotFound) {
+		h.log.WithField("key", key).Error("dispatch: a kept object is missing from the artifact store")
+		return nil, fail(http.StatusInternalServerError, "artifact_missing", "the kept bytes are recorded but not in the store")
+	}
+	if err != nil {
+		h.log.WithError(err).WithField("key", key).Error("dispatch: artifact store read failed")
+		return nil, fail(http.StatusBadGateway, "artifact_store_unavailable", "the artifact store could not be read")
+	}
+	defer func() { _ = body.Close() }()
+	f, err := os.CreateTemp("", "pravara-kept-read-*")
+	if err != nil {
+		h.log.WithError(err).Error("dispatch: no temporary space to check a kept object")
+		return nil, fail(http.StatusInternalServerError, "internal_error", "could not check the kept bytes")
+	}
+	discard := func() { _ = f.Close(); _ = os.Remove(f.Name()) }
+	sum := sha256.New()
+	n, err := io.Copy(io.MultiWriter(f, sum), io.LimitReader(body, kept.Bytes+1))
+	if err != nil {
+		discard()
+		h.log.WithError(err).WithField("key", key).Error("dispatch: artifact store read failed")
+		return nil, fail(http.StatusBadGateway, "artifact_store_unavailable", "the artifact store could not be read")
+	}
+	if got := hex.EncodeToString(sum.Sum(nil)); n != kept.Bytes || got != kept.SHA256 {
+		discard()
+		h.log.WithFields(logrus.Fields{"key": key, "bytes": n, "want_bytes": kept.Bytes, "sha256": got}).
+			Error("dispatch: a kept object does not match its recorded digest")
+		return nil, fail(http.StatusInternalServerError, "artifact_digest_mismatch", "the stored bytes do not match the recorded sha256; nothing was sent")
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		discard()
+		return nil, fail(http.StatusInternalServerError, "internal_error", "could not read the checked bytes")
+	}
+	return f, nil
+}
+
+func keptExtension(mediaType string) string {
+	switch mediaType {
+	case "model/3mf":
+		return ".3mf"
+	case "model/stl":
+		return ".stl"
+	case "application/json":
+		return ".json"
+	}
+	return ""
 }

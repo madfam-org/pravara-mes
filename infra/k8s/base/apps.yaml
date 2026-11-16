@@ -78,6 +78,16 @@ spec:
             - secretRef:
                 name: pravara-service-clients
                 optional: true
+            # The bucket where dispatch keeps the manufacturing bytes it sent
+            # (RFC 0059 S12). Written by `enclii buckets create
+            # pravara-dispatch-artifacts` (STORAGE_BACKEND, R2_ENDPOINT_URL,
+            # R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY). Optional
+            # so pods start before the bucket exists; with DISPATCH_ENABLED
+            # the API refuses to start without it. Last, so its keys win.
+            # See docs/operations/fabrication-dispatch.md.
+            - secretRef:
+                name: pravara-dispatch-artifacts
+                optional: true
           resources:
             requests:
               cpu: 25m
