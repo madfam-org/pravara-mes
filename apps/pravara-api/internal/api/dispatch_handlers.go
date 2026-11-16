@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/dispatch"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
@@ -34,11 +36,41 @@ type DispatchHandler struct {
 	dispatch  *repositories.DispatchRepository
 	passports *repositories.PassportRepository
 	log       *logrus.Logger
+	// artifactReads bounds concurrent kept-bytes downloads per process:
+	// each holds a temporary file up to DISPATCH_ARTIFACT_MAX_BYTES and a
+	// store connection.
+	artifactReads chan struct{}
 }
+
+// DefaultArtifactReads is how many kept-bytes downloads one process serves
+// at once when nothing else is configured.
+const DefaultArtifactReads = 2
 
 // NewDispatchHandler creates the handler.
 func NewDispatchHandler(svc *dispatch.Service, d *repositories.DispatchRepository, p *repositories.PassportRepository, log *logrus.Logger) *DispatchHandler {
-	return &DispatchHandler{svc: svc, dispatch: d, passports: p, log: log}
+	return &DispatchHandler{svc: svc, dispatch: d, passports: p, log: log, artifactReads: make(chan struct{}, DefaultArtifactReads)}
+}
+
+// WithArtifactReads sets the per-process limit of concurrent kept-bytes
+// downloads (n <= 0 keeps the default).
+func (h *DispatchHandler) WithArtifactReads(n int) *DispatchHandler {
+	if n > 0 {
+		h.artifactReads = make(chan struct{}, n)
+	}
+	return h
+}
+
+// artifactWriteDeadline lifts the server's write timeout for one download.
+// A variable so tests can observe the call.
+var artifactWriteDeadline = func(w http.ResponseWriter, deadline time.Time) error {
+	return http.NewResponseController(w).SetWriteDeadline(deadline)
+}
+
+// artifactReadBound is how long one kept-bytes download may take, reading
+// the object from the store and writing it to the client: two minutes plus
+// one second per MiB (at least 1 MiB/s end to end).
+func artifactReadBound(size int64) time.Duration {
+	return 2*time.Minute + time.Duration(size/(1<<20)+1)*time.Second
 }
 
 type taskRef struct {
@@ -244,7 +276,33 @@ func (h *DispatchHandler) Artifact(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "artifact_store_unavailable", "message": "the artifact store is not configured"})
 		return
 	}
-	f, serr := h.verifiedCopy(ctx, key, kept)
+	// Everything needed from the database is read: end the request's tenant
+	// transaction now, so no pooled connection is held during the store read
+	// and the download. The scope (and RLS) stays; nothing else is queried.
+	if err := db.ReleaseScope(ctx); err != nil {
+		h.log.WithError(err).Error("dispatch: could not end the request transaction before the artifact read")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error", "message": "failed to read dispatch"})
+		return
+	}
+	select {
+	case h.artifactReads <- struct{}{}:
+		defer func() { <-h.artifactReads }()
+	default:
+		c.Header("Retry-After", "5")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "artifact_reads_busy",
+			"message": "too many artifact downloads at once; retry shortly"})
+		return
+	}
+	// The server's write timeout is short; this response may be large. Lift
+	// it for this response only, to a bound from the object's size, and stop
+	// reading the store when the client goes away (the request context).
+	bound := artifactReadBound(kept.Bytes)
+	if err := artifactWriteDeadline(c.Writer, time.Now().Add(bound)); err != nil {
+		h.log.WithError(err).Warn("dispatch: could not lift the write deadline for an artifact download")
+	}
+	rctx, cancel := context.WithTimeout(ctx, bound)
+	defer cancel()
+	f, serr := h.verifiedCopy(rctx, key, kept)
 	if serr != nil {
 		serr(c)
 		return
@@ -307,9 +365,13 @@ func (h *DispatchHandler) verifiedCopy(ctx context.Context, key string, kept dis
 	}
 	discard := func() { _ = f.Close(); _ = os.Remove(f.Name()) }
 	sum := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, sum), io.LimitReader(body, kept.Bytes+1))
+	n, err := io.Copy(io.MultiWriter(f, sum), io.LimitReader(ctxReader{ctx: ctx, r: body}, kept.Bytes+1))
 	if err != nil {
 		discard()
+		if ctx.Err() != nil {
+			h.log.WithError(err).WithField("key", key).Warn("dispatch: artifact read stopped (client gone or time bound reached)")
+			return nil, fail(http.StatusServiceUnavailable, "artifact_read_cancelled", "the artifact read was stopped")
+		}
 		h.log.WithError(err).WithField("key", key).Error("dispatch: artifact store read failed")
 		return nil, fail(http.StatusBadGateway, "artifact_store_unavailable", "the artifact store could not be read")
 	}
@@ -324,6 +386,20 @@ func (h *DispatchHandler) verifiedCopy(ctx context.Context, key string, kept dis
 		return nil, fail(http.StatusInternalServerError, "internal_error", "could not read the checked bytes")
 	}
 	return f, nil
+}
+
+// ctxReader stops a read as soon as ctx ends, whatever the underlying
+// reader does with it.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 func keptExtension(mediaType string) string {

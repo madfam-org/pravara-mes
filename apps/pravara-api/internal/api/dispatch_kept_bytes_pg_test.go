@@ -5,6 +5,7 @@ package api
 // (opt-in with PRAVARA_TEST_DATABASE_URL); the bucket is the in-memory store.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -69,8 +70,12 @@ func TestDispatchKeepsTheBytesAndServesThemToItsTenant(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, b.SidecarSHA256, hexSHA(w.Body.Bytes()), "the sidecar exactly as checked")
 
-	// Same access as reading the dispatch: a pravara-mes:read machine token.
-	assert.Equal(t, http.StatusOK, r.do(http.MethodGet, base+"artifact", r.machineToken(t, "pravara-mes:read", nil), nil).Code)
+	// Machine callers need pravara-mes:jobs for the geometry itself; the
+	// read scope that shows the dispatch's state is not enough.
+	assert.Equal(t, http.StatusOK, r.do(http.MethodGet, base+"artifact", r.machineToken(t, "pravara-mes:jobs", nil), nil).Code)
+	assert.Equal(t, http.StatusForbidden, r.do(http.MethodGet, base+"artifact", r.machineToken(t, "pravara-mes:read", nil), nil).Code)
+	assert.Equal(t, http.StatusOK, r.do(http.MethodGet, "/v1/dispatches/"+id.String(), r.machineToken(t, "pravara-mes:read", nil), nil).Code,
+		"the dispatch's state stays readable with pravara-mes:read")
 	assert.Equal(t, http.StatusForbidden, r.do(http.MethodGet, base+"artifact", r.machineToken(t, "pravara-mes:nodes", nil), nil).Code)
 	assert.Equal(t, http.StatusUnauthorized, r.do(http.MethodGet, base+"artifact", "", nil).Code)
 
@@ -149,5 +154,68 @@ func TestDispatchRenderDownloadOutcomes(t *testing.T) {
 		assert.False(t, *d.ErrorRetryable)
 		assert.Len(t, r.fabprep.Jobs, jobs, "nothing was sliced")
 		assert.Len(t, r.store.Keys(), keys, "nothing was kept")
+	})
+}
+
+// stripKept turns a dispatch into one recorded before pravara kept bytes.
+func (r *dispatchRig) stripKept(t *testing.T, id uuid.UUID) {
+	t.Helper()
+	_, err := r.admin.Exec(`UPDATE dispatch_jobs SET render_bundle = render_bundle - 'kept' - 'superseded_kept',
+		next_attempt_at = NOW() WHERE id = $1`, id)
+	require.NoError(t, err)
+	require.Empty(t, renderOf(t, r.dispatch(t, id)).Kept)
+}
+
+// RFC 0059 S12 holds for dispatches recorded before pravara kept bytes: a
+// `rendered` row is not sliced, and a `sliced` row gets no start_job, until
+// the bytes are kept. They go back to the render stage, which keeps the
+// still-fresh render in place.
+func TestDispatchLegacyRowsKeepTheirBytesBeforeGoingOn(t *testing.T) {
+	r := newDispatchRig(t)
+	r.seedMachine(t, "voron-01", "idle", "tpu-95a")
+
+	t.Run("legacy rendered row: kept before slicing", func(t *testing.T) {
+		id := r.create(t, r.seedTask(t, boxSpecs))
+		r.runUntil(t, id, repositories.DispatchRendered)
+		renders, downloads, jobs := len(r.yantra.Requests), r.yantra.Downloads, len(r.fabprep.Jobs)
+		r.stripKept(t, id)
+
+		r.svc.RunOnce(context.Background())
+		d := r.dispatch(t, id)
+		assert.Equal(t, repositories.DispatchReserved, d.Status, "sent back to the render stage")
+		assert.Len(t, r.fabprep.Jobs, jobs, "nothing sliced from unkept bytes")
+
+		d = r.runUntil(t, id, repositories.DispatchSliced)
+		b := renderOf(t, d)
+		require.Len(t, b.Kept, 2, "kept before it was sliced")
+		assert.Equal(t, downloads+1, r.yantra.Downloads, "the geometry was downloaded and kept")
+		assert.Len(t, r.yantra.Requests, renders, "a fresh render is kept in place, not rendered again")
+		assert.Len(t, r.fabprep.Jobs, jobs+1)
+		_, err := r.admin.Exec(`UPDATE dispatch_jobs SET status = 'cancelled' WHERE id = $1`, id)
+		require.NoError(t, err)
+		_, err = r.admin.Exec(`UPDATE machine_reservations SET status = 'released', released_at = NOW() WHERE dispatch_id = $1`, id)
+		require.NoError(t, err)
+	})
+
+	t.Run("legacy sliced row: kept before start_job", func(t *testing.T) {
+		id := r.create(t, r.seedTask(t, boxSpecs))
+		r.runUntil(t, id, repositories.DispatchSliced)
+		downloads, created := r.yantra.Downloads, r.fabprep.Created
+		r.stripKept(t, id)
+
+		r.svc.RunOnce(context.Background())
+		d := r.dispatch(t, id)
+		assert.Equal(t, repositories.DispatchReserved, d.Status, "sent back to the render stage")
+		assert.Nil(t, d.CommandID)
+		var commands int
+		require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM task_commands WHERE task_id = $1`, d.TaskID).Scan(&commands))
+		assert.Zero(t, commands, "no start_job for unkept bytes")
+
+		d = r.runUntil(t, id, repositories.DispatchCommandEnqueued)
+		assert.Len(t, renderOf(t, d).Kept, 2)
+		assert.Equal(t, downloads+1, r.yantra.Downloads)
+		assert.Equal(t, created, r.fabprep.Created, "the same render's slice job is found again by its idempotency key")
+		require.NoError(t, r.admin.QueryRow(`SELECT count(*) FROM task_commands WHERE task_id = $1`, d.TaskID).Scan(&commands))
+		assert.Equal(t, 1, commands)
 	})
 }

@@ -161,6 +161,27 @@ func (s *Scope) Rollback() error {
 	return err
 }
 
+// ReleaseScope commits the transaction of the scope carried by ctx, if one
+// is open, so no pooled connection stays checked out while the request waits
+// on something slow outside the database (an object store read, a long
+// response). The scope stays attached: a later statement opens a fresh
+// transaction under the same tenant, so RLS is unchanged. Use it only after
+// the request's reads are done and before its writes, if any.
+func ReleaseScope(ctx context.Context) error {
+	s := scopeFrom(ctx)
+	if s == nil {
+		return nil
+	}
+	return s.Commit()
+}
+
+// ScopeActive reports whether the scope carried by ctx holds an open
+// transaction (and so a pooled connection).
+func ScopeActive(ctx context.Context) bool {
+	s := scopeFrom(ctx)
+	return s != nil && s.Active()
+}
+
 // RunInTenantTx runs fn with a tenant scope for tenantID and commits when fn
 // returns nil (rolls back otherwise). Statements fn issues through a TenantDB
 // with the given context run in that one transaction. Use it for background

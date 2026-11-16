@@ -135,6 +135,10 @@ func (w *scopeCommitWriter) Flush() {
 	w.ResponseWriter.Flush()
 }
 
+// Unwrap exposes the underlying writer to http.ResponseController, so a
+// handler can lift its own write deadline (long downloads).
+func (w *scopeCommitWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *scopeCommitWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	w.ensureDecided()
 	return w.ResponseWriter.Hijack()

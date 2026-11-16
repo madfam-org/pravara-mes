@@ -19,6 +19,7 @@ import (
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
+	mw "github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 )
 
 func TestDispatchRoutesAreRegisteredAndDispatchIsHumanOnly(t *testing.T) {
@@ -29,6 +30,14 @@ func TestDispatchRoutesAreRegisteredAndDispatchIsHumanOnly(t *testing.T) {
 	}
 	_, listed := MachineRouteScopes()["POST /v1/dispatches"]
 	assert.False(t, listed, "dispatch ends in start_job: no machine scope may reach it")
+
+	// The kept geometry itself: machine callers need pravara-mes:jobs; a
+	// bare read scope (enough for the dispatch's state) is not.
+	artifacts := MachineRouteScopes()["GET /v1/dispatches/:id/artifacts/:kind"]
+	assert.Equal(t, []string{mw.ScopeJobs}, artifacts.AnyOf)
+	assert.True(t, artifacts.Allows(mw.Caller{Kind: mw.CallerServiceAccount, Scopes: []string{mw.ScopeJobs}}))
+	assert.False(t, artifacts.Allows(mw.Caller{Kind: mw.CallerServiceAccount, Scopes: []string{mw.ScopeRead}}))
+	assert.True(t, artifacts.Allows(mw.Caller{Kind: mw.CallerUser}), "people are governed by roles, as on the dispatch read")
 }
 
 // With dispatch disabled (the default), POST /v1/dispatches answers 503 with

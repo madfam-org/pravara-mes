@@ -45,6 +45,10 @@ type DispatchConfig struct {
 	// ArtifactMaxBytes bounds each download pravara keeps from yantra4d (the
 	// rendered geometry, its sidecar). Larger is a terminal failure.
 	ArtifactMaxBytes int64 `mapstructure:"artifact_max_bytes"`
+	// ArtifactConcurrentReads bounds concurrent kept-bytes downloads
+	// (GET /v1/dispatches/:id/artifacts/:kind) per process; more answer 503
+	// with Retry-After. Each holds up to ArtifactMaxBytes in /tmp.
+	ArtifactConcurrentReads int `mapstructure:"artifact_concurrent_reads"`
 
 	YantraAPIURL          string `mapstructure:"yantra4d_api_url"`
 	FabricationPrepAPIURL string `mapstructure:"fabrication_prep_api_url"`
@@ -58,7 +62,8 @@ type DispatchConfig struct {
 // (STORAGE_BACKEND, R2_ENDPOINT_URL, R2_BUCKET_NAME, R2_ACCESS_KEY_ID,
 // R2_SECRET_ACCESS_KEY). Required when dispatch is enabled.
 //
-// Not the legacy r2.* settings (R2_ENDPOINT, R2_BUCKET), which nothing uses.
+// The legacy R2_ENDPOINT / R2_BUCKET settings and their r2.* config were
+// removed: nothing used them.
 type ArtifactStoreConfig struct {
 	Backend         string `mapstructure:"backend"`
 	EndpointURL     string `mapstructure:"endpoint_url"`
@@ -124,6 +129,7 @@ func setDispatchDefaults(v *viper.Viper) {
 	v.SetDefault("dispatch.passport_max_attempts", 20)
 	v.SetDefault("dispatch.require_bounding_box", false)
 	v.SetDefault("dispatch.artifact_max_bytes", 256<<20)
+	v.SetDefault("dispatch.artifact_concurrent_reads", 2)
 	// Yantra4D's API host (yantra4d enclii.yaml). yantra4d.madfam.io, the
 	// default until 2026-11-14, does not resolve.
 	v.SetDefault("dispatch.yantra4d_api_url", "https://api.yantra4d.com")
@@ -146,6 +152,7 @@ func bindDispatchEnv(v *viper.Viper) {
 	_ = v.BindEnv("dispatch.passport_max_attempts", "DISPATCH_PASSPORT_MAX_ATTEMPTS")
 	_ = v.BindEnv("dispatch.require_bounding_box", "DISPATCH_REQUIRE_BOUNDING_BOX")
 	_ = v.BindEnv("dispatch.artifact_max_bytes", "DISPATCH_ARTIFACT_MAX_BYTES")
+	_ = v.BindEnv("dispatch.artifact_concurrent_reads", "DISPATCH_ARTIFACT_CONCURRENT_READS")
 	_ = v.BindEnv("dispatch.yantra4d_api_url", "YANTRA4D_API_URL")
 	_ = v.BindEnv("dispatch.fabrication_prep_api_url", "FABRICATION_PREP_API_URL")
 	_ = v.BindEnv("dispatch.asset_shells_api_url", "ASSET_SHELLS_API_URL")

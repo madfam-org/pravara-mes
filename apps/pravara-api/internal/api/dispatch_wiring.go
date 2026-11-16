@@ -175,7 +175,8 @@ func registerDispatchRoutes(v1 *gin.RouterGroup, database *db.DB, cfg *config.Co
 		}
 	}
 	tdb := database.Tenant(log)
-	h := NewDispatchHandler(svc, repositories.NewDispatchRepository(tdb), repositories.NewPassportRepository(tdb), log)
+	h := NewDispatchHandler(svc, repositories.NewDispatchRepository(tdb), repositories.NewPassportRepository(tdb), log).
+		WithArtifactReads(cfg.Dispatch.ArtifactConcurrentReads)
 	v1.POST("/match", h.Match)
 	v1.POST("/dispatches", h.Create)
 	v1.GET("/dispatches", h.List)
