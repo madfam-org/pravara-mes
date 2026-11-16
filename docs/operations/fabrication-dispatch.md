@@ -25,7 +25,7 @@ task → order item → product (cartridge, mode, parameters, type shell)
 | `POST /v1/match` `{task_id}` | people; machine tokens with `pravara-mes:read` or `pravara-mes:jobs` | Dry run: every machine with its checks, eligible ones ranked. Reserves nothing. |
 | `POST /v1/dispatches` `{task_id}` | people only (and wildcard API keys) | Files a dispatch. 202; 409 if the task already has one in progress; 503 when dispatch is disabled or a machine client is missing. |
 | `GET /v1/dispatches`, `GET /v1/dispatches/:id` | people; `read` or `jobs` | State, match explanation, render and slice digests, the manufacturing record and the passport deliveries. |
-| `GET /v1/dispatches/:id/artifacts/:kind` (`artifact` or `sidecar`, optional `?sha256=`) | people; `read` or `jobs` | The bytes Pravara kept of the dispatch's render. 404 for another tenant's dispatch or a digest that was not kept. Checked against the recorded sha256 before anything is sent; a damaged copy is a 500 `artifact_digest_mismatch`, never a download. |
+| `GET /v1/dispatches/:id/artifacts/:kind` (`artifact` or `sidecar`, optional `?sha256=`) | people; machine tokens with `jobs` only (not `read`: this is the geometry itself) | The bytes Pravara kept of the dispatch's render. 404 for another tenant's dispatch or a digest that was not kept. Checked against the recorded sha256 before anything is sent; a damaged copy is a 500 `artifact_digest_mismatch`, never a download. At most `DISPATCH_ARTIFACT_CONCURRENT_READS` downloads per process at once; more get 503 with `Retry-After: 5`. |
 
 `POST /v1/dispatches` is people-only for the same reason as
 `POST /v1/machines/:id/command`: it ends in `start_job` on a printer.
@@ -142,13 +142,28 @@ each kept object under `kept`: `kind` (`artifact` or `sidecar`), `key`, `sha256`
 | yantra4d refuses the download for good (e.g. 403) | `render_download_failed`, terminal |
 | The bytes do not match the declared sha256 | `render_digest_mismatch`, terminal; nothing is stored or sliced |
 | Larger than `DISPATCH_ARTIFACT_MAX_BYTES` (declared or while streaming) | `render_artifact_too_large`, terminal |
-| The bucket cannot be written | `artifact_store_failed`, retried |
-| Another object already sits at the content address | `artifact_store_conflict`, terminal; nothing is overwritten |
+| The bucket cannot be written | `artifact_store_failed`, retried. The stored message says what failed (HTTP status or "could not be reached"), never the endpoint, bucket or key; the full error is in the server log |
+| Another object already sits at the content address, or one without the recorded `sha256` metadata | `artifact_store_conflict`, terminal; nothing is overwritten |
 
 **Key layout.** Content-addressed and namespaced by tenant:
 `tenants/<tenant_id>/sha256/<hex digest>`, with the digest also recorded as object metadata
 `sha256`. The same bytes are stored once per tenant; a second Put of them writes nothing. Writes are
-conditional (`If-None-Match: *`), so nothing is ever replaced.
+conditional (`If-None-Match: *`), so nothing is ever replaced, and carry `x-amz-checksum-sha256`, so
+the store itself refuses a body that is not the declared digest. An object at the key without the
+`sha256` metadata is treated as a conflict, never as already stored.
+
+**Nothing goes onward unkept.** Slicing and `start_job` only follow a render whose bytes are kept. A
+dispatch recorded before this existed and found in `rendered` or `sliced` (or in `enqueuing` before
+its ledger row is written) goes back to the render stage, which keeps the render in place while it is
+fresh and renders again (and keeps) when it is not; a slice already made from the same render is found
+again by its idempotency key. A dispatch whose `start_job` ledger row already exists goes on: that
+command may already be on the stream and is re-sent from the ledger, so rewinding it would start a
+second job.
+
+**Time bounds.** The keep step is bounded to 12 minutes in all (downloads bounded by the yantra4d
+client's 5-minute timeout, each store call by 2 minutes). Before it starts, the runner extends its
+lease on the dispatch to 15 minutes and the machine reservation to cover it, so no other runner claims
+the dispatch meanwhile.
 
 **Retention.** None: kept bytes are never deleted. They are the manufacturing record. The store
 interface has no delete, and a stale render that is requested again keeps its new bytes **and**
@@ -171,8 +186,10 @@ enclii buckets create pravara-dispatch-artifacts --project pravara-mes --namespa
 That writes the Secret `pravara-dispatch-artifacts` in namespace `pravara-mes` with
 `STORAGE_BACKEND` (`r2`), `R2_ENDPOINT_URL`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID` and
 `R2_SECRET_ACCESS_KEY`. pravara-api mounts it with `envFrom` (`optional: true`, so pods start before
-it exists) and reads those exact names. These are not the legacy `R2_ENDPOINT` / `R2_BUCKET`
-settings, which nothing uses.
+it exists) and reads those exact names. The legacy `R2_ENDPOINT` / `R2_BUCKET` settings, and the
+`R2_*` entries of `apps/pravara-api/.enclii.yml` that could have shadowed the Secret, were removed.
+The pod's `/tmp` emptyDir is limited to 1Gi (with a matching `ephemeral-storage` limit): two
+concurrent reads and one keep of 256 MiB each; raise it with either setting.
 
 **Fail closed.** With `DISPATCH_ENABLED=true`, a missing or incomplete store (any of the five keys
 absent, a backend other than `r2`, an endpoint that is not https) is a configuration error: the API
@@ -193,6 +210,7 @@ nothing (an incomplete one is logged as a warning). Create the bucket before tur
 | `DISPATCH_POLL_INTERVAL_SECONDS` | `10` | Runner tick and slice-job poll interval. |
 | `DISPATCH_PASSPORT_MAX_ATTEMPTS` | `20` | Delivery attempts per passport row. |
 | `DISPATCH_ARTIFACT_MAX_BYTES` | `268435456` (256 MiB) | Largest geometry or sidecar Pravara keeps; larger fails the dispatch. Downloads are spooled to `/tmp`, not memory. |
+| `DISPATCH_ARTIFACT_CONCURRENT_READS` | `2` | Kept-bytes downloads one process serves at once; more get 503 with `Retry-After`. Each download's write deadline is lifted to 2 minutes plus a second per MiB, and the store read stops when the client goes away. |
 | `STORAGE_BACKEND`, `R2_ENDPOINT_URL`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | unset | The kept-bytes bucket, from the `pravara-dispatch-artifacts` Secret. Required when dispatch is enabled. |
 | `YANTRA4D_API_URL` | `https://api.yantra4d.com` | yantra4d's API. The default until 2026-11-14, `yantra4d.madfam.io`, does not resolve. |
 | `FABRICATION_PREP_API_URL`, `ASSET_SHELLS_API_URL` | `fabrication-prep-api.madfam.io`, `asset-shells-api.madfam.io` | Service base URLs. Neither service is deployed yet, so these hosts are unverified. |

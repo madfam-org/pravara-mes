@@ -67,10 +67,11 @@ Environment variables (set in `.env` or container):
 | `DISPATCH_ENABLED` | Fabrication dispatch and its runner (owner turns it on) | false |
 | `STORAGE_BACKEND`, `R2_ENDPOINT_URL`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Bucket where dispatch keeps the manufacturing bytes it sent, from the `pravara-dispatch-artifacts` Secret (`enclii buckets create`). Required when `DISPATCH_ENABLED=true`; the API does not start without it | unset |
 | `DISPATCH_ARTIFACT_MAX_BYTES` | Largest geometry or sidecar dispatch keeps | 268435456 |
+| `DISPATCH_ARTIFACT_CONCURRENT_READS` | Concurrent kept-bytes downloads per process (more get 503 with `Retry-After`) | 2 |
 
 The remaining dispatch settings are in
 [fabrication-dispatch.md](../../docs/operations/fabrication-dispatch.md#configuration).
-The legacy `R2_ENDPOINT` / `R2_BUCKET` settings are unused.
+The legacy `R2_ENDPOINT` / `R2_BUCKET` settings were removed (nothing used them).
 
 ## API Documentation
 
