@@ -15,7 +15,6 @@ type Config struct {
 	Database   DatabaseConfig   `mapstructure:"database"`
 	Redis      RedisConfig      `mapstructure:"redis"`
 	OIDC       OIDCConfig       `mapstructure:"oidc"`
-	R2         R2Config         `mapstructure:"r2"`
 	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
 	Dhanam     DhanamConfig     `mapstructure:"dhanam"`
 	Cotiza     CotizaConfig     `mapstructure:"cotiza"`
@@ -123,14 +122,6 @@ type OIDCConfig struct {
 	// SessionRoleApp: this application's slug in Janua application roles.
 	SessionRoleApp string `mapstructure:"session_role_app"`
 	ClientID       string `mapstructure:"client_id"`
-}
-
-// R2Config holds Cloudflare R2 storage settings.
-type R2Config struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
 }
 
 // CentrifugoConfig holds Centrifugo WebSocket gateway settings.
@@ -295,11 +286,6 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("oidc.session_audiences", "OIDC_SESSION_AUDIENCES")
 	v.BindEnv("oidc.session_role_app", "OIDC_SESSION_ROLE_APP")
 	v.BindEnv("oidc.client_id", "OIDC_CLIENT_ID")
-
-	v.BindEnv("r2.endpoint", "R2_ENDPOINT")
-	v.BindEnv("r2.access_key_id", "R2_ACCESS_KEY_ID")
-	v.BindEnv("r2.secret_access_key", "R2_SECRET_ACCESS_KEY")
-	v.BindEnv("r2.bucket", "R2_BUCKET")
 
 	v.BindEnv("centrifugo.token_secret", "CENTRIFUGO_TOKEN_SECRET")
 	v.BindEnv("centrifugo.token_ttl", "CENTRIFUGO_TOKEN_TTL")

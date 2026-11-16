@@ -81,24 +81,10 @@ spec:
     - name: OIDC_AUDIENCE
       value: pravara-api
 
-    # R2 Storage
-    - name: R2_ENDPOINT
-      valueFrom:
-        secretKeyRef:
-          name: pravara-secrets
-          key: r2-endpoint
-    - name: R2_ACCESS_KEY_ID
-      valueFrom:
-        secretKeyRef:
-          name: pravara-secrets
-          key: r2-access-key-id
-    - name: R2_SECRET_ACCESS_KEY
-      valueFrom:
-        secretKeyRef:
-          name: pravara-secrets
-          key: r2-secret-access-key
-    - name: R2_BUCKET
-      value: pravara-production
+    # Object storage: the kept manufacturing bytes of fabrication dispatch
+    # come from the pravara-dispatch-artifacts Secret (enclii buckets create),
+    # mounted with envFrom in infra/k8s/base/apps.yaml. No R2_* entries here:
+    # an explicit env entry would shadow that Secret.
 
   networking:
     port: 4500
