@@ -9,6 +9,7 @@ task → order item → product (cartridge, mode, parameters, type shell)
   → RequirementProfile from the type shell            (asset-shells, public read)
   → matchmaking v2 + TTL reservation                   (registry + Sparkplug live state)
   → render bundle: geometry + GOC-1 variables.json     (yantra4d, machine client)
+  → keep those bytes, verified by sha256               (pravara's own bucket)
   → slice job with the machine's profiles, polled      (fabrication-prep, machine client)
   → re-check the machine, then start_job (signed URL + sha256)
     on the durable command stream; ledger row first    (telemetry-worker → DCMD)
@@ -24,6 +25,7 @@ task → order item → product (cartridge, mode, parameters, type shell)
 | `POST /v1/match` `{task_id}` | people; machine tokens with `pravara-mes:read` or `pravara-mes:jobs` | Dry run: every machine with its checks, eligible ones ranked. Reserves nothing. |
 | `POST /v1/dispatches` `{task_id}` | people only (and wildcard API keys) | Files a dispatch. 202; 409 if the task already has one in progress; 503 when dispatch is disabled or a machine client is missing. |
 | `GET /v1/dispatches`, `GET /v1/dispatches/:id` | people; `read` or `jobs` | State, match explanation, render and slice digests, the manufacturing record and the passport deliveries. |
+| `GET /v1/dispatches/:id/artifacts/:kind` (`artifact` or `sidecar`, optional `?sha256=`) | people; `read` or `jobs` | The bytes Pravara kept of the dispatch's render. 404 for another tenant's dispatch or a digest that was not kept. Checked against the recorded sha256 before anything is sent; a damaged copy is a 500 `artifact_digest_mismatch`, never a download. |
 
 `POST /v1/dispatches` is people-only for the same reason as
 `POST /v1/machines/:id/command`: it ends in `start_job` on a printer.
@@ -77,9 +79,10 @@ a failed publish keeps the row and retries, and content the service rejects
 
 ## What the render step keeps, and for how long
 
-Pravara stores the render's **address and digests**, not its bytes: the part's URL, its
-`sha256`, the GOC-1 `instance_id`, and the sidecar's URL and digest. fabrication-prep fetches
-the bytes from yantra4d and checks them against the digest.
+Pravara records the render's address and digests (the part's URL, its `sha256`, the GOC-1
+`instance_id`, the sidecar's URL and digest) **and keeps the bytes** (owner ruling S12 of
+2026-11-14, RFC 0059 wave 0). See [Kept manufacturing bytes](#kept-manufacturing-bytes).
+fabrication-prep still fetches its input from yantra4d and checks it against the digest.
 
 yantra4d deletes render artifacts 24 hours after they were made and on a pod restart, renames
 them on every release, and answers a repeated request from its cache with the same artifact. So:
@@ -116,11 +119,65 @@ yantra4d answers `200 "success"` with a failed or timed-out part simply absent, 
 
 Retries spend `DISPATCH_MAX_ATTEMPTS`.
 
-**Not done:** Pravara does not yet keep the manufacturing bytes themselves (owner ruling S12 of
-2026-11-14). That needs an object store, which Pravara has configured names for and no code. Until
-then, a render older than yantra4d's lifetime can only be made again, never fetched again, and a
-passport's geometry digest names bytes that only exist while yantra4d or fabrication-prep still
-holds them.
+## Kept manufacturing bytes
+
+**Only yantra4d's own origin.** The yantra4d client sends a machine bearer with every call, so it
+follows a URL from a render answer only when it resolves to the configured base URL's scheme and
+host, never follows a redirect, and refuses a base URL that is not https (plain http only on a
+loopback host, for tests). This holds for the sidecar fetch as well as the downloads below.
+
+After the part is picked and its sidecar checked, and **before** the dispatch moves on to slicing,
+Pravara downloads the rendered geometry and keeps it with the GOC-1 sidecar (`variables.json`, the
+bytes it already downloaded and checked; it is the variables document). Each is checked against its
+declared sha256 while it streams into a temporary file, bounded by `DISPATCH_ARTIFACT_MAX_BYTES`,
+and only then stored. The render bundle (`dispatch_jobs.render_bundle`, JSON; no migration) records
+each kept object under `kept`: `kind` (`artifact` or `sidecar`), `key`, `sha256`, `bytes`,
+`media_type`, `kept_at`.
+
+| Situation | Outcome |
+|---|---|
+| A part or sidecar URL in the render answer is not on `YANTRA4D_API_URL`'s scheme and host (another host, `//host/…`, plain http) | `render_url_off_origin`, terminal; nothing is fetched from it |
+| yantra4d answers a download with a redirect | `render_download_failed` (`redirect_refused`), terminal; redirects are never followed |
+| Download fails, or yantra4d answers 5xx, 429, 404 or 410 | `render_download_failed`, retried (the retry renders again) |
+| yantra4d refuses the download for good (e.g. 403) | `render_download_failed`, terminal |
+| The bytes do not match the declared sha256 | `render_digest_mismatch`, terminal; nothing is stored or sliced |
+| Larger than `DISPATCH_ARTIFACT_MAX_BYTES` (declared or while streaming) | `render_artifact_too_large`, terminal |
+| The bucket cannot be written | `artifact_store_failed`, retried |
+| Another object already sits at the content address | `artifact_store_conflict`, terminal; nothing is overwritten |
+
+**Key layout.** Content-addressed and namespaced by tenant:
+`tenants/<tenant_id>/sha256/<hex digest>`, with the digest also recorded as object metadata
+`sha256`. The same bytes are stored once per tenant; a second Put of them writes nothing. Writes are
+conditional (`If-None-Match: *`), so nothing is ever replaced.
+
+**Retention.** None: kept bytes are never deleted. They are the manufacturing record. The store
+interface has no delete, and a stale render that is requested again keeps its new bytes **and**
+leaves the earlier copy in place, listed on the bundle under `superseded_kept` and still readable with
+`?sha256=`. A render kept across a re-match that was recorded before this existed gets its bytes kept
+the next time it is reused while still fresh.
+
+**What slicing reads.** Unchanged: fabrication-prep fetches inputs only from hosts on its
+`INPUT_ALLOWED_HOSTS` (`api.yantra4d.com`) and follows no redirects, so the slice request still
+carries the yantra4d URL and digest. The kept copy is Pravara's record, not slicing's input.
+
+**Provisioning (owner).** The bucket and its bucket-scoped token (Object Read & Write; it cannot
+change bucket settings) come from Enclii:
+
+```bash
+enclii buckets create pravara-dispatch-artifacts --project pravara-mes --namespace pravara-mes \
+  --secret-name pravara-dispatch-artifacts
+```
+
+That writes the Secret `pravara-dispatch-artifacts` in namespace `pravara-mes` with
+`STORAGE_BACKEND` (`r2`), `R2_ENDPOINT_URL`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY`. pravara-api mounts it with `envFrom` (`optional: true`, so pods start before
+it exists) and reads those exact names. These are not the legacy `R2_ENDPOINT` / `R2_BUCKET`
+settings, which nothing uses.
+
+**Fail closed.** With `DISPATCH_ENABLED=true`, a missing or incomplete store (any of the five keys
+absent, a backend other than `r2`, an endpoint that is not https) is a configuration error: the API
+does not start, and the previous pod keeps serving. With dispatch disabled, a missing store changes
+nothing (an incomplete one is logged as a warning). Create the bucket before turning dispatch on.
 
 ## Configuration
 
@@ -135,6 +192,8 @@ holds them.
 | `DISPATCH_MAX_ATTEMPTS` | `5` | Retries of retryable failures. |
 | `DISPATCH_POLL_INTERVAL_SECONDS` | `10` | Runner tick and slice-job poll interval. |
 | `DISPATCH_PASSPORT_MAX_ATTEMPTS` | `20` | Delivery attempts per passport row. |
+| `DISPATCH_ARTIFACT_MAX_BYTES` | `268435456` (256 MiB) | Largest geometry or sidecar Pravara keeps; larger fails the dispatch. Downloads are spooled to `/tmp`, not memory. |
+| `STORAGE_BACKEND`, `R2_ENDPOINT_URL`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | unset | The kept-bytes bucket, from the `pravara-dispatch-artifacts` Secret. Required when dispatch is enabled. |
 | `YANTRA4D_API_URL` | `https://api.yantra4d.com` | yantra4d's API. The default until 2026-11-14, `yantra4d.madfam.io`, does not resolve. |
 | `FABRICATION_PREP_API_URL`, `ASSET_SHELLS_API_URL` | `fabrication-prep-api.madfam.io`, `asset-shells-api.madfam.io` | Service base URLs. Neither service is deployed yet, so these hosts are unverified. |
 | `JANUA_TOKEN_URL` | Janua token endpoint | client_credentials endpoint. |

@@ -16,8 +16,10 @@ physical jobs (orders, tasks, machines, telemetry, quality).
   do not hand-edit).
 - `llms-full.txt` — full context map and durable operating contract.
 - `docs/operations/fabrication-dispatch.md` — matchmaking (`POST /v1/match`),
-  dispatch (`/v1/dispatches`: render → slice → start_job) and the passport
-  updater; off unless `DISPATCH_ENABLED=true`.
+  dispatch (`/v1/dispatches`: render → keep the bytes → slice → start_job)
+  and the passport updater; off unless `DISPATCH_ENABLED=true`, and then it
+  needs the `pravara-dispatch-artifacts` bucket Secret (kept bytes are never
+  deleted; `GET /v1/dispatches/:id/artifacts/:kind` reads them back).
 - `docs/operations/job-consumption.md` — per-job consumption (material and
   machine minutes, actual or estimate; quantities only, no cost), stock
   relief, `orders.engagement_slug`, `GET /v1/jobs/consumption`, append-only

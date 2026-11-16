@@ -102,6 +102,14 @@ Regenerate or repair these files with
   a new route under jobs, inventory, dispatch or machine control fails CI
   until it is COVERED or EXEMPTED. Gates, tools and owner enablement:
   `docs/operations/native-mcp.md`; follow-ups: ROADMAP item 23.
+- **Kept manufacturing bytes.** Fabrication dispatch downloads each render's
+  geometry and GOC-1 sidecar from yantra4d, checks their sha256 and keeps
+  them in the `pravara-dispatch-artifacts` bucket (`internal/artifactstore`,
+  keys `tenants/<tenant>/sha256/<hex>`) before slicing; slicing still reads
+  from yantra4d. Kept bytes are never deleted: the store has no delete and
+  is write-once. With `DISPATCH_ENABLED=true` the API refuses to start
+  without the bucket Secret. See `docs/operations/fabrication-dispatch.md`
+  «Kept manufacturing bytes».
 - **Cost events.** `internal/costevents` pushes job consumption to Dhanam
   (`POST /v1/cost-events`, source `pravara`) as quantity-only `consumption`
   events: never `amount_minor`, `currency`, `fx` or `unit_value_minor`
