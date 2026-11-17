@@ -78,13 +78,28 @@ spec:
             - secretRef:
                 name: pravara-service-clients
                 optional: true
+            # The bucket where dispatch keeps the manufacturing bytes it sent
+            # (RFC 0059 S12). Written by `enclii buckets create
+            # pravara-dispatch-artifacts` (STORAGE_BACKEND, R2_ENDPOINT_URL,
+            # R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY). Optional
+            # so pods start before the bucket exists; with DISPATCH_ENABLED
+            # the API refuses to start without it. Last, so its keys win.
+            # See docs/operations/fabrication-dispatch.md.
+            - secretRef:
+                name: pravara-dispatch-artifacts
+                optional: true
+          # ephemeral-storage covers the /tmp emptyDir below (kubelet counts
+          # it against the pod) plus container logs; the root filesystem is
+          # read-only. Limit = 1Gi /tmp + 256Mi for logs and margin.
           resources:
             requests:
               cpu: 25m
               memory: 80Mi
+              ephemeral-storage: 256Mi
             limits:
               cpu: 500m
               memory: 512Mi
+              ephemeral-storage: 1280Mi
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
@@ -118,8 +133,17 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        # /tmp holds the kept-bytes spool files (fabrication dispatch):
+        #   reads:   DISPATCH_ARTIFACT_CONCURRENT_READS (2)
+        #            x DISPATCH_ARTIFACT_MAX_BYTES (256 MiB) = 512 MiB
+        #   keeping: the runner keeps one object at a time,
+        #            1 x 256 MiB                               = 256 MiB
+        #   total                                              = 768 MiB
+        # sizeLimit 1Gi leaves 256 MiB for anything else in /tmp. Raise it
+        # with either setting.
         - name: tmp
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 1Gi
 ---
 apiVersion: v1
 kind: Service

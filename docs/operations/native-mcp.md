@@ -90,6 +90,7 @@ families (`/v1/jobs`, `/v1/inventory`, `/v1/tasks/:id/consumption`,
 | `POST /v1/inventory/:id/adjust` | EXEMPTED: manual adjust moves stock |
 | `POST /v1/tasks/:id/consumption` | EXEMPTED: an operator actual moves stock |
 | `POST /v1/match`, `GET /v1/dispatches`, `GET /v1/dispatches/:id` | EXEMPTED: dispatch planning and control plane |
+| `GET /v1/dispatches/:id/artifacts/:kind` | EXEMPTED: the kept manufacturing bytes (geometry files), not a cost input |
 | `POST /v1/dispatches` | EXEMPTED: ends in `start_job` on a printer |
 | `POST /v1/machines/:id/command` | EXEMPTED: machine control |
 | `POST /v1/webhooks/forgesight` | EXEMPTED: inbound webhook |

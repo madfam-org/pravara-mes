@@ -236,6 +236,22 @@ func (r *DispatchRepository) ClaimDue(ctx context.Context, tenantID uuid.UUID, o
 	return out, rows.Err()
 }
 
+// ExtendLease pushes the runner's lease on a dispatch out to lease from now,
+// before a step that may outlast the lease it was claimed with. It fails with
+// ErrLeaseLost when the runner no longer holds the dispatch.
+func (r *DispatchRepository) ExtendLease(ctx context.Context, id uuid.UUID, owner string, lease time.Duration) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE dispatch_jobs SET lease_until = NOW() + make_interval(secs => $3)
+		WHERE id = $1 AND lease_owner = $2`, id, owner, lease.Seconds())
+	if err != nil {
+		return fmt.Errorf("extend dispatch lease: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrLeaseLost
+	}
+	return nil
+}
+
 // Save writes the runner's progress and ends its lease. It fails with
 // ErrLeaseLost when another runner took the dispatch over.
 func (r *DispatchRepository) Save(ctx context.Context, d *DispatchJob, owner string) error {

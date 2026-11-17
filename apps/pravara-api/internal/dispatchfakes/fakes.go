@@ -2,7 +2,8 @@
 // fabrication dispatch calls, following their real API shapes:
 //
 //   - Janua      POST /api/v1/oauth/token (client_credentials, HTTP Basic)
-//   - yantra4d   POST /api/render, GET /static/<artifact>.variables.json
+//   - yantra4d   POST /api/render, GET /static/<artifact>.3mf and
+//     GET /static/<artifact>.variables.json
 //   - fabrication-prep  POST/GET /v1/slice-jobs, GET /v1/profiles,
 //     GET /v1/artifacts/{sha256}?exp&kid&sig
 //   - asset-shells  GET /api/v3.1/shells[...], POST /madfam/v1/instances,
@@ -118,7 +119,26 @@ type Yantra4D struct {
 	// ArtifactModified, when set, is sent as the artifact's Last-Modified:
 	// a cache hit on an artifact rendered earlier.
 	ArtifactModified time.Time
-	cartridge, mode  string
+	// ArtifactFailures is how many of the next geometry downloads answer
+	// ArtifactFailStatus (e.g. 503) instead of the bytes.
+	ArtifactFailures   int
+	ArtifactFailStatus int
+	// ArtifactBody, when set, is served as the geometry instead of Geometry:
+	// bytes that do not match the digest the render declared.
+	ArtifactBody []byte
+	// Downloads counts geometry downloads answered with bytes.
+	Downloads int
+	// PartURL and VariablesURL, when set, replace the URLs the render answer
+	// carries (e.g. an absolute URL on another host).
+	PartURL, VariablesURL string
+	// RedirectTo, when set, answers every GET (geometry and sidecar
+	// downloads) with 302 to this location.
+	RedirectTo string
+	// BeforeRender, when set, runs at the start of every render request,
+	// outside the lock (e.g. to change the database while a runner steps a
+	// batch).
+	BeforeRender    func()
+	cartridge, mode string
 }
 
 // Set changes what the next render serves, under the fake's lock.
@@ -156,8 +176,21 @@ func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D 
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "missing or wrong token"})
 			return
 		}
+		y.mu.Lock()
+		redirect := y.RedirectTo
+		y.mu.Unlock()
+		if redirect != "" && r.Method == http.MethodGet {
+			http.Redirect(w, r, redirect, http.StatusFound)
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/render":
+			y.mu.Lock()
+			hook := y.BeforeRender
+			y.mu.Unlock()
+			if hook != nil {
+				hook()
+			}
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			y.mu.Lock()
@@ -185,11 +218,40 @@ func NewYantra4D(t testing.TB, cartridge, mode, part, treeSHA string) *Yantra4D 
 					"log": "render queued\n[" + part + "] ERROR: Render timed out while waiting for completion\n"})
 				return
 			}
+			partURL, varsURL := "/static/"+cartridge+"_"+part+".3mf", "/static/"+cartridge+"_"+part+".3mf.variables.json"
+			y.mu.Lock()
+			if y.PartURL != "" {
+				partURL = y.PartURL
+			}
+			if y.VariablesURL != "" {
+				varsURL = y.VariablesURL
+			}
+			y.mu.Unlock()
 			writeJSON(w, http.StatusOK, map[string]any{"status": "success", "request_id": "r1",
-				"parts": []any{map[string]any{"type": part, "url": "/static/" + cartridge + "_" + part + ".3mf",
+				"parts": []any{map[string]any{"type": part, "url": partURL,
 					"size_bytes": len(y.Geometry), "sha256": geo, "media_type": "model/3mf", "instance_id": instance,
-					"variables_url": "/static/" + cartridge + "_" + part + ".3mf.variables.json"}},
+					"variables_url": varsURL}},
 				"generator_output": map[string]any{"format_version": "1.0.0", "complete": true, "variables_sha256": Digest([]byte("vars"))}})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "."+y.Format):
+			y.mu.Lock()
+			fail, status := y.ArtifactFailures > 0, y.ArtifactFailStatus
+			if fail {
+				y.ArtifactFailures--
+			} else {
+				y.Downloads++
+			}
+			body := y.Geometry
+			if y.ArtifactBody != nil {
+				body = y.ArtifactBody
+			}
+			y.mu.Unlock()
+			if fail {
+				writeJSON(w, status, map[string]any{"error": "artifact unavailable"})
+				return
+			}
+			w.Header().Set("Content-Type", "model/3mf")
+			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+			_, _ = w.Write(body)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, ".variables.json"):
 			y.mu.Lock()
 			sidecar, modified := y.Sidecar, y.ArtifactModified

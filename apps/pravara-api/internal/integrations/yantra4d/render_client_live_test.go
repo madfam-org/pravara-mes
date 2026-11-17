@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ func (a anonymous) RoundTrip(r *http.Request) (*http.Response, error) {
 	return a.next.RoundTrip(r)
 }
 
-func liveRenderClient(t *testing.T) (*Client, *http.Client, string) {
+func liveRenderClient(t *testing.T) (*Client, string) {
 	t.Helper()
 	if os.Getenv("YANTRA4D_LIVE") != "1" {
 		t.Skip("set YANTRA4D_LIVE=1 to call Yantra4D's public API")
@@ -66,10 +67,10 @@ func liveRenderClient(t *testing.T) (*Client, *http.Client, string) {
 	httpClient := &http.Client{Timeout: 5 * time.Minute, Transport: anonymous{next: http.DefaultTransport}}
 	c, err := NewClient(base, ts, httpClient)
 	require.NoError(t, err)
-	return c, httpClient, base
+	return c, base
 }
 
-func liveRender(t *testing.T, c *Client, httpClient *http.Client, base string) (*RenderResponse, Part, *Sidecar) {
+func liveRender(t *testing.T, c *Client, base string) (*RenderResponse, Part, *Sidecar) {
 	t.Helper()
 	ctx := context.Background()
 	resp, err := c.Render(ctx, RenderRequest{Project: liveProject, Mode: liveMode, ExportFormat: liveFormat,
@@ -84,22 +85,28 @@ func liveRender(t *testing.T, c *Client, httpClient *http.Client, base string) (
 	}
 	require.NotNil(t, part, "part %q present (log: %s)", livePart, LogExcerpt(resp.Log))
 
-	// The artifact and sidecar must be on the configured origin.
+	// The artifact and sidecar must be on the configured origin: OriginURL
+	// is the check production uses before it sends a bearer anywhere.
 	want, _ := url.Parse(base)
 	for _, ref := range []string{part.URL, part.VariablesURL} {
-		u, err := url.Parse(c.AbsoluteURL(ref))
+		abs, err := c.OriginURL(ref)
+		require.NoError(t, err, "Yantra4D answered a URL off its own origin: %q", ref)
+		u, err := url.Parse(abs)
 		require.NoError(t, err)
 		assert.Equal(t, want.Scheme, u.Scheme, ref)
 		assert.Equal(t, want.Host, u.Host, ref)
 	}
 
-	// Download the bytes the slicer would fetch and check them.
-	r, err := httpClient.Get(c.AbsoluteURL(part.URL))
+	// Download the bytes the way dispatch keeps them: through the client's
+	// own origin-checked path, which follows no redirect.
+	body, length, err := c.OpenArtifact(ctx, part.URL)
 	require.NoError(t, err)
-	data, err := io.ReadAll(r.Body)
-	_ = r.Body.Close()
+	data, err := io.ReadAll(body)
+	_ = body.Close()
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, r.StatusCode)
+	if length >= 0 {
+		assert.Equal(t, length, int64(len(data)), "Content-Length matches the bytes")
+	}
 	sum := sha256.Sum256(data)
 	assert.Equal(t, part.SHA256, hex.EncodeToString(sum[:]), "downloaded bytes match the answer's sha256")
 
@@ -108,19 +115,21 @@ func liveRender(t *testing.T, c *Client, httpClient *http.Client, base string) (
 	assert.Equal(t, part.InstanceID, doc.InstanceID)
 	require.NotNil(t, resp.GeneratorOutput)
 	assert.Equal(t, resp.GeneratorOutput.VariablesSHA256, doc.VariablesSHA256)
-	t.Logf("status %s, part %q present, %d bytes %s, sha256 %s, instance_id %s, variables_sha256 %s, complete=%v, sidecar_sha256 %s, tree_sha256 %s, artifact Last-Modified %s, request_id %s",
+	raw := sha256.Sum256(doc.Raw)
+	assert.Equal(t, sidecarSHA, hex.EncodeToString(raw[:]), "the raw sidecar bytes are the ones whose digest is returned")
+	t.Logf("status %s, part %q present, %d bytes %s, sha256 %s, instance_id %s, variables_sha256 %s, complete=%v, sidecar_sha256 %s, tree_sha256 %s, sidecar Last-Modified %s, request_id %s",
 		resp.Status, part.Type, len(data), part.MediaType, part.SHA256, doc.InstanceID, doc.VariablesSHA256, doc.Complete,
-		sidecarSHA, doc.Generator.Source.TreeSHA256, r.Header.Get("Last-Modified"), resp.RequestID)
+		sidecarSHA, doc.Generator.Source.TreeSHA256, doc.ArtifactModified.Format(time.RFC3339), resp.RequestID)
 	return resp, *part, doc
 }
 
 func TestLiveDispatchRenderClient(t *testing.T) {
-	c, httpClient, base := liveRenderClient(t)
+	c, base := liveRenderClient(t)
 	ctx := context.Background()
 
-	first, firstPart, firstDoc := liveRender(t, c, httpClient, base)
+	first, firstPart, firstDoc := liveRender(t, c, base)
 	time.Sleep(liveSpacing)
-	_, secondPart, secondDoc := liveRender(t, c, httpClient, base)
+	_, secondPart, secondDoc := liveRender(t, c, base)
 	assert.Equal(t, firstDoc.InstanceID, secondDoc.InstanceID, "same inputs, same GOC-1 identity")
 	if firstPart.SHA256 == secondPart.SHA256 {
 		t.Logf("reproducibility: identical renders gave the same digest")
@@ -151,4 +160,22 @@ func TestLiveDispatchRenderClient(t *testing.T) {
 	t.Logf("export format %s as guest: %v", liveDenied, err)
 	require.True(t, errors.As(err, &re), "a format the tier may not export is an error")
 	assert.Equal(t, http.StatusForbidden, re.Status)
+
+	// The same refusal rules production uses, on the live origin (no
+	// request is made for a refused URL).
+	refused := []string{"//example.invalid/static/x.stl"}
+	if strings.HasPrefix(base, "https://") {
+		refused = append(refused, "http://"+mustHost(t, base)+"/static/x.stl")
+	}
+	for _, ref := range refused {
+		_, _, err := c.OpenArtifact(ctx, ref)
+		require.True(t, errors.As(err, &re), ref)
+		assert.Equal(t, CodeOffOrigin, re.Code, ref)
+	}
+}
+
+func mustHost(t *testing.T, base string) string {
+	u, err := url.Parse(base)
+	require.NoError(t, err)
+	return u.Host
 }

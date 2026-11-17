@@ -58,6 +58,14 @@ type RenderBundle struct {
 	// instance came back with different bytes: yantra4d does not promise that
 	// a re-render reproduces them (RFC 0059 S2, S3).
 	PreviousSHA256 string `json:"previous_sha256,omitempty"`
+	// Kept are the bytes of this render pravara holds in its own store
+	// (RFC 0059 S12, keep.go): the geometry and its sidecar, verified
+	// against SHA256 and SidecarSHA256 before slicing. URL and VariablesURL
+	// expire; these do not.
+	Kept []KeptObject `json:"kept,omitempty"`
+	// SupersededKept are the kept bytes of earlier renders of this dispatch
+	// that a re-render replaced. They stay in the store.
+	SupersededKept []KeptObject `json:"superseded_kept,omitempty"`
 }
 
 // SliceRecord is stored in dispatch_jobs.slice_result. Signed URLs are not
@@ -242,7 +250,8 @@ func (s *Service) rematch(d *repositories.DispatchJob) {
 	d.Status = repositories.DispatchQueued
 }
 
-// stageRender: yantra4d render + GOC-1 sidecar, checked against the type shell.
+// stageRender: yantra4d render + GOC-1 sidecar, checked against the type
+// shell; the bytes are kept (keep.go) before the dispatch moves on.
 func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) *stepError {
 	if serr := s.holdReservation(ctx, d, s.cfg.ReservationTTL); serr != nil {
 		return serr
@@ -259,6 +268,14 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 			s.log.WithError(err).WithField("dispatch_id", d.ID).
 				Warn("dispatch: the kept render could not be read; rendering again without comparing it to the earlier one")
 		case renderIsFresh(*kept, s.now(), s.cfg.RenderFreshFor):
+			// Recorded before pravara kept bytes: keep them now, while
+			// the URLs are still good.
+			if !keptComplete(*kept) {
+				if serr := s.keepWithLease(ctx, d, kept, nil, nil); serr != nil {
+					return serr
+				}
+				d.RenderBundle = encode(kept)
+			}
 			d.Status = repositories.DispatchRendered
 			return nil
 		default:
@@ -280,6 +297,16 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	if serr != nil {
 		return serr
 	}
+	// Every URL the answer carries must stay on yantra4d's origin: pravara
+	// sends its machine bearer to it, and keeps what it downloads.
+	partURL, err := s.Renderer.OriginURL(part.URL)
+	if err != nil {
+		return terminal("render_url_off_origin", "the part URL: %v", err)
+	}
+	variablesURL, err := s.Renderer.OriginURL(part.VariablesURL)
+	if err != nil && part.VariablesURL != "" {
+		return terminal("render_url_off_origin", "the sidecar URL: %v", err)
+	}
 	sidecar, sidecarSHA, err := s.Renderer.FetchSidecar(ctx, *part)
 	if err != nil {
 		return fromRemote("render_sidecar_invalid", err)
@@ -298,8 +325,8 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 	default:
 		return terminal("render_format_unsliceable", "fabrication-prep slices model/stl or model/3mf, got %q", part.MediaType)
 	}
-	bundle := RenderBundle{Part: part.Type, URL: s.Renderer.AbsoluteURL(part.URL), SHA256: part.SHA256,
-		MediaType: part.MediaType, InstanceID: sidecar.InstanceID, VariablesURL: s.Renderer.AbsoluteURL(part.VariablesURL),
+	bundle := RenderBundle{Part: part.Type, URL: partURL, SHA256: part.SHA256,
+		MediaType: part.MediaType, InstanceID: sidecar.InstanceID, VariablesURL: variablesURL,
 		SidecarSHA256: sidecarSHA, VariablesSHA256: sidecar.VariablesSHA256, TreeSHA256: sidecar.Generator.Source.TreeSHA256,
 		Complete: sidecar.Complete, Engine: sidecar.Generator.Engine, RenderedAt: artifactTime(sidecar.ArtifactModified, s.now())}
 	if earlier != nil {
@@ -316,6 +343,13 @@ func (s *Service) stageRender(ctx context.Context, d *repositories.DispatchJob) 
 				"previous_sha256": earlier.SHA256, "sha256": bundle.SHA256}).
 				Warn("dispatch: the same design instance rendered to different bytes; using the new render")
 		}
+	}
+	// Keep the bytes before anything is made from them.
+	if serr := s.keepWithLease(ctx, d, &bundle, sidecar.Raw, part.SizeBytes); serr != nil {
+		return serr
+	}
+	if earlier != nil {
+		bundle.SupersededKept = supersededKept(*earlier, bundle.Kept)
 	}
 	d.RenderBundle = encode(bundle)
 	d.Status = repositories.DispatchRendered
@@ -397,6 +431,9 @@ func pickPart(parts []yantra4d.Part, want, renderLog string) (*yantra4d.Part, *s
 func (s *Service) stageSliceSubmit(ctx context.Context, d *repositories.DispatchJob) *stepError {
 	if serr := s.holdReservation(ctx, d, s.cfg.ReservationTTL); serr != nil {
 		return serr
+	}
+	if s.rewindUnkept(d) {
+		return nil
 	}
 	match, err1 := decode[MatchRecord](d.MatchResult)
 	bundle, err2 := decode[RenderBundle](d.RenderBundle)
@@ -486,6 +523,9 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 		return terminal("state_incomplete", "dispatch lacks its slice result or machine")
 	}
 	if d.Status == repositories.DispatchSliced {
+		if s.rewindUnkept(d) {
+			return nil
+		}
 		if serr := s.recheck(ctx, d); serr != nil {
 			return serr
 		}
@@ -519,6 +559,13 @@ func (s *Service) stageEnqueue(ctx context.Context, d *repositories.DispatchJob)
 			}
 			return terminal("command_"+cmd.Status, "start_job %s: %s", cmd.Status, msg)
 		}
+	}
+	// No ledger row means nothing was appended (the row is written first), so
+	// an unkept render can still be sent back. A ledger row (pending) may
+	// already be on the stream and is re-sent from the ledger after a
+	// DBIRTH: rewinding then would issue a second start_job, so it goes on.
+	if cmd == nil && s.rewindUnkept(d) {
+		return nil
 	}
 	// Fresh signed URL: the one from slicing may have expired.
 	job, err := s.Slicer.GetSliceJob(ctx, rec.JobID)

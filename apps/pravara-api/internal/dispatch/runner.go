@@ -32,6 +32,11 @@ func (s *Service) Start(ctx context.Context) {
 		s.log.Info("Fabrication dispatch disabled; runner not started")
 		return
 	}
+	if s.Store == nil {
+		// Fail closed: a render that cannot be kept is not dispatched.
+		s.log.Error("Fabrication dispatch enabled without an artifact store; runner not started")
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(s.cfg.PollInterval)
 		defer ticker.Stop()
@@ -96,6 +101,22 @@ func (s *Service) runTenant(ctx context.Context, tenantID uuid.UUID) int {
 
 // step runs one hop and saves the outcome (releasing the lease).
 func (s *Service) step(ctx context.Context, d *repositories.DispatchJob) {
+	// A claimed batch is stepped one dispatch at a time, and a hop can take
+	// minutes (a render, keeping the bytes), so a later dispatch's claim lease
+	// may have run out before its turn, and another replica may have claimed
+	// it since. Renew the lease first and skip the hop when it is no longer
+	// ours: no render, reservation or command for work another runner holds.
+	if err := s.inTenant(ctx, d.TenantID, func(ctx context.Context) error {
+		return s.Dispatch.ExtendLease(ctx, d.ID, s.owner, leaseFor)
+	}); err != nil {
+		entry := s.log.WithFields(logrus.Fields{"dispatch_id": d.ID, "status": d.Status})
+		if errors.Is(err, repositories.ErrLeaseLost) {
+			entry.Info("dispatch lease taken over before its turn; skipping this hop")
+		} else {
+			entry.WithError(err).Warn("dispatch: could not renew the lease; skipping this hop")
+		}
+		return
+	}
 	before := d.Status
 	serr := s.advance(ctx, d)
 	now := s.now()

@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
@@ -77,6 +78,7 @@ type dispatchRig struct {
 	yantra   *dispatchfakes.Yantra4D
 	fabprep  *dispatchfakes.FabricationPrep
 	shells   *dispatchfakes.AssetShells
+	store    *artifactstore.Memory
 	typeEnv  map[string]any
 	typeID   string
 	cfg      *config.Config
@@ -178,7 +180,8 @@ func newDispatchRig(t *testing.T) *dispatchRig {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = publisher.Close() })
 	database := &db.DB{DB: app}
-	r.svc, err = BuildDispatchService(cfg, database, publisher, log)
+	r.store = artifactstore.NewMemory()
+	r.svc, err = buildDispatchService(cfg, database, publisher, r.store, log)
 	require.NoError(t, err)
 	require.Empty(t, r.svc.Unavailable())
 

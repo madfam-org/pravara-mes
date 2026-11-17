@@ -86,6 +86,11 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(post, "/v1/match"):         jobsRead,
 		k(get, "/v1/dispatches"):     jobsRead,
 		k(get, "/v1/dispatches/:id"): jobsRead,
+		// The kept bytes of a dispatch's render (RFC 0059 S12): the
+		// geometry itself, so machine callers need pravara-mes:jobs, not a
+		// bare read scope. People are governed by roles, as on the
+		// dispatch read.
+		k(get, "/v1/dispatches/:id/artifacts/:kind"): jobs,
 		// --- end fabrication dispatch ---
 
 		// Job consumption reads for downstream cost ledgers (quantities only).

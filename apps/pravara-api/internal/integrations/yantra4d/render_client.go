@@ -13,6 +13,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -40,15 +42,74 @@ type Client struct {
 }
 
 // NewClient creates a client for baseURL (e.g. https://api.yantra4d.com).
+// The base URL must be https (plain http only on a loopback host, for
+// tests): the client sends a machine bearer token with every call.
+//
+// Every URL a render answer carries is followed only when it has the base
+// URL's scheme and host (OriginURL), and the client never follows a
+// redirect: yantra4d serves files directly, and a bearer must not travel to
+// any other host.
 func NewClient(baseURL string, tokens *machineclients.TokenSource, httpClient *http.Client) (*Client, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/"))
-	if err != nil || u.Scheme == "" || u.Host == "" {
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil {
 		return nil, fmt.Errorf("yantra4d: invalid base URL %q", baseURL)
+	}
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopback(u.Hostname())) {
+		return nil, fmt.Errorf("yantra4d: base URL %q must be https (plain http only on a loopback host)", baseURL)
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 5 * time.Minute}
 	}
-	return &Client{baseURL: u, http: httpClient, tokens: tokens}, nil
+	noRedirects := *httpClient
+	noRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Client{baseURL: u, http: &noRedirects, tokens: tokens}, nil
+}
+
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// CodeOffOrigin is the remote.Error code of a URL in a render answer that
+// points away from yantra4d's own origin.
+const CodeOffOrigin = "url_off_origin"
+
+// OriginURL resolves a URL a render answer returned (often "/static/…")
+// against the base URL and refuses it unless the result has the base URL's
+// scheme and host. An absolute URL on another host, a protocol-relative
+// "//host/…" and a downgrade to http are all refused: pravara would send its
+// machine bearer there.
+func (c *Client) OriginURL(ref string) (string, error) {
+	off := func(why string) error {
+		return &remote.Error{Service: service, Op: "url", Code: CodeOffOrigin,
+			Message: fmt.Sprintf("%q %s; only %s://%s is followed", ref, why, c.baseURL.Scheme, c.baseURL.Host)}
+	}
+	if strings.TrimSpace(ref) == "" {
+		return "", off("is empty")
+	}
+	u, err := url.Parse(ref)
+	if err != nil {
+		return "", off("is not a URL")
+	}
+	abs := c.baseURL.ResolveReference(u)
+	switch {
+	case abs.User != nil:
+		return "", off("carries credentials")
+	case abs.Scheme != c.baseURL.Scheme:
+		return "", off("uses another scheme")
+	case abs.Host != c.baseURL.Host:
+		return "", off("is on another host")
+	}
+	return abs.String(), nil
+}
+
+// redirectRefused reports a 3xx answer, which the client does not follow.
+func redirectRefused(op string, resp *http.Response) error {
+	return &remote.Error{Service: service, Op: op, Status: resp.StatusCode, Code: "redirect_refused",
+		Message: "yantra4d answered with a redirect; pravara does not follow redirects"}
 }
 
 // RenderRequest is yantra4d's documented render contract: parameters nested
@@ -182,7 +243,10 @@ type Sidecar struct {
 	// sends one: when the render was actually made, which on a cache hit is
 	// earlier than the request. Zero when unknown. Not part of the document.
 	ArtifactModified time.Time `json:"-"`
-	Geometry         []struct {
+	// Raw is the exact document as downloaded: the bytes whose sha256
+	// FetchSidecar returns, kept by dispatch. Not part of the document.
+	Raw      []byte `json:"-"`
+	Geometry []struct {
 		Path      string `json:"path"`
 		MediaType string `json:"media_type"`
 		SHA256    string `json:"sha256"`
@@ -199,8 +263,12 @@ func (c *Client) FetchSidecar(ctx context.Context, part Part) (*Sidecar, string,
 		return nil, "", &remote.Error{Service: service, Op: "sidecar", Code: "sidecar_missing",
 			Message: fmt.Sprintf("part %q has no variables_url (GOC-1 sidecar); dispatch requires it", part.Type)}
 	}
+	target, err := c.OriginURL(part.VariablesURL)
+	if err != nil {
+		return nil, "", err
+	}
 	resp, err := machineclients.Do(ctx, c.http, c.tokens, func(ctx context.Context) (*http.Request, error) {
-		r, err := http.NewRequestWithContext(ctx, http.MethodGet, c.resolve(part.VariablesURL), nil)
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -211,6 +279,9 @@ func (c *Client) FetchSidecar(ctx context.Context, part Part) (*Sidecar, string,
 		return nil, "", wrap("sidecar", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return nil, "", redirectRefused("sidecar", resp)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", remote.StatusError(service, "sidecar", resp)
 	}
@@ -226,7 +297,35 @@ func (c *Client) FetchSidecar(ctx context.Context, part Part) (*Sidecar, string,
 	if modified, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
 		doc.ArtifactModified = modified.UTC()
 	}
+	doc.Raw = raw
 	return &doc, hex.EncodeToString(sum[:]), nil
+}
+
+// OpenArtifact starts the download of a render artifact (a part's geometry
+// or its sidecar) at ref, a URL the envelope returned, on yantra4d's own
+// origin only (OriginURL). It returns the body and its declared length (-1
+// when unknown); the caller bounds, verifies and closes it. A non-200 answer
+// is a classified error (5xx and 429 retryable; a redirect is refused).
+func (c *Client) OpenArtifact(ctx context.Context, ref string) (io.ReadCloser, int64, error) {
+	target, err := c.OriginURL(ref)
+	if err != nil {
+		return nil, 0, err
+	}
+	resp, err := machineclients.Do(ctx, c.http, c.tokens, func(ctx context.Context) (*http.Request, error) {
+		return http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	})
+	if err != nil {
+		return nil, 0, wrap("artifact", err)
+	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		defer func() { _ = resp.Body.Close() }()
+		return nil, 0, redirectRefused("artifact", resp)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
+		return nil, 0, remote.StatusError(service, "artifact", resp)
+	}
+	return resp.Body, resp.ContentLength, nil
 }
 
 // CheckSidecar verifies that a sidecar is a GOC-1 document for exactly this
@@ -260,9 +359,8 @@ func CheckSidecar(doc *Sidecar, part Part) error {
 	return bad("sidecar lists no primary geometry")
 }
 
-// AbsoluteURL resolves a URL the envelope returns (often "/static/…").
-func (c *Client) AbsoluteURL(ref string) string { return c.resolve(ref) }
-
+// resolve joins a path of pravara's own (never one from an answer) to the
+// base URL.
 func (c *Client) resolve(ref string) string {
 	u, err := url.Parse(ref)
 	if err != nil {
