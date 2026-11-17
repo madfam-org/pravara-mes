@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -31,7 +32,55 @@ import (
 // With dispatch enabled, an artifact store that is missing or incomplete is a
 // configuration error: pravara does not dispatch bytes it cannot keep.
 func BuildDispatchService(cfg *config.Config, database *db.DB, publisher *pubsub.Publisher, log *logrus.Logger) (*dispatch.Service, error) {
-	return buildDispatchService(cfg, database, publisher, nil, log)
+	store, err := artifactStoreFromConfig(cfg, log)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkArtifactStore(context.Background(), store, cfg.Dispatch.Enabled, log); err != nil {
+		return nil, err
+	}
+	return buildDispatchService(cfg, database, publisher, store, log)
+}
+
+// selfChecker is a store that can prove its bucket behaves as it relies on
+// (artifactstore.S3.SelfCheck).
+type selfChecker interface {
+	SelfCheck(ctx context.Context) error
+}
+
+// artifactSelfCheckTimeout bounds the start-up self-check as a whole.
+const artifactSelfCheckTimeout = 90 * time.Second
+
+// checkArtifactStore runs the store's self-check against the real bucket.
+// With dispatch enabled it runs before dispatch starts and a failure is an
+// error (no dispatch on a bucket that does not keep bytes as designed). With
+// dispatch disabled it runs in the background and only logs, so the bucket is
+// proven (or its problem known) before anyone enables dispatch.
+func checkArtifactStore(ctx context.Context, store artifactstore.Store, enabled bool, log *logrus.Logger) error {
+	checker, ok := store.(selfChecker)
+	if !ok {
+		return nil
+	}
+	run := func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, artifactSelfCheckTimeout)
+		defer cancel()
+		return checker.SelfCheck(ctx)
+	}
+	if enabled {
+		if err := run(ctx); err != nil {
+			return fmt.Errorf("dispatch is enabled but %w", err)
+		}
+		log.Info("Artifact store self-check passed")
+		return nil
+	}
+	go func() {
+		if err := run(context.Background()); err != nil {
+			log.WithError(err).Error("Artifact store self-check failed (dispatch is disabled; enabling it would be refused)")
+			return
+		}
+		log.Info("Artifact store self-check passed")
+	}()
+	return nil
 }
 
 // artifactStoreFromConfig builds the store from the Secret Enclii writes.

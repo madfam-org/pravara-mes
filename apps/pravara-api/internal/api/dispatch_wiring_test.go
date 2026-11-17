@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/artifactstore"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 )
 
@@ -73,9 +77,19 @@ func TestDispatchWiringRefusesToDispatchWithoutTheArtifactStore(t *testing.T) {
 		cfg := &config.Config{}
 		cfg.Dispatch.Enabled = true
 		cfg.ArtifactStore = storeConfig()
-		svc, err := BuildDispatchService(cfg, nil, nil, log)
+		svc, err := buildDispatchService(cfg, nil, nil, nil, log)
 		require.NoError(t, err, "building the store makes no call to the bucket")
 		assert.NotNil(t, svc.Store)
+	})
+
+	t.Run("enabled, the bucket fails the start-up self-check", func(t *testing.T) {
+		cfg := &config.Config{}
+		cfg.Dispatch.Enabled = true
+		cfg.ArtifactStore = storeConfig() // an endpoint that does not resolve
+		_, err := BuildDispatchService(cfg, nil, nil, log)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dispatch is enabled but artifact store self-check")
+		assert.NotContains(t, err.Error(), "placeholder-secret-value", "the secret never reaches a log line")
 	})
 
 	t.Run("a negative size bound is refused", func(t *testing.T) {
@@ -84,4 +98,48 @@ func TestDispatchWiringRefusesToDispatchWithoutTheArtifactStore(t *testing.T) {
 		_, err := BuildDispatchService(cfg, nil, nil, log)
 		assert.ErrorContains(t, err, "artifact_max_bytes")
 	})
+}
+
+type fakeChecker struct {
+	artifactstore.Store
+	err   error
+	calls chan struct{}
+}
+
+func (f *fakeChecker) SelfCheck(context.Context) error {
+	if f.calls != nil {
+		f.calls <- struct{}{}
+	}
+	return f.err
+}
+
+// With dispatch enabled, a bucket that fails the self-check stops dispatch
+// from being built; one that passes does not.
+func TestArtifactSelfCheckGatesEnabledDispatch(t *testing.T) {
+	log := logrus.New()
+	err := checkArtifactStore(context.Background(), &fakeChecker{Store: artifactstore.NewMemory(), err: errors.New("If-None-Match is not enforced")}, true, log)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dispatch is enabled")
+	assert.Contains(t, err.Error(), "If-None-Match is not enforced")
+
+	require.NoError(t, checkArtifactStore(context.Background(), &fakeChecker{Store: artifactstore.NewMemory()}, true, log))
+}
+
+// With dispatch disabled the self-check still runs (so the bucket is proven
+// before anyone enables dispatch) but never stops the API from starting.
+func TestArtifactSelfCheckOnlyLogsWhileDispatchIsDisabled(t *testing.T) {
+	calls := make(chan struct{}, 1)
+	err := checkArtifactStore(context.Background(), &fakeChecker{Store: artifactstore.NewMemory(), err: errors.New("boom"), calls: calls}, false, logrus.New())
+	require.NoError(t, err)
+	select {
+	case <-calls:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the self-check did not run while dispatch was disabled")
+	}
+}
+
+// A store with no self-check (the in-memory store, no store at all) passes.
+func TestArtifactSelfCheckSkipsStoresWithoutOne(t *testing.T) {
+	require.NoError(t, checkArtifactStore(context.Background(), artifactstore.NewMemory(), true, logrus.New()))
+	require.NoError(t, checkArtifactStore(context.Background(), nil, true, logrus.New()))
 }

@@ -166,6 +166,11 @@ func TestS3StoreContractAgainstS3CompatibleServer(t *testing.T) {
 	require.NoError(t, err)
 	storeContract(t, store)
 	putChecks(t, store)
+	// The start-up self-check passes on a conforming server and leaves no probe.
+	require.NoError(t, store.SelfCheck(context.Background()))
+	left, err := store.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: aws.String(SelfCheckPrefix)})
+	require.NoError(t, err)
+	assert.Empty(t, left.Contents, "the self-check removes its probe")
 
 	// An object without the sha256 metadata is a conflict, never "stored".
 	bare := []byte("no metadata " + uuid.NewString())

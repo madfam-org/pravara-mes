@@ -163,7 +163,18 @@ second job.
 **Time bounds.** The keep step is bounded to 12 minutes in all (downloads bounded by the yantra4d
 client's 5-minute timeout, each store call by 2 minutes). Before it starts, the runner extends its
 lease on the dispatch to 15 minutes and the machine reservation to cover it, so no other runner claims
-the dispatch meanwhile.
+the dispatch meanwhile. The runner also renews its lease before **every** hop: a claimed batch is
+stepped one dispatch at a time, so a later dispatch whose claim ran out (and that another replica
+claimed) is skipped rather than rendered, reserved or saved over the other runner's lease.
+
+**Start-up self-check.** Whenever the bucket is configured, the API checks it against the real server
+when it starts: a conditional put carrying a sha256 checksum is accepted, a second conditional put is
+refused with 412, HEAD returns the `sha256` metadata, the object reads back intact, and the same bytes
+again count as already stored. The probe lives under `selfcheck/` (never under `tenants/`) and is
+removed afterwards. With dispatch disabled the check runs in the background and only logs
+(`Artifact store self-check passed`, or the failing step); with dispatch enabled it runs before
+dispatch starts and a failure stops the API from starting dispatch, so dispatch never runs on a bucket
+that does not keep bytes as described here.
 
 **Retention.** None: kept bytes are never deleted. They are the manufacturing record. The store
 interface has no delete, and a stale render that is requested again keeps its new bytes **and**
