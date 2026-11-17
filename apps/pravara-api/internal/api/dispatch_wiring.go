@@ -73,8 +73,11 @@ func checkArtifactStore(ctx context.Context, store artifactstore.Store, enabled 
 		log.Info("Artifact store self-check passed")
 		return nil
 	}
+	// Detached from the caller's cancellation (start-up returns at once), but
+	// still derived from its context and bounded by run's own timeout.
+	bg := context.WithoutCancel(ctx)
 	go func() {
-		if err := run(context.Background()); err != nil {
+		if err := run(bg); err != nil {
 			log.WithError(err).Error("Artifact store self-check failed (dispatch is disabled; enabling it would be refused)")
 			return
 		}
