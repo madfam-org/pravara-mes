@@ -7,6 +7,13 @@
       "severity": "moderate",
       "reason": "Fixed only in minimatch 11.0.1 (advisory published 2026-10-30, no 3.x/9.x/10.x backport; checked 2026-11-04). It enters only through lint tooling (eslint 9, @eslint/eslintrc, eslint-plugin-import need minimatch 3.x; @typescript-eslint/typescript-estree needs 10.x), and 11.x drops the default export those call. Dev-only: globs come from first-party lint config, never from untrusted input, and nothing ships to the browser.",
       "review_by": "2026-12-04"
+    },
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "severity": "high",
+      "reason": "No fixed version exists: the advisory covers picomatch <= 4.0.7 and 4.0.7 is the latest release (advisory published 2026-10-19, range last updated 2026-11-17; registry and advisory checked 2026-11-18). It is a ReDoS through repeated extglobs in a glob pattern. By the lockfile's dependency trace, picomatch enters only through build, lint and test tooling: tailwindcss 3 (chokidar, fast-glob, micromatch), eslint-config-next, vite and vitest. The two paths under `dependencies` (tailwindcss-animate, and @janua/nextjs through @janua/ui) reach it through a peer dependency on tailwindcss; next itself does not require it. The patterns those tools match come from first-party config (Tailwind content globs, lint and test file patterns), not from request input. Not verified by inspecting the built bundle. Remove this entry when a fixed picomatch is published.",
+      "review_by": "2026-12-04"
     }
   ]
 }
