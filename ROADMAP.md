@@ -306,6 +306,31 @@ The open checkboxes in the phase sections below are the feature roadmap:
 
 The open Phase 1 and Phase 2.5 checkboxes have moved into the list above.
 
+### Proposed: assembling a routed product (2026-11-17)
+
+Proposed from an integration that projects a description of an assembly plant
+into this API's request bodies and records what does not fit. Each item is a
+capability the API does not have today. None is scheduled: each needs an owner
+decision on scope before any work starts, and the list is here so the gap is
+written down in one place.
+
+- **Operation sequence.** An order item is one task today. A product assembled
+  in steps needs ordered operations per product, each bound to a station type,
+  so that a work instruction or a quality gate attaches to an operation instead
+  of being ordered by its title.
+- **Multi-level bill of materials.** The bill of materials is one flat level
+  today. Sub-assemblies need parent lines, so that consumption follows the
+  structure instead of being flattened to unit quantities by the caller.
+- **Inspection plans.** Only inspection instances exist today. A plan (what to
+  check, by which method, against which limit, at which operation) would let
+  the instances for each unit be created from it.
+- **Station types** for a fastening station that records torque and angle per
+  fastener, an electrical safety tester and an end-of-line test rig. Such
+  stations register as the generic `custom` type today.
+- **An MTConnect adapter.** The protocol is named in the machine enum and has
+  no adapter. Full OPC UA is already listed above under machine-adapter
+  completion.
+
 ### Known flaky tests
 
 No flaky test is known in the suites CI gates: the Go modules in `go.work`,
