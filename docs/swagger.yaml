@@ -2080,7 +2080,7 @@ definitions:
 host: localhost:4500
 info:
   contact:
-    email: support@pravara.io
+    email: support@madfam.io
     name: PravaraMES Team
     url: https://github.com/madfam-org/pravara-mes
   description: |-
