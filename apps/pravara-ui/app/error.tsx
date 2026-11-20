@@ -54,7 +54,7 @@ export default function Error({ error, reset }: ErrorPageProps) {
         <p className="mt-8 text-sm text-muted-foreground">
           If this problem persists, please{" "}
           <a
-            href="mailto:support@pravara.io"
+            href="mailto:support@madfam.io"
             className="text-primary underline-offset-4 hover:underline"
           >
             contact support

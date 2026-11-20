@@ -50,7 +50,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-500">
               If this problem persists, please{" "}
               <a
-                href="mailto:support@pravara.io"
+                href="mailto:support@madfam.io"
                 className="text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
               >
                 contact support
