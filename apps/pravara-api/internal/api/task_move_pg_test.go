@@ -132,6 +132,25 @@ func TestTaskMoveWithAutomationAgainstPostgres(t *testing.T) {
 	require.NoError(t, rig.sqlDB.QueryRow(`SELECT count(*) FROM task_commands WHERE task_id = $1 AND command_type = 'start_job'`,
 		taskID).Scan(&commands))
 	assert.Equal(t, 1, commands, "automation recorded one durable start_job command")
+	var issuedBy *uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT issued_by FROM task_commands WHERE task_id = $1`, taskID).Scan(&issuedBy))
+	assert.Nil(t, issuedBy, "the person has no users row: issued_by is NULL, the command is still recorded")
+
+	// A person who has a users row is recorded as the issuer.
+	personID := uuid.New()
+	_, err = rig.sqlDB.Exec(`INSERT INTO users (id, tenant_id, email, name) VALUES ($1, $2, 'operator@example.test', 'Operator')`,
+		personID, rig.tenantID)
+	require.NoError(t, err)
+	var second uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, title, status, machine_id)
+		VALUES ($1, 'Assigned 2', 'queued', $2) RETURNING id`, rig.tenantID, machineID).Scan(&second))
+	w = rig.do(http.MethodPost, "/v1/tasks/"+second.String()+"/move", rig.userTokenFor(t, personID, "operator"),
+		map[string]any{"status": "in_progress", "from_status": "queued"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT issued_by FROM task_commands WHERE task_id = $1`, second).Scan(&issuedBy))
+	if assert.NotNil(t, issuedBy) {
+		assert.Equal(t, personID, *issuedBy)
+	}
 }
 
 // Concurrent moves to the end of one column get distinct positions.

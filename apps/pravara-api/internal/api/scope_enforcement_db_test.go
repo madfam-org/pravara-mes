@@ -178,7 +178,12 @@ func (r *scopeRig) machineToken(t *testing.T, scope string, mutate func(jwt.MapC
 }
 
 func (r *scopeRig) userToken(t *testing.T, roles ...string) string {
-	c := r.baseClaims(uuid.NewString())
+	return r.userTokenFor(t, uuid.New(), roles...)
+}
+
+// userTokenFor is userToken for a given subject.
+func (r *scopeRig) userTokenFor(t *testing.T, sub uuid.UUID, roles ...string) string {
+	c := r.baseClaims(sub.String())
 	c["email"] = "person@example.test"
 	// A person's token as Janua issues it: type "access", and authority here
 	// only through this application's roles. Everyone here holds
