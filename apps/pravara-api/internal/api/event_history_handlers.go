@@ -54,12 +54,20 @@ func (h *EventHistoryHandler) ListEvents(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"events": events,
-		"total":  total,
-		"limit":  filter.Limit,
-		"offset": filter.Offset,
-	})
+	c.JSON(http.StatusOK, EventListResponse{Events: events, Total: total, Limit: filter.Limit, Offset: filter.Offset})
+}
+
+// EventListResponse is the body of GET /v1/events.
+type EventListResponse struct {
+	Events []repositories.OutboxEvent `json:"events"`
+	Total  int                        `json:"total"`
+	Limit  int                        `json:"limit"`
+	Offset int                        `json:"offset"`
+}
+
+// EventTypesResponse is the body of GET /v1/events/types.
+type EventTypesResponse struct {
+	EventTypes []repositories.EventTypeCount `json:"event_types"`
 }
 
 // GetEventByID returns a single event.
@@ -93,7 +101,7 @@ func (h *EventHistoryHandler) GetEventTypes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"event_types": types})
+	c.JSON(http.StatusOK, EventTypesResponse{EventTypes: types})
 }
 
 // queryInt extracts an integer query parameter with a default value.

@@ -183,6 +183,19 @@ See [docs/operations/sparkplug-broker-and-enrollment.md](../../docs/operations/s
 
 `GET /v1/inventory` takes `search` (case-insensitive match on name or SKU), `category`, `limit` (default 20) and `offset`. Machine reads return only the tenant of the token or API key, like every other route.
 
+### Shop-floor terminal
+
+A terminal's Janua device token carries `pravara-mes:terminal`, which opens these reads and nothing else (no write, ruling PV-1):
+
+| Method | Path | Access |
+|--------|------|--------|
+| `GET` | `/v1/orders`, `/v1/orders/:id`, `/v1/orders/:id/items` | `pravara-mes:terminal`, `pravara-mes:read` or `pravara-mes:jobs` |
+| `GET` | `/v1/tasks`, `/v1/tasks/board`, `/v1/tasks/:id`, `/v1/tasks/:id/work-instructions` | `pravara-mes:terminal` |
+| `GET` | `/v1/quality/batches/lookup?lot_number=` | `pravara-mes:terminal` |
+| `GET` | `/v1/events`, `/v1/events/types`, `/v1/events/:id` | `pravara-mes:terminal` or `pravara-mes:read` |
+
+See [docs/operations/shop-floor-terminal.md](../../docs/operations/shop-floor-terminal.md) and the wire contract [docs/contracts/terminal.v1.json](../../docs/contracts/terminal.v1.json).
+
 ### API Key Management (admin only)
 
 | Method | Path | Description |
