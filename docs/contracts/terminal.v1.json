@@ -263,17 +263,82 @@
         "message": "always string",
         "current_status": "always string"
       }
+    },
+    "consumption_reported": {
+      "fields": {
+        "consumption": "always object",
+        "stock_movements": "always array"
+      }
+    },
+    "consumption_already_recorded": {
+      "fields": {
+        "error": "always string",
+        "message": "always string",
+        "consumption": "always object",
+        "correct_with": "always string"
+      }
+    },
+    "step_acknowledged": {
+      "fields": {
+        "message": "always string",
+        "task_id": "always string",
+        "wi_id": "always string",
+        "step_number": "always integer"
+      }
     }
+  },
+  "idempotency": {
+    "header": "Idempotency-Key",
+    "key": "1-100 printable ASCII characters; the terminal sends its record identifier",
+    "scope": "the tenant and the client: the OAuth client the token was issued to (the device), else the caller",
+    "first_use": "the write runs; an answer below 400 is stored with a fingerprint of the method, path, query and canonical JSON body",
+    "same_request": "the stored status, content type and body again, with header Idempotent-Replayed: true; the write does not run again",
+    "other_request": {
+      "status": 409,
+      "error": "idempotency_key_reused"
+    },
+    "failed_answer": "an answer of 400 or more stores nothing; the key stays free",
+    "busy": {
+      "status": 503,
+      "error": "idempotency_key_busy",
+      "retry_after_seconds": 1
+    },
+    "outside_the_transaction": "what a write does outside Pravara's database transaction is not undone or deduplicated by the key: a realtime publish, an automation command and its dispatch-stream append happen once per run of the write, and a run whose transaction then fails may have done them",
+    "replayed_header": "Idempotent-Replayed",
+    "retention_days_default": 35,
+    "retry": "5xx, 429 or no answer: deliver again with the same key. Any other 4xx is final: keep the record for a person"
   },
   "writes": [
     {
       "method": "POST",
       "path": "/v1/tasks/:id/move",
       "authority": "person",
+      "idempotent": true,
       "request": "task_move",
       "responses": {
         "200": "task_moved",
         "409": "task_status_conflict"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/consumption",
+      "authority": "person",
+      "idempotent": true,
+      "request": "consumption_report",
+      "responses": {
+        "201": "consumption_reported",
+        "409": "consumption_already_recorded"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/work-instructions/:wiId/acknowledge",
+      "authority": "person",
+      "idempotent": true,
+      "request": "step_acknowledge",
+      "responses": {
+        "200": "step_acknowledged"
       }
     }
   ],
@@ -283,6 +348,20 @@
         "status": "required string",
         "from_status": "optional string",
         "position": "optional integer"
+      }
+    },
+    "consumption_report": {
+      "fields": {
+        "material_code": "optional string",
+        "material_lot": "optional string",
+        "quantity": "required number",
+        "unit": "required string",
+        "disposition": "optional string"
+      }
+    },
+    "step_acknowledge": {
+      "fields": {
+        "step_number": "required integer"
       }
     }
   }

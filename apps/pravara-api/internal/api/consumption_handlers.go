@@ -251,13 +251,28 @@ func (h *ConsumptionHandler) Report(c *gin.Context) {
 		return
 	}
 	if !created {
-		c.JSON(http.StatusConflict, gin.H{"error": "already_recorded",
-			"message":     "an operator actual for this job and material is already recorded; correct it instead",
-			"consumption": fact, "correct_with": correctionPath(h.correctionTarget(c, fact))})
+		c.JSON(http.StatusConflict, ConsumptionAlreadyRecordedResponse{Error: "already_recorded",
+			Message:     "an operator actual for this job and material is already recorded; correct it instead",
+			Consumption: fact, CorrectWith: correctionPath(h.correctionTarget(c, fact))})
 		return
 	}
 	if moves == nil {
 		moves = []repositories.InventoryTransaction{}
 	}
-	c.JSON(http.StatusCreated, gin.H{"consumption": fact, "stock_movements": moves})
+	c.JSON(http.StatusCreated, ConsumptionReportResponse{Consumption: fact, StockMovements: moves})
+}
+
+// ConsumptionReportResponse is the 201 of POST /v1/tasks/:id/consumption.
+type ConsumptionReportResponse struct {
+	Consumption    *repositories.JobConsumption        `json:"consumption"`
+	StockMovements []repositories.InventoryTransaction `json:"stock_movements"`
+}
+
+// ConsumptionAlreadyRecordedResponse is its 409: the stored actual and the
+// route that corrects it.
+type ConsumptionAlreadyRecordedResponse struct {
+	Error       string                       `json:"error"`
+	Message     string                       `json:"message"`
+	Consumption *repositories.JobConsumption `json:"consumption"`
+	CorrectWith string                       `json:"correct_with"`
 }

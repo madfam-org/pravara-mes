@@ -66,6 +66,42 @@ unaffected. The answer is `{"message", "status", "kanban_position",
 "previous_status"}`. No transition table: which moves a terminal offers is
 the terminal's business. Pravara's clock dates the move (ruling PV-5).
 
+## `Idempotency-Key` on the terminal's writes
+
+A terminal delivers each record at least once, so its writes honour an
+`Idempotency-Key` request header (ruling PV-4) with the semantics receipts
+already have for their `idempotency_key` body field. The routes are
+`IdempotentWriteRoutes` (`internal/api/route_scopes.go`):
+`POST /v1/tasks/:id/move`, `POST /v1/tasks/:id/consumption` and
+`POST /v1/tasks/:id/work-instructions/:wiId/acknowledge`.
+
+| Request | Answer |
+|---|---|
+| No header | The write runs, as it always has |
+| First use of a key | The write runs. An answer below 400 is stored with a fingerprint of the method, path, query and canonical JSON body |
+| Same key, same request | The stored status, content type and body again, with `Idempotent-Replayed: true`. Nothing runs twice |
+| Same key, another request | **409** `idempotency_key_reused` |
+| The write answered 400 or more | Nothing is stored; the key stays free and the request may be retried |
+| A key that is not 1-100 printable ASCII characters, or two keys | **400** `invalid_idempotency_key` |
+
+- **Scope.** A key belongs to the tenant and to the client: the OAuth client
+  the token was issued to (a terminal's device), else the caller (a person's
+  own subject, an API key). Two clients never share a key; the operators of
+  one device share the device's keys.
+- **Atomic.** The key is claimed inside the request's transaction before the
+  write runs, and its answer stored before that transaction commits; a
+  concurrent request with the same key waits, then gets the stored answer.
+- **Retention.** `PRAVARA_IDEMPOTENCY_RETENTION_DAYS` (default **35**, a
+  placeholder spanning a month end until the terminal's outbox limits are
+  measured). An older key counts as unused; expired rows are deleted by
+  later requests of the same tenant.
+- **Retry rule for the terminal.** A 5xx, a 429 or no answer: deliver again
+  with the same key. Any other 4xx is final: the terminal keeps the record
+  for a person.
+- **Table.** `idempotency_keys`, migration 037 (tenant-scoped, forced
+  row-level security). Apply it before the build that embeds it rolls out
+  (`docs/operations/schema-guard.md`).
+
 ## Not built yet
 
 - The operator's token as a third class of caller (RFC 0064 §9 item 2): it
@@ -75,3 +111,5 @@ the terminal's business. Pravara's clock dates the move (ruling PV-5).
   write from a terminal (§9 item 5).
 - Late delivery of an act recorded while its operator's token expired
   (ruling PV-2, second step).
+- The record's sequence number kept beside its key, which comes with late
+  delivery.
