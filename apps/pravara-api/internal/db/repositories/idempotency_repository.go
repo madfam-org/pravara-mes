@@ -42,7 +42,9 @@ const idempotencySweepBatch = 100
 // another transaction holds an uncommitted claim on the same key, Claim
 // waits for it to end.
 func (r *IdempotencyRepository) Claim(ctx context.Context, client, key, route, fingerprint string, notBefore time.Time) (*IdempotencyRecord, error) {
-	// Expired rows of this tenant, this key's first, a bounded batch at a time.
+	// Expired rows of this tenant, this key's first, a bounded batch at a
+	// time. Rows another request is already deleting are skipped, so two
+	// requests never wait on each other here.
 	if _, err := r.db.ExecContext(ctx, `
 		DELETE FROM idempotency_keys
 		WHERE `+tenantMatch+` AND created_at < $1
@@ -50,7 +52,8 @@ func (r *IdempotencyRepository) Claim(ctx context.Context, client, key, route, f
 		      SELECT client, idempotency_key FROM idempotency_keys
 		      WHERE `+tenantMatch+` AND created_at < $1
 		      ORDER BY (client = $2 AND idempotency_key = $3) DESC, created_at
-		      LIMIT $4)`,
+		      LIMIT $4
+		      FOR UPDATE SKIP LOCKED)`,
 		notBefore, client, key, idempotencySweepBatch); err != nil {
 		return nil, fmt.Errorf("delete expired idempotency keys: %w", err)
 	}

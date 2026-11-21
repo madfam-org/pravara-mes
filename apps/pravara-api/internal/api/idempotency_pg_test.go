@@ -149,3 +149,37 @@ func TestIdempotencyKeyOpensNothingAgainstPostgres(t *testing.T) {
 		map[string]any{"status": "in_progress"})
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 }
+
+// A key older than the retention (35 days by default) counts as unused, and
+// the claim deletes expired rows of its tenant.
+func TestIdempotencyKeyExpiresAgainstPostgres(t *testing.T) {
+	rig := newScopeRig(t)
+	c := rig.baseClaims(uuid.NewString())
+	c["type"] = "access"
+	c["client_id"] = "jnc_terminal_test"
+	c["roles"] = []string{testRoleApp + ":operator"}
+	operator := rig.sign(t, c, rig.key)
+
+	const key = "01JDF3Q8Z5X7K2M4N6P8R0T2VB"
+	for _, k := range []string{key, "01JDF3Q8Z5X7K2M4N6P8R0T2VC"} {
+		_, err := rig.sqlDB.Exec(`INSERT INTO idempotency_keys (tenant_id, client, idempotency_key, route, request_sha256,
+			response_status, response_content_type, response_body, created_at)
+			VALUES ($1, 'client:jnc_terminal_test', $2, '/v1/tasks/:id/move', repeat('0', 64), 200, 'application/json', '{}',
+			NOW() - INTERVAL '40 days')`, rig.tenantID, k)
+		require.NoError(t, err)
+	}
+	var taskID uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, title, status) VALUES ($1, 'Old key', 'queued') RETURNING id`,
+		rig.tenantID).Scan(&taskID))
+
+	w := rig.doWithKey(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", operator, key,
+		map[string]any{"status": "in_progress", "from_status": "queued"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Empty(t, w.Header().Get(middleware.IdempotentReplayedHeader), "an expired key is not replayed")
+
+	var fresh, expired int
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT count(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day'),
+		count(*) FILTER (WHERE created_at < NOW() - INTERVAL '35 days') FROM idempotency_keys`).Scan(&fresh, &expired))
+	assert.Equal(t, 1, fresh, "the key now holds this request")
+	assert.Zero(t, expired, "the tenant's expired rows were deleted")
+}
