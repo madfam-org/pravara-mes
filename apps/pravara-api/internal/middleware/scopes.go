@@ -24,6 +24,12 @@ const (
 	// ScopeCogsRead: the cost ledger's reads (RFC 0051 M2): job consumption
 	// quantities over HTTP and the native MCP's read tools (POST /mcp).
 	ScopeCogsRead = "pravara-cogs:read"
+	// ScopeTerminal: a shop-floor terminal's own device token (RFC 0064,
+	// ruling PV-10). It opens the terminal's reads and nothing else: orders,
+	// tasks, a task's work instructions, a lot looked up by its number and
+	// the event history. It never opens a write: an operator's act from a
+	// terminal always carries a person's authority (ruling PV-1).
+	ScopeTerminal = "pravara-mes:terminal"
 
 	// ScopeWildcard grants every scope. API keys only: it is never honoured
 	// on a Janua token.
@@ -37,9 +43,10 @@ const (
 )
 
 // MachineScopes are the scopes a Janua machine token may carry for this API.
-var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead, ScopeCogsRead}
+var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead, ScopeCogsRead, ScopeTerminal}
 
-// APIKeyScopes are the scopes an API key may be issued with.
+// APIKeyScopes are the scopes an API key may be issued with. ScopeTerminal is
+// not one of them: it reaches a terminal only on its Janua device token.
 var APIKeyScopes = []string{
 	ScopeJobs, ScopeNodes, ScopePassports, ScopeRead,
 	LegacyScopeReadEvents, LegacyScopeReadFeeds, LegacyScopeReadStatus,

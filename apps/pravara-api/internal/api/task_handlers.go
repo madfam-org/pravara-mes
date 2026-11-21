@@ -696,7 +696,11 @@ func (h *TaskHandler) GetKanbanBoard(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"columns": board,
-	})
+	c.JSON(http.StatusOK, KanbanBoardResponse{Columns: board})
+}
+
+// KanbanBoardResponse is the body of GET /v1/tasks/board: the tenant's
+// tasks keyed by status.
+type KanbanBoardResponse struct {
+	Columns map[types.TaskStatus][]types.Task `json:"columns"`
 }

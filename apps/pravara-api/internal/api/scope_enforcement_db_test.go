@@ -229,7 +229,7 @@ func TestScopeEnforcementAgainstPostgres(t *testing.T) {
 		{"machine read: events", http.MethodGet, "/v1/events", rig.machineToken(t, "pravara-mes:read", nil), nil, http.StatusOK},
 		{"machine legacy name on events", http.MethodGet, "/v1/events", rig.machineToken(t, "read:events", nil), nil, http.StatusForbidden},
 		{"machine nodes: machine registry", http.MethodGet, "/v1/machines", rig.machineToken(t, "pravara-mes:nodes", nil), nil, http.StatusOK},
-		{"machine all scopes: unlisted route", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:jobs pravara-mes:nodes pravara-mes:passports pravara-mes:read", nil), nil, http.StatusForbidden},
+		{"machine, every scope but the terminal's: task reads", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:jobs pravara-mes:nodes pravara-mes:passports pravara-mes:read", nil), nil, http.StatusForbidden},
 		{"machine on admin route", http.MethodGet, "/v1/api-keys", rig.machineToken(t, "pravara-mes:read", nil), nil, http.StatusForbidden},
 		{"machine scope as JSON array", http.MethodPost, "/v1/orders", rig.machineToken(t, "", func(c jwt.MapClaims) { c["scope"] = []string{"pravara-mes:jobs"} }), order, http.StatusCreated},
 		{"machine token_use only (partial markers)", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:read", func(c jwt.MapClaims) { delete(c, "actor_type"); c["sub"] = "x" }), nil, http.StatusForbidden},
@@ -250,7 +250,7 @@ func TestScopeEnforcementAgainstPostgres(t *testing.T) {
 		{"api key jobs: order intake", http.MethodPost, "/v1/orders", rig.apiKey(t, "pravara-mes:jobs"), order, http.StatusCreated},
 		{"api key legacy read:events", http.MethodGet, "/v1/events", rig.apiKey(t, "read:events"), nil, http.StatusOK},
 		{"api key legacy read:events: no intake", http.MethodPost, "/v1/orders", rig.apiKey(t, "read:events"), order, http.StatusForbidden},
-		{"api key read: unlisted route", http.MethodGet, "/v1/tasks", rig.apiKey(t, "pravara-mes:read"), nil, http.StatusForbidden},
+		{"api key read: task reads are the terminal's", http.MethodGet, "/v1/tasks", rig.apiKey(t, "pravara-mes:read"), nil, http.StatusForbidden},
 		{"api key wildcard: unlisted route", http.MethodGet, "/v1/tasks", rig.apiKey(t, "*"), nil, http.StatusOK},
 		{"no credentials", http.MethodGet, "/v1/orders", "", nil, http.StatusUnauthorized},
 	}

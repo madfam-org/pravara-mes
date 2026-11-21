@@ -634,11 +634,14 @@ func (h *OrderHandler) ListItems(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"order_id": orderID,
-		"items":    items,
-		"count":    len(items),
-	})
+	c.JSON(http.StatusOK, OrderItemsResponse{OrderID: orderID, Items: items, Count: len(items)})
+}
+
+// OrderItemsResponse is the body of GET /v1/orders/:id/items.
+type OrderItemsResponse struct {
+	OrderID uuid.UUID         `json:"order_id"`
+	Items   []types.OrderItem `json:"items"`
+	Count   int               `json:"count"`
 }
 
 // AddItem adds an item to an order.

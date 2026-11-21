@@ -1,0 +1,102 @@
+{
+  "contract": "pravara-mes.terminal",
+  "version": 1,
+  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. Field presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. Unknown fields may be added only by changing this file.",
+  "audience": "pravara-api",
+  "scopes": {
+    "device": "pravara-mes:terminal"
+  },
+  "reads": [
+    {"method": "GET", "path": "/v1/orders", "query": ["status", "priority", "from_date", "to_date", "limit", "offset"], "response": "order_list"},
+    {"method": "GET", "path": "/v1/orders/:id", "response": "order"},
+    {"method": "GET", "path": "/v1/orders/:id/items", "response": "order_items"},
+    {"method": "GET", "path": "/v1/tasks", "query": ["status", "order_id", "machine_id", "user_id", "limit", "offset"], "response": "task_list"},
+    {"method": "GET", "path": "/v1/tasks/board", "response": "task_board"},
+    {"method": "GET", "path": "/v1/tasks/:id", "response": "task"},
+    {"method": "GET", "path": "/v1/tasks/:id/work-instructions", "response": "task_work_instructions"},
+    {"method": "GET", "path": "/v1/quality/batches/lookup", "query": ["lot_number"], "response": "lot"},
+    {"method": "GET", "path": "/v1/events", "query": ["type", "types", "since", "until", "limit", "offset"], "response": "event_list"},
+    {"method": "GET", "path": "/v1/events/types", "response": "event_types"},
+    {"method": "GET", "path": "/v1/events/:id", "response": "event"}
+  ],
+  "shapes": {
+    "order_list": {
+      "fields": {"data": "always", "total": "always", "limit": "always", "offset": "always"},
+      "of": {"data": "order"}
+    },
+    "order": {
+      "fields": {
+        "id": "always", "tenant_id": "always", "external_id": "omitempty", "engagement_slug": "omitempty",
+        "customer_name": "always", "customer_email": "omitempty", "status": "always", "priority": "always",
+        "due_date": "omitempty", "total_amount": "omitempty", "currency": "always",
+        "shipping_address": "omitempty", "metadata": "omitempty", "created_at": "always", "updated_at": "always"
+      }
+    },
+    "order_items": {
+      "fields": {"order_id": "always", "items": "always", "count": "always"},
+      "of": {"items": "order_item"}
+    },
+    "order_item": {
+      "fields": {
+        "id": "always", "order_id": "always", "product_name": "always", "product_sku": "omitempty",
+        "quantity": "always", "unit_price": "omitempty", "specifications": "omitempty",
+        "cad_file_url": "omitempty", "created_at": "always"
+      }
+    },
+    "task_list": {
+      "fields": {"data": "always", "total": "always", "limit": "always", "offset": "always"},
+      "of": {"data": "task"}
+    },
+    "task_board": {
+      "fields": {"columns": "always"},
+      "of": {"columns": "task"}
+    },
+    "task": {
+      "fields": {
+        "id": "always", "tenant_id": "always", "order_id": "omitempty", "order_item_id": "omitempty",
+        "machine_id": "omitempty", "assigned_user_id": "omitempty", "title": "always",
+        "description": "omitempty", "status": "always", "priority": "always",
+        "estimated_minutes": "omitempty", "actual_minutes": "omitempty", "kanban_position": "always",
+        "started_at": "omitempty", "completed_at": "omitempty", "metadata": "omitempty",
+        "created_at": "always", "updated_at": "always"
+      }
+    },
+    "task_work_instructions": {
+      "fields": {"task_id": "always", "data": "always"},
+      "of": {"data": "task_work_instruction"}
+    },
+    "task_work_instruction": {
+      "fields": {
+        "id": "always", "tenant_id": "always", "task_id": "always", "work_instruction_id": "always",
+        "step_acknowledgements": "omitempty", "all_acknowledged": "always",
+        "created_at": "always", "updated_at": "always"
+      }
+    },
+    "lot": {
+      "fields": {
+        "id": "always", "lot_number": "always", "status": "always", "product_name": "always",
+        "product_code": "omitempty", "quantity": "always", "unit": "always", "expiry_date": "omitempty",
+        "inventory_item_id": "omitempty", "sku": "omitempty", "material_id": "omitempty",
+        "material_code": "omitempty"
+      }
+    },
+    "event_list": {
+      "fields": {"events": "always", "total": "always", "limit": "always", "offset": "always"},
+      "of": {"events": "event"}
+    },
+    "event_types": {
+      "fields": {"event_types": "always"},
+      "of": {"event_types": "event_type_count"}
+    },
+    "event_type_count": {
+      "fields": {"event_type": "always", "count": "always"}
+    },
+    "event": {
+      "fields": {
+        "id": "always", "tenant_id": "always", "event_type": "always", "channel_namespace": "always",
+        "payload": "always", "delivered": "always", "created_at": "always"
+      }
+    }
+  },
+  "writes": []
+}
