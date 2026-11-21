@@ -57,10 +57,16 @@ type terminalContract struct {
 			Status int    `json:"status"`
 			Error  string `json:"error"`
 		} `json:"other_request"`
-		FailedAnswer         string `json:"failed_answer"`
-		ReplayedHeader       string `json:"replayed_header"`
-		RetentionDaysDefault int    `json:"retention_days_default"`
-		Retry                string `json:"retry"`
+		FailedAnswer string `json:"failed_answer"`
+		Busy         struct {
+			Status            int    `json:"status"`
+			Error             string `json:"error"`
+			RetryAfterSeconds int    `json:"retry_after_seconds"`
+		} `json:"busy"`
+		OutsideTheTransaction string `json:"outside_the_transaction"`
+		ReplayedHeader        string `json:"replayed_header"`
+		RetentionDaysDefault  int    `json:"retention_days_default"`
+		Retry                 string `json:"retry"`
 	} `json:"idempotency"`
 	Writes []struct {
 		Method     string            `json:"method"`
@@ -225,6 +231,10 @@ func TestTerminalContractIdempotency(t *testing.T) {
 	assert.Equal(t, middleware.IdempotentReplayedHeader, c.Idempotency.ReplayedHeader)
 	assert.Equal(t, 409, c.Idempotency.OtherRequest.Status)
 	assert.Equal(t, "idempotency_key_reused", c.Idempotency.OtherRequest.Error)
+	assert.Equal(t, 503, c.Idempotency.Busy.Status)
+	assert.Equal(t, "idempotency_key_busy", c.Idempotency.Busy.Error)
+	assert.Equal(t, middleware.IdempotencyBusyRetryAfterSeconds, c.Idempotency.Busy.RetryAfterSeconds)
+	assert.NotEmpty(t, c.Idempotency.OutsideTheTransaction)
 	assert.Equal(t, config.DefaultIdempotencyRetentionDays, c.Idempotency.RetentionDaysDefault)
 	assert.Equal(t, middleware.DefaultIdempotencyRetention, time.Duration(c.Idempotency.RetentionDaysDefault)*24*time.Hour)
 }
