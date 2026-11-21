@@ -2,7 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
@@ -59,61 +65,35 @@ func TestCreateTaskRequest_Validation(t *testing.T) {
 	}
 }
 
+// The move's body as gin binds it: status required; from_status and
+// position optional, and a position, when sent, at least 1 (RFC 0064 §4.1).
 func TestMoveTaskRequest_Validation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	tests := []struct {
-		name     string
-		request  MoveTaskRequest
-		validPos bool
+		name  string
+		body  string
+		valid bool
 	}{
-		{
-			name: "valid move to backlog",
-			request: MoveTaskRequest{
-				Status:   "backlog",
-				Position: 1,
-			},
-			validPos: true,
-		},
-		{
-			name: "valid move to in_progress",
-			request: MoveTaskRequest{
-				Status:   "in_progress",
-				Position: 5,
-			},
-			validPos: true,
-		},
-		{
-			name: "invalid position zero",
-			request: MoveTaskRequest{
-				Status:   "queued",
-				Position: 0,
-			},
-			validPos: false,
-		},
-		{
-			name: "invalid negative position",
-			request: MoveTaskRequest{
-				Status:   "queued",
-				Position: -1,
-			},
-			validPos: false,
-		},
+		{"status and position, as callers always sent", `{"status":"backlog","position":1}`, true},
+		{"position further down", `{"status":"in_progress","position":5}`, true},
+		{"no position: end of the column", `{"status":"in_progress"}`, true},
+		{"from_status and no position", `{"status":"in_progress","from_status":"queued"}`, true},
+		{"from_status and position", `{"status":"completed","from_status":"in_progress","position":2}`, true},
+		{"no status", `{"position":1}`, false},
+		{"position zero", `{"status":"queued","position":0}`, false},
+		{"negative position", `{"status":"queued","position":-1}`, false},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := json.Marshal(tt.request)
-			if err != nil {
-				t.Fatalf("failed to marshal: %v", err)
-			}
-
-			var decoded MoveTaskRequest
-			if err := json.Unmarshal(data, &decoded); err != nil {
-				t.Fatalf("failed to unmarshal: %v", err)
-			}
-
-			validPosition := decoded.Position >= 1
-			if validPosition != tt.validPos {
-				t.Errorf("position validity: got %v, want %v", validPosition, tt.validPos)
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			var req MoveTaskRequest
+			err := c.ShouldBindJSON(&req)
+			if tt.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}

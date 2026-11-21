@@ -368,7 +368,7 @@ HMAC-SHA256 signature header.
 | POST | `/v1/tasks` | Create task |
 | GET | `/v1/tasks/:id` | Get task by ID |
 | PATCH | `/v1/tasks/:id` | Update task |
-| POST | `/v1/tasks/:id/move` | Move task (status/position) |
+| POST | `/v1/tasks/:id/move` | Move task: `status`; optional `from_status` (409 `status_conflict` with `current_status` when the task is elsewhere, nothing changes) and `position` (end of the target column when absent) |
 | POST | `/v1/tasks/:id/assign` | Assign task to user |
 | DELETE | `/v1/tasks/:id` | Delete task |
 | GET | `/v1/tasks/:id/commands` | Get command history for task |

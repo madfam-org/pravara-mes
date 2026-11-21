@@ -80,6 +80,21 @@ on its Janua device token, and an API-key row that carries it anyway gains
 nothing from it. People are unaffected (their roles govern them),
 and so are API keys holding the wildcard scope.
 
+## The task move (`POST /v1/tasks/:id/move`)
+
+A person's write (no machine scope opens it). Body:
+
+| Field | | |
+|---|---|---|
+| `status` | required | The status the task enters |
+| `from_status` | optional | The status the caller says the task leaves. The task's row is locked and, when it is in any other status, nothing changes and the answer is **409** `{"error": "status_conflict", "current_status": ...}`. A move delivered twice, or after someone moved the task at a desk, is refused instead of applied |
+| `position` | optional, at least 1 | The place in the target column. Absent, the task goes to the end of that column (a terminal does not know the board) |
+
+A caller that sends `status` and `position`, as every caller did before, is
+unaffected. The answer is `{"message", "status", "kanban_position",
+"previous_status"}`. No transition table: which moves a terminal offers is
+the terminal's business. Pravara's clock dates the move (ruling PV-5).
+
 ## Not built yet
 
 - The operator's token as a third class of caller (RFC 0064 §9 item 2): it
