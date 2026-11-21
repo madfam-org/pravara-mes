@@ -39,6 +39,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
 const (
@@ -99,6 +100,13 @@ func newScratchDatabase(t *testing.T) *sql.DB {
 
 func newScopeRig(t *testing.T) *scopeRig {
 	t.Helper()
+	return newScopeRigWith(t, nil)
+}
+
+// newScopeRigWith is newScopeRig with an event publisher, which also wires
+// the task automation (machine commands on a move into in_progress).
+func newScopeRigWith(t *testing.T, publisher *pubsub.Publisher) *scopeRig {
+	t.Helper()
 	sqlDB := newScratchDatabase(t)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -131,7 +139,7 @@ func newScopeRig(t *testing.T) *scopeRig {
 	// (the scratch database's owner) seeds and inspects rows.
 	app := &db.DB{DB: openAsApp(t, sqlDB)}
 	tdb := app.Tenant(log)
-	RegisterRoutesAll(router, app, cfg, log, nil, nil, RoutesDeps{
+	RegisterRoutesAll(router, app, cfg, log, publisher, nil, RoutesDeps{
 		APIKeyRepo: repositories.NewAPIKeyRepository(tdb),
 		OutboxRepo: repositories.NewOutboxRepository(tdb),
 	})

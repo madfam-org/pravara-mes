@@ -596,6 +596,7 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 
 	// Test moving task to different status
 	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Get current task
 	currentRows := sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
@@ -643,7 +644,8 @@ func TestTaskRepository_MoveTaskExpecting_Conflict(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = \$1 AND .* FOR UPDATE`).
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = \$1 AND .* FOR NO KEY UPDATE`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
 			AddRow(tenantID, types.TaskStatusInProgress, 1))
@@ -677,6 +679,7 @@ func TestTaskRepository_MoveTaskExpecting_EndOfColumn(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
@@ -720,6 +723,7 @@ func TestTaskRepository_MoveTaskExpecting_EndOfOwnColumn(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
@@ -757,6 +761,7 @@ func TestTaskRepository_MoveTaskExpecting_NotFound(t *testing.T) {
 	taskID := uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}))
