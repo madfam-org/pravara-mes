@@ -171,6 +171,10 @@ func (h *OrderHandler) List(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, TerminalOrderList{Data: terminalOrders(orders), Total: total, Limit: filter.Limit, Offset: filter.Offset})
+		return
+	}
 	c.JSON(http.StatusOK, ListResponse{
 		Data:   orders,
 		Total:  total,
@@ -219,6 +223,10 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, terminalOrder(*order))
+		return
+	}
 	c.JSON(http.StatusOK, order)
 }
 
@@ -634,6 +642,10 @@ func (h *OrderHandler) ListItems(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, TerminalOrderItemsResponse{OrderID: orderID, Items: terminalOrderItems(items), Count: len(items)})
+		return
+	}
 	c.JSON(http.StatusOK, OrderItemsResponse{OrderID: orderID, Items: items, Count: len(items)})
 }
 

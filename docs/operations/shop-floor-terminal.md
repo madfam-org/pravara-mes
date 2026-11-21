@@ -30,14 +30,25 @@ sends a terminal-only caller to every registered route):
 
 | Route | Notes |
 |---|---|
-| `GET /v1/orders`, `GET /v1/orders/:id`, `GET /v1/orders/:id/items` | Also open to `pravara-mes:read` and `pravara-mes:jobs`, as before |
+| `GET /v1/orders`, `GET /v1/orders/:id`, `GET /v1/orders/:id/items` | Also open to `pravara-mes:read` and `pravara-mes:jobs`, as before. A terminal-only caller gets the **narrow view** below |
 | `GET /v1/tasks`, `GET /v1/tasks/board`, `GET /v1/tasks/:id` | Terminal only: `pravara-mes:read` does not open them |
 | `GET /v1/tasks/:id/work-instructions` | Terminal only. The instructions attached to a task and which steps were acknowledged |
 | `GET /v1/quality/batches/lookup?lot_number=` | Terminal only. One lot by its exact number, with its stock item's SKU and registry material code when it is linked; 404 `lot_not_found` |
 | `GET /v1/events`, `GET /v1/events/types`, `GET /v1/events/:id` | Also open to `pravara-mes:read`. The terminal follows changes from the history (`since`, `types`), not from the live stream |
 
+**The terminal's order view** (owner ruling 2026-11-20: "Narrow the
+terminal's order view, no customer fields"). A caller holding
+`pravara-mes:terminal` and neither `pravara-mes:read` nor `pravara-mes:jobs`
+gets `TerminalOrder` and `TerminalOrderItem` (`internal/api/terminal_view.go`):
+an order's id, external id, status, priority, due date and times; an item's
+id, product name and SKU, quantity and specifications. No customer name or
+email, shipping address, engagement slug, amount, currency or metadata; no
+unit price or CAD file URL. Every other caller gets the full order as before.
+The event history is served as ruled (every event type).
+
 `pravara-mes:terminal` is not an API-key scope: it reaches a terminal only
-on its Janua device token. People are unaffected (their roles govern them),
+on its Janua device token, and an API-key row that carries it anyway gains
+nothing from it. People are unaffected (their roles govern them),
 and so are API keys holding the wildcard scope.
 
 ## Not built yet

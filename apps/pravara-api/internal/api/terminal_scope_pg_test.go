@@ -34,6 +34,9 @@ func TestTerminalDeviceTokenAgainstPostgres(t *testing.T) {
 		VALUES ($1, 'Terminal test', 'term-1') RETURNING id`, rig.tenantID).Scan(&orderID))
 	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, order_id, title, status)
 		VALUES ($1, $2, 'Print bracket', 'queued') RETURNING id`, rig.tenantID, orderID).Scan(&taskID))
+	_, err := rig.sqlDB.Exec(`INSERT INTO order_items (order_id, product_name, quantity, unit_price, cad_file_url)
+		VALUES ($1, 'Bracket', 2, 10.5, 'https://files.example.test/bracket.step')`, orderID)
+	require.NoError(t, err)
 	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO material_registry (tenant_id, code, name, category, base_unit)
 		VALUES ($1, 'FIL-PLA-BLK', 'PLA negro', 'filament', 'g') RETURNING id`, rig.tenantID).Scan(&materialID))
 	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO inventory_items (tenant_id, sku, name, unit, quantity_on_hand, material_id)
@@ -58,6 +61,19 @@ func TestTerminalDeviceTokenAgainstPostgres(t *testing.T) {
 		w := rig.do(http.MethodGet, path, device, nil)
 		assert.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
 	}
+
+	// Orders come in the terminal's narrow view: no customer fields.
+	for _, path := range []string{"/v1/orders", "/v1/orders/" + orderID.String(), "/v1/orders/" + orderID.String() + "/items"} {
+		w := rig.do(http.MethodGet, path, device, nil)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		for _, field := range []string{"customer_name", "customer_email", "shipping_address", "total_amount", "currency", "metadata", "unit_price", "cad_file_url"} {
+			assert.NotContains(t, w.Body.String(), `"`+field+`"`, "GET %s", path)
+		}
+		assert.NotContains(t, w.Body.String(), "Terminal test", "GET %s", path)
+	}
+	full := rig.do(http.MethodGet, "/v1/orders/"+orderID.String(), rig.machineToken(t, "pravara-mes:read", nil), nil)
+	require.Equal(t, http.StatusOK, full.Code, full.Body.String())
+	assert.Contains(t, full.Body.String(), `"customer_name":"Terminal test"`, "a pravara-mes:read caller is unchanged")
 
 	// The lot lookup answers the lot's stock item and registry material.
 	w := rig.do(http.MethodGet, "/v1/quality/batches/lookup?lot_number="+url.QueryEscape("LOT-TERM-0001"), device, nil)

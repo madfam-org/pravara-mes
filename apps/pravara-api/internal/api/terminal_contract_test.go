@@ -7,12 +7,18 @@ package api
 // removed or made optional on either side fails here.
 
 import (
+	"encoding"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,11 +64,11 @@ func loadTerminalContract(t *testing.T) terminalContract {
 // Pravara writes for it.
 func terminalShapeTypes() map[string]any {
 	return map[string]any{
-		"order_list":             ListResponse{},
-		"order":                  types.Order{},
-		"order_items":            OrderItemsResponse{},
-		"order_item":             types.OrderItem{},
-		"task_list":              ListResponse{},
+		"terminal_order_list":    TerminalOrderList{},
+		"terminal_order":         TerminalOrder{},
+		"terminal_order_items":   TerminalOrderItemsResponse{},
+		"terminal_order_item":    TerminalOrderItem{},
+		"task_list":              TaskListResponse{},
 		"task_board":             KanbanBoardResponse{},
 		"task":                   types.Task{},
 		"task_work_instructions": TaskWorkInstructionsResponse{},
@@ -75,8 +81,9 @@ func terminalShapeTypes() map[string]any {
 	}
 }
 
-// jsonFields returns a struct type's JSON field names with "always" or
-// "omitempty", following embedded structs the way encoding/json does.
+// jsonFields returns a struct type's JSON field names with "<presence>
+// <type>": presence "always" or "omitempty", type the JSON type (jsonType).
+// It follows embedded structs the way encoding/json does.
 func jsonFields(t reflect.Type) map[string]string {
 	out := map[string]string{}
 	for i := 0; i < t.NumField(); i++ {
@@ -101,9 +108,49 @@ func jsonFields(t reflect.Type) map[string]string {
 				presence = "omitempty"
 			}
 		}
-		out[name] = presence
+		out[name] = presence + " " + jsonType(f.Type)
 	}
 	return out
+}
+
+var (
+	jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+)
+
+// jsonType is the JSON type encoding/json writes for t: string, integer,
+// number, boolean, object, array, or any (raw JSON).
+func jsonType(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch {
+	case t == reflect.TypeOf(json.RawMessage{}):
+		return "any"
+	case t == reflect.TypeOf(time.Time{}):
+		return "string"
+	case t.Implements(jsonMarshalerType) || reflect.PointerTo(t).Implements(jsonMarshalerType):
+		return "any"
+	case t.Implements(textMarshalerType) || reflect.PointerTo(t).Implements(textMarshalerType):
+		return "string"
+	}
+	switch t.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Map, reflect.Struct:
+		return "object"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	default:
+		return "any"
+	}
 }
 
 func TestTerminalContractNamesThisAPI(t *testing.T) {
@@ -185,10 +232,86 @@ func TestTerminalContractNestedShapesMatchTheGoTypes(t *testing.T) {
 			for elem.Kind() == reflect.Slice || elem.Kind() == reflect.Map || elem.Kind() == reflect.Pointer {
 				elem = elem.Elem()
 			}
-			if elem.Kind() == reflect.Interface {
-				continue // ListResponse.Data: the handler decides; see the route tests
-			}
+			require.NotEqual(t, reflect.Interface, elem.Kind(), "shape %q: field %q must have a concrete element type", name, field)
 			assert.Equal(t, reflect.TypeOf(goTypes[nested]), elem, "shape %q: field %q holds %s, the contract says %q", name, field, elem, nested)
+		}
+	}
+}
+
+// terminalReadHandlers names the handler of each contract read, so the
+// query parameters the contract names can be checked against its source.
+var terminalReadHandlers = map[string]struct{ file, recv, fn string }{
+	"GET /v1/orders":                 {"order_handlers.go", "OrderHandler", "List"},
+	"GET /v1/tasks":                  {"task_handlers.go", "TaskHandler", "List"},
+	"GET /v1/quality/batches/lookup": {"quality_handlers.go", "QualityHandler", "LookupBatchLot"},
+	"GET /v1/events":                 {"event_history_handlers.go", "EventHistoryHandler", "ListEvents"},
+}
+
+// queryParamsRead returns the string literals a handler passes as the name
+// to c.Query, c.DefaultQuery, c.GetQuery or queryInt(c, ...).
+func queryParamsRead(t *testing.T, file, recv, fn string) map[string]bool {
+	t.Helper()
+	parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+	require.NoError(t, err)
+	out := map[string]bool{}
+	for _, decl := range parsed.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != fn || fd.Recv == nil || len(fd.Recv.List) != 1 {
+			continue
+		}
+		star, ok := fd.Recv.List[0].Type.(*ast.StarExpr)
+		if !ok || star.X.(*ast.Ident).Name != recv {
+			continue
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			var name string
+			var arg int
+			switch f := call.Fun.(type) {
+			case *ast.SelectorExpr:
+				name = f.Sel.Name
+			case *ast.Ident:
+				name, arg = f.Name, 1
+			}
+			switch name {
+			case "Query", "DefaultQuery", "GetQuery", "queryInt":
+			default:
+				return true
+			}
+			if name == "queryInt" && len(call.Args) < 2 {
+				return true
+			}
+			if lit, ok := call.Args[arg].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				v, err := strconv.Unquote(lit.Value)
+				require.NoError(t, err)
+				out[v] = true
+			}
+			return true
+		})
+		return out
+	}
+	t.Fatalf("handler %s.%s not found in %s", recv, fn, file)
+	return nil
+}
+
+// Every query parameter the contract names is one its route's handler reads.
+func TestTerminalContractQueryParametersAreRead(t *testing.T) {
+	c := loadTerminalContract(t)
+	for _, r := range c.Reads {
+		key := middleware.RouteKey(r.Method, r.Path)
+		if len(r.Query) == 0 {
+			continue
+		}
+		h, ok := terminalReadHandlers[key]
+		if !assert.True(t, ok, "%s names query parameters; add its handler to terminalReadHandlers", key) {
+			continue
+		}
+		read := queryParamsRead(t, h.file, h.recv, h.fn)
+		for _, q := range r.Query {
+			assert.True(t, read[q], "%s: the contract names query parameter %q, which %s.%s does not read", key, q, h.recv, h.fn)
 		}
 	}
 }

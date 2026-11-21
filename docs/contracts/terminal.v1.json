@@ -1,100 +1,252 @@
 {
   "contract": "pravara-mes.terminal",
   "version": 1,
-  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. Field presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. Unknown fields may be added only by changing this file.",
+  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. A field is '<presence> <type>'. Presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. Type is the JSON type: string, integer, number, boolean, object, array or any (raw JSON). A UUID or a time is a string. Unknown fields may be added only by changing this file.",
   "audience": "pravara-api",
   "scopes": {
     "device": "pravara-mes:terminal"
   },
   "reads": [
-    {"method": "GET", "path": "/v1/orders", "query": ["status", "priority", "from_date", "to_date", "limit", "offset"], "response": "order_list"},
-    {"method": "GET", "path": "/v1/orders/:id", "response": "order"},
-    {"method": "GET", "path": "/v1/orders/:id/items", "response": "order_items"},
-    {"method": "GET", "path": "/v1/tasks", "query": ["status", "order_id", "machine_id", "user_id", "limit", "offset"], "response": "task_list"},
-    {"method": "GET", "path": "/v1/tasks/board", "response": "task_board"},
-    {"method": "GET", "path": "/v1/tasks/:id", "response": "task"},
-    {"method": "GET", "path": "/v1/tasks/:id/work-instructions", "response": "task_work_instructions"},
-    {"method": "GET", "path": "/v1/quality/batches/lookup", "query": ["lot_number"], "response": "lot"},
-    {"method": "GET", "path": "/v1/events", "query": ["type", "types", "since", "until", "limit", "offset"], "response": "event_list"},
-    {"method": "GET", "path": "/v1/events/types", "response": "event_types"},
-    {"method": "GET", "path": "/v1/events/:id", "response": "event"}
+    {
+      "method": "GET",
+      "path": "/v1/orders",
+      "query": [
+        "status",
+        "priority",
+        "from_date",
+        "to_date",
+        "limit",
+        "offset"
+      ],
+      "response": "terminal_order_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/orders/:id",
+      "response": "terminal_order"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/orders/:id/items",
+      "response": "terminal_order_items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks",
+      "query": [
+        "status",
+        "order_id",
+        "machine_id",
+        "user_id",
+        "limit",
+        "offset"
+      ],
+      "response": "task_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/board",
+      "response": "task_board"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:id",
+      "response": "task"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:id/work-instructions",
+      "response": "task_work_instructions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quality/batches/lookup",
+      "query": [
+        "lot_number"
+      ],
+      "response": "lot"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events",
+      "query": [
+        "type",
+        "types",
+        "since",
+        "until",
+        "limit",
+        "offset"
+      ],
+      "response": "event_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events/types",
+      "response": "event_types"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events/:id",
+      "response": "event"
+    }
   ],
   "shapes": {
-    "order_list": {
-      "fields": {"data": "always", "total": "always", "limit": "always", "offset": "always"},
-      "of": {"data": "order"}
-    },
-    "order": {
+    "terminal_order_list": {
       "fields": {
-        "id": "always", "tenant_id": "always", "external_id": "omitempty", "engagement_slug": "omitempty",
-        "customer_name": "always", "customer_email": "omitempty", "status": "always", "priority": "always",
-        "due_date": "omitempty", "total_amount": "omitempty", "currency": "always",
-        "shipping_address": "omitempty", "metadata": "omitempty", "created_at": "always", "updated_at": "always"
+        "data": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "data": "terminal_order"
       }
     },
-    "order_items": {
-      "fields": {"order_id": "always", "items": "always", "count": "always"},
-      "of": {"items": "order_item"}
-    },
-    "order_item": {
+    "terminal_order": {
       "fields": {
-        "id": "always", "order_id": "always", "product_name": "always", "product_sku": "omitempty",
-        "quantity": "always", "unit_price": "omitempty", "specifications": "omitempty",
-        "cad_file_url": "omitempty", "created_at": "always"
+        "id": "always string",
+        "tenant_id": "always string",
+        "external_id": "omitempty string",
+        "status": "always string",
+        "priority": "always integer",
+        "due_date": "omitempty string",
+        "created_at": "always string",
+        "updated_at": "always string"
+      }
+    },
+    "terminal_order_items": {
+      "fields": {
+        "order_id": "always string",
+        "items": "always array",
+        "count": "always integer"
+      },
+      "of": {
+        "items": "terminal_order_item"
+      }
+    },
+    "terminal_order_item": {
+      "fields": {
+        "id": "always string",
+        "order_id": "always string",
+        "product_name": "always string",
+        "product_sku": "omitempty string",
+        "quantity": "always integer",
+        "specifications": "omitempty object",
+        "created_at": "always string"
       }
     },
     "task_list": {
-      "fields": {"data": "always", "total": "always", "limit": "always", "offset": "always"},
-      "of": {"data": "task"}
+      "fields": {
+        "data": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "data": "task"
+      }
     },
     "task_board": {
-      "fields": {"columns": "always"},
-      "of": {"columns": "task"}
+      "fields": {
+        "columns": "always object"
+      },
+      "of": {
+        "columns": "task"
+      }
     },
     "task": {
       "fields": {
-        "id": "always", "tenant_id": "always", "order_id": "omitempty", "order_item_id": "omitempty",
-        "machine_id": "omitempty", "assigned_user_id": "omitempty", "title": "always",
-        "description": "omitempty", "status": "always", "priority": "always",
-        "estimated_minutes": "omitempty", "actual_minutes": "omitempty", "kanban_position": "always",
-        "started_at": "omitempty", "completed_at": "omitempty", "metadata": "omitempty",
-        "created_at": "always", "updated_at": "always"
+        "id": "always string",
+        "tenant_id": "always string",
+        "order_id": "omitempty string",
+        "order_item_id": "omitempty string",
+        "machine_id": "omitempty string",
+        "assigned_user_id": "omitempty string",
+        "title": "always string",
+        "description": "omitempty string",
+        "status": "always string",
+        "priority": "always integer",
+        "estimated_minutes": "omitempty integer",
+        "actual_minutes": "omitempty integer",
+        "kanban_position": "always integer",
+        "started_at": "omitempty string",
+        "completed_at": "omitempty string",
+        "metadata": "omitempty object",
+        "created_at": "always string",
+        "updated_at": "always string"
       }
     },
     "task_work_instructions": {
-      "fields": {"task_id": "always", "data": "always"},
-      "of": {"data": "task_work_instruction"}
+      "fields": {
+        "task_id": "always string",
+        "data": "always array"
+      },
+      "of": {
+        "data": "task_work_instruction"
+      }
     },
     "task_work_instruction": {
       "fields": {
-        "id": "always", "tenant_id": "always", "task_id": "always", "work_instruction_id": "always",
-        "step_acknowledgements": "omitempty", "all_acknowledged": "always",
-        "created_at": "always", "updated_at": "always"
+        "id": "always string",
+        "tenant_id": "always string",
+        "task_id": "always string",
+        "work_instruction_id": "always string",
+        "step_acknowledgements": "omitempty any",
+        "all_acknowledged": "always boolean",
+        "created_at": "always string",
+        "updated_at": "always string"
       }
     },
     "lot": {
       "fields": {
-        "id": "always", "lot_number": "always", "status": "always", "product_name": "always",
-        "product_code": "omitempty", "quantity": "always", "unit": "always", "expiry_date": "omitempty",
-        "inventory_item_id": "omitempty", "sku": "omitempty", "material_id": "omitempty",
-        "material_code": "omitempty"
+        "id": "always string",
+        "lot_number": "always string",
+        "status": "always string",
+        "product_name": "always string",
+        "product_code": "omitempty string",
+        "quantity": "always number",
+        "unit": "always string",
+        "expiry_date": "omitempty string",
+        "inventory_item_id": "omitempty string",
+        "sku": "omitempty string",
+        "material_id": "omitempty string",
+        "material_code": "omitempty string"
       }
     },
     "event_list": {
-      "fields": {"events": "always", "total": "always", "limit": "always", "offset": "always"},
-      "of": {"events": "event"}
+      "fields": {
+        "events": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "events": "event"
+      }
     },
     "event_types": {
-      "fields": {"event_types": "always"},
-      "of": {"event_types": "event_type_count"}
+      "fields": {
+        "event_types": "always array"
+      },
+      "of": {
+        "event_types": "event_type_count"
+      }
     },
     "event_type_count": {
-      "fields": {"event_type": "always", "count": "always"}
+      "fields": {
+        "event_type": "always string",
+        "count": "always integer"
+      }
     },
     "event": {
       "fields": {
-        "id": "always", "tenant_id": "always", "event_type": "always", "channel_namespace": "always",
-        "payload": "always", "delivered": "always", "created_at": "always"
+        "id": "always string",
+        "tenant_id": "always string",
+        "event_type": "always string",
+        "channel_namespace": "always string",
+        "payload": "always any",
+        "delivered": "always boolean",
+        "created_at": "always string"
       }
     }
   },

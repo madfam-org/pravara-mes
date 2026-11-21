@@ -101,12 +101,25 @@ func (r ScopeRequirement) allows(caller Caller) bool {
 	case CallerServiceAccount:
 		return containsAny(caller.Scopes, r.AnyOf)
 	case CallerAPIKey:
-		return containsAny(caller.Scopes, []string{ScopeWildcard}) ||
-			containsAny(caller.Scopes, r.AnyOf) ||
-			containsAny(caller.Scopes, r.LegacyAPIKeyScopes)
+		// ScopeTerminal is never an API key's (IsValidAPIKeyScope refuses
+		// it); a key row that carries it anyway gains nothing from it.
+		held := withoutScope(caller.Scopes, ScopeTerminal)
+		return containsAny(held, []string{ScopeWildcard}) ||
+			containsAny(held, r.AnyOf) ||
+			containsAny(held, r.LegacyAPIKeyScopes)
 	default:
 		return false
 	}
+}
+
+func withoutScope(scopes []string, drop string) []string {
+	out := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		if s != drop {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func containsAny(held, wanted []string) bool {

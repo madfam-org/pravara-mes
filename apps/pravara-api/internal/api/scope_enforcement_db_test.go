@@ -126,9 +126,14 @@ func newScopeRig(t *testing.T) *scopeRig {
 	router := gin.New()
 	log := logrus.New()
 	log.SetLevel(logrus.PanicLevel)
-	RegisterRoutesAll(router, &db.DB{DB: sqlDB}, cfg, log, nil, nil, RoutesDeps{
-		APIKeyRepo: repositories.NewAPIKeyRepository(sqlDB),
-		OutboxRepo: repositories.NewOutboxRepository(sqlDB),
+	// The API connects as pravara_app (NOSUPERUSER NOBYPASSRLS), as in
+	// production, so every request runs under row-level security; sqlDB
+	// (the scratch database's owner) seeds and inspects rows.
+	app := &db.DB{DB: openAsApp(t, sqlDB)}
+	tdb := app.Tenant(log)
+	RegisterRoutesAll(router, app, cfg, log, nil, nil, RoutesDeps{
+		APIKeyRepo: repositories.NewAPIKeyRepository(tdb),
+		OutboxRepo: repositories.NewOutboxRepository(tdb),
 	})
 	return &scopeRig{router: router, key: key, tenantID: tenantID, sqlDB: sqlDB}
 }
