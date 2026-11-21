@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,10 @@ import (
 // IdempotencyKeyHeader is the request header that makes a write safe to
 // deliver more than once (RFC 0064 §5, ruling PV-4).
 const IdempotencyKeyHeader = "Idempotency-Key"
+
+// IdempotencyBusyRetryAfterSeconds is the Retry-After of the 503 a request
+// gets while another request holds its key.
+const IdempotencyBusyRetryAfterSeconds = 1
 
 // IdempotentReplayedHeader marks an answer that is a stored one, sent again
 // for a repeated request: nothing ran.
@@ -55,7 +60,17 @@ type IdempotencyStore interface {
 //     runs twice;
 //   - the same key and another request: 409 idempotency_key_reused;
 //   - an answer of 400 or more stores nothing, so the key stays free and the
-//     request may be retried.
+//     request may be retried;
+//   - while another request holds the key for longer than
+//     repositories.IdempotencyLockTimeout: 503 idempotency_key_busy with
+//     Retry-After.
+//
+// "Nothing runs twice" covers what the write does in Pravara's database
+// transaction. What it does outside that transaction is not undone or
+// deduplicated by the key: a realtime publish, an automation command written
+// in its own transaction and its append to the dispatch stream happen once
+// per run of the write, and a run whose transaction then fails (a commit
+// error, a 5xx after them) may already have done them.
 //
 // A key belongs to the tenant and to the client: the OAuth client the token
 // was issued to (a terminal's device), else the caller itself. Two clients
@@ -107,6 +122,15 @@ func Idempotent(store IdempotencyStore, retention time.Duration, log *logrus.Log
 
 		ctx := c.Request.Context()
 		existing, err := store.Claim(ctx, client, key, c.FullPath(), fingerprint, time.Now().Add(-retention))
+		if errors.Is(err, repositories.ErrIdempotencyBusy) {
+			// Another delivery of this key is still running: retry shortly.
+			c.Header("Retry-After", strconv.Itoa(IdempotencyBusyRetryAfterSeconds))
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "idempotency_key_busy",
+				"message": "Another request with this Idempotency-Key is still running; retry",
+			})
+			return
+		}
 		if err != nil {
 			idempotencyFailure(c, log, err, "claim idempotency key")
 			return

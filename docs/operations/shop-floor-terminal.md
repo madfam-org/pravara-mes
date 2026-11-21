@@ -120,6 +120,7 @@ already have for their `idempotency_key` body field. The routes are
 | Same key, another request | **409** `idempotency_key_reused` |
 | The write answered 400 or more | Nothing is stored; the key stays free and the request may be retried |
 | A key that is not 1-100 printable ASCII characters, or two keys | **400** `invalid_idempotency_key` |
+| Another request holds the same key for more than 5 s | **503** `idempotency_key_busy` with `Retry-After: 1`; nothing ran |
 
 - **Scope.** A key belongs to the tenant and to the client: the OAuth client
   the token was issued to (a terminal's device), else the caller (a person's
@@ -128,6 +129,12 @@ already have for their `idempotency_key` body field. The routes are
 - **Atomic.** The key is claimed inside the request's transaction before the
   write runs, and its answer stored before that transaction commits; a
   concurrent request with the same key waits, then gets the stored answer.
+- **What the key covers.** "Nothing runs twice" is about what the write
+  does in Pravara's database transaction. What it does outside it is not
+  undone or deduplicated by the key: a realtime publish, an automation
+  command written in its own transaction and its append to the dispatch
+  stream happen once per run of the write, and a run whose transaction then
+  fails (a commit error, a 5xx after them) may already have done them.
 - **Retention.** `PRAVARA_IDEMPOTENCY_RETENTION_DAYS` (default **35**, a
   placeholder spanning a month end until the terminal's outbox limits are
   measured). An older key counts as unused; expired rows are deleted by

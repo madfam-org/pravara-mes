@@ -12,12 +12,14 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 )
 
@@ -182,4 +184,45 @@ func TestIdempotencyKeyExpiresAgainstPostgres(t *testing.T) {
 		count(*) FILTER (WHERE created_at < NOW() - INTERVAL '35 days') FROM idempotency_keys`).Scan(&fresh, &expired))
 	assert.Equal(t, 1, fresh, "the key now holds this request")
 	assert.Zero(t, expired, "the tenant's expired rows were deleted")
+}
+
+// A duplicate that finds the key held by an unfinished request waits at most
+// the lock timeout, then answers a retryable 503; once the holder ends, the
+// key works again.
+func TestIdempotencyKeyBusyAgainstPostgres(t *testing.T) {
+	rig := newScopeRig(t)
+	c := rig.baseClaims(uuid.NewString())
+	c["type"] = "access"
+	c["client_id"] = "jnc_terminal_test"
+	c["roles"] = []string{testRoleApp + ":operator"}
+	operator := rig.sign(t, c, rig.key)
+	var taskID uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, title, status) VALUES ($1, 'Held', 'queued') RETURNING id`,
+		rig.tenantID).Scan(&taskID))
+	const key = "01JDF3Q8Z5X7K2M4N6P8R0T2VD"
+
+	// Another request's claim, not yet committed.
+	holder, err := rig.sqlDB.Begin()
+	require.NoError(t, err)
+	_, err = holder.Exec(`INSERT INTO idempotency_keys (tenant_id, client, idempotency_key, route, request_sha256)
+		VALUES ($1, 'client:jnc_terminal_test', $2, '/v1/tasks/:id/move', repeat('0', 64))`, rig.tenantID, key)
+	require.NoError(t, err)
+
+	start := time.Now()
+	w := rig.doWithKey(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", operator, key,
+		map[string]any{"status": "in_progress", "from_status": "queued"})
+	waited := time.Since(start)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "idempotency_key_busy")
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
+	assert.Less(t, waited, repositories.IdempotencyLockTimeout+5*time.Second)
+	var status string
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT status FROM tasks WHERE id = $1`, taskID).Scan(&status))
+	assert.Equal(t, "queued", status, "the busy request moved nothing")
+
+	// The holder gives up; the retry runs.
+	require.NoError(t, holder.Rollback())
+	w = rig.doWithKey(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", operator, key,
+		map[string]any{"status": "in_progress", "from_status": "queued"})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }

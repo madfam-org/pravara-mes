@@ -264,3 +264,30 @@ func TestIdempotentOnGuardsOnlyTheListedRoutes(t *testing.T) {
 	assert.Equal(t, 1, runs["move"], "the listed route ran once")
 	assert.Equal(t, 2, runs["assign"], "an unlisted route ignores the header")
 }
+
+type busyStore struct{ *memoryIdempotencyStore }
+
+func (busyStore) Claim(context.Context, string, string, string, string, time.Time) (*repositories.IdempotencyRecord, error) {
+	return nil, repositories.ErrIdempotencyBusy
+}
+
+// A key another request still holds is a retryable 503, and the write does
+// not run.
+func TestIdempotentBusyKeyIsRetryable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyCaller), Caller{Kind: CallerUser, ID: "0b6b1f9e-0d7e-4c55-9a43-7c6f2b1d2e10"})
+		c.Next()
+	})
+	ran := false
+	router.POST("/v1/tasks/:id/move", Idempotent(busyStore{newMemoryIdempotencyStore()}, time.Hour, nil), func(c *gin.Context) { ran = true })
+	req := httptest.NewRequest(http.MethodPost, "/v1/tasks/7/move", strings.NewReader(`{}`))
+	req.Header.Set(IdempotencyKeyHeader, ulidKey)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
+	assert.Contains(t, w.Body.String(), `"idempotency_key_busy"`)
+	assert.False(t, ran)
+}
