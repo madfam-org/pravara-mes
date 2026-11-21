@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -1045,6 +1046,51 @@ func (h *QualityHandler) GetBatchLotByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, batchLot)
+}
+
+// lotNumberMaxLen is batch_lots.lot_number's width (migration 009).
+const lotNumberMaxLen = 100
+
+// LookupBatchLot finds one lot by its exact number.
+// @Summary Look up a lot by its number
+// @Description Returns the tenant's lot with exactly this lot_number: its identity, status and quantity, and, when the lot is linked to a stock item (migration 035), that item's SKU and its registry material code. A shop-floor terminal reads it with pravara-mes:terminal to learn which material a scanned lot is (RFC 0064 §4.2): the lot's tag names the lot and nothing else. Supplier, purchase-order and metadata fields are not returned; GET /v1/quality/batches/{id} has them for people.
+// @Tags quality
+// @Produce json
+// @Param lot_number query string true "The lot number, exact match (1-100 characters)"
+// @Success 200 {object} repositories.LotLookup "The lot"
+// @Failure 400 {object} map[string]string "invalid_lot_number"
+// @Failure 404 {object} map[string]string "lot_not_found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /quality/batches/lookup [get]
+func (h *QualityHandler) LookupBatchLot(c *gin.Context) {
+	lotNumber := c.Query("lot_number")
+	if strings.TrimSpace(lotNumber) == "" || len(lotNumber) > lotNumberMaxLen {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_lot_number",
+			"message": "lot_number is required (1-100 characters)",
+		})
+		return
+	}
+
+	lot, err := h.batchLotRepo.LookupByLotNumber(c.Request.Context(), lotNumber)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to look up batch lot")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to look up batch lot",
+		})
+		return
+	}
+	if lot == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "lot_not_found",
+			"message": "No lot has this number",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, lot)
 }
 
 // CreateBatchLot creates a new batch lot.
