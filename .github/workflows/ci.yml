@@ -96,6 +96,98 @@ jobs:
           DATABASE_URL: postgres://pravara:test@localhost:5432/pravara_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
 
+  go-postgres-tests:
+    name: PostgreSQL Tests (Go)
+    runs-on: ubuntu-24.04
+    # The tests gated on PRAVARA_TEST_DATABASE_URL (the *_pg_test.go and
+    # *_db_test.go suites): each creates a scratch database on this server,
+    # applies every migration, and serves requests as the NOSUPERUSER
+    # NOBYPASSRLS application role pravara_app, so row-level security is
+    # exercised. The set is discovered, not hand-kept: every test that skips
+    # with "PRAVARA_TEST_DATABASE_URL not set" when the variable is absent
+    # runs here with it set. The job fails if none ran or any skipped.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          POSTGRES_USER: pravara
+          # A throwaway value for a database that lives only for this job.
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: pravara_test
+          # The tests connect as the password-less role pravara_app.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: apps/pravara-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            apps/pravara-api/go.sum
+            apps/telemetry-worker/go.sum
+            packages/sdk-go/go.sum
+
+      - name: Find the PostgreSQL-gated tests
+        run: |
+          set -o pipefail
+          # Without the variable every gated test skips with this message;
+          # those top-level test names are the suite. -short as in go-checks.
+          env -u PRAVARA_TEST_DATABASE_URL go test ./internal/api/ ./internal/db/... -short -count=1 -json > "$RUNNER_TEMP/discover.json" || {
+            echo "::error::go test failed while listing the PostgreSQL-gated tests"; exit 1; }
+          jq -r 'select(.Action == "output" and .Test != null
+                        and (.Output | test("PRAVARA_TEST_DATABASE_URL not set")))
+                 | .Test | split("/")[0]' "$RUNNER_TEMP/discover.json" | sort -u > "$RUNNER_TEMP/gated.txt"
+          count=$(wc -l < "$RUNNER_TEMP/gated.txt")
+          echo "PostgreSQL-gated tests found: $count"
+          cat "$RUNNER_TEMP/gated.txt"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no PostgreSQL-gated tests found"; exit 1
+          fi
+
+      - name: Run them against PostgreSQL
+        env:
+          PRAVARA_TEST_DATABASE_URL: postgres://pravara@localhost:5432/pravara_test?sslmode=disable
+        run: |
+          pattern="^($(paste -sd'|' "$RUNNER_TEMP/gated.txt"))\$"
+          set +e
+          go test ./internal/api/ ./internal/db/... -count=1 -v -json -timeout 20m -run "$pattern" > "$RUNNER_TEMP/run.json"
+          rc=$?
+          set -e
+          jq -j 'select(.Action == "output") | .Output' "$RUNNER_TEMP/run.json"
+          top='select(.Test != null and (.Test | contains("/") | not))'
+          passed=$(jq -r "$top | select(.Action == \"pass\") | .Package + \" \" + .Test" "$RUNNER_TEMP/run.json" | sort -u | wc -l)
+          failed=$(jq -r "$top | select(.Action == \"fail\") | .Package + \" \" + .Test" "$RUNNER_TEMP/run.json" | sort -u | wc -l)
+          skipped=$(jq -r "$top | select(.Action == \"skip\") | .Package + \" \" + .Test" "$RUNNER_TEMP/run.json" | sort -u)
+          nskipped=$(printf '%s' "$skipped" | grep -c . || true)
+          expected=$(wc -l < "$RUNNER_TEMP/gated.txt")
+          {
+            echo "### PostgreSQL tests"
+            echo "Gated tests found: $expected. Passed: $passed. Failed: $failed. Skipped: $nskipped."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "passed=$passed failed=$failed skipped=$nskipped expected=$expected"
+          if [ "$nskipped" -gt 0 ]; then
+            echo "::error::PostgreSQL tests skipped with the database present:"; echo "$skipped"; exit 1
+          fi
+          if [ "$passed" -eq 0 ]; then
+            echo "::error::no PostgreSQL test ran"; exit 1
+          fi
+          if [ "$passed" -lt "$expected" ]; then
+            echo "::error::$expected gated tests found, $passed passed"; exit 1
+          fi
+          exit $rc
+
   ui-checks:
     name: Lint & Typecheck (UI)
     runs-on: ubuntu-24.04
