@@ -265,12 +265,26 @@ type TaskMove struct {
 // row is locked, and when its status differs the move is refused with
 // *TaskStatusConflictError and nothing changes (RFC 0064 §4.1, ruling PV-5).
 //
+// Moves on one tenant's board run one at a time (a transaction-scoped
+// advisory lock taken first), so two moves to the end of a column get
+// distinct positions. The task's row is locked FOR NO KEY UPDATE, not FOR
+// UPDATE: rows that reference the task (the durable machine command that
+// automation writes in its own transaction while this one is open) take FOR
+// KEY SHARE on it, which FOR UPDATE would block until this transaction ends,
+// and this transaction waits for that write.
+//
 // The operation is performed within a transaction to maintain data integrity.
 // Returns ErrTaskNotFound if the task is not found.
 func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition *int, expected *types.TaskStatus) (*TaskMove, error) {
 	var move *TaskMove
 	err := db.InTx(ctx, r.db, func(tx DBTX) error {
 		var err error
+
+		// One move at a time on this tenant's board.
+		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(
+			'pravara.task_board:' || COALESCE(current_setting('app.current_tenant_id', true), ''), 0))`); err != nil {
+			return fmt.Errorf("failed to lock the task board: %w", err)
+		}
 
 		// Get the current task, locked so the expected status holds until
 		// the move is written.
@@ -279,7 +293,7 @@ func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, ne
 		var tenantID uuid.UUID
 
 		err = tx.QueryRowContext(ctx,
-			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch+` FOR UPDATE`, id,
+			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch+` FOR NO KEY UPDATE`, id,
 		).Scan(&tenantID, &currentStatus, &currentPosition)
 		if err == sql.ErrNoRows {
 			return ErrTaskNotFound
