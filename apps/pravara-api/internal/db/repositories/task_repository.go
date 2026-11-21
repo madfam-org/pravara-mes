@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -225,30 +226,88 @@ func (r *TaskRepository) Update(ctx context.Context, task *types.Task) error {
 	return nil
 }
 
-// MoveTask updates the task's status and/or position for Kanban board operations.
-// This method handles all the position recalculations needed when moving a card:
+// MoveTask updates the task's status and position for Kanban board
+// operations. It is MoveTaskExpecting with a position and no expected status.
+func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition int) error {
+	_, err := r.MoveTaskExpecting(ctx, id, newStatus, &newPosition, nil)
+	return err
+}
+
+// ErrTaskNotFound is returned by MoveTaskExpecting for a task the tenant
+// does not have. Its text is the "task not found" callers already match.
+var ErrTaskNotFound = errors.New("task not found")
+
+// TaskStatusConflictError is returned by MoveTaskExpecting when the task is
+// not in the status the caller said it leaves. Nothing was changed.
+type TaskStatusConflictError struct {
+	Current types.TaskStatus
+}
+
+func (e *TaskStatusConflictError) Error() string {
+	return fmt.Sprintf("task is %s, not in the expected status", e.Current)
+}
+
+// TaskMove is what a move changed.
+type TaskMove struct {
+	OldStatus   types.TaskStatus
+	OldPosition int
+	NewStatus   types.TaskStatus
+	NewPosition int
+}
+
+// MoveTaskExpecting moves a task to newStatus and recalculates positions:
 //   - Moving between columns: shifts positions in both old and new columns
 //   - Moving within a column: shifts affected tasks up or down
 //
+// newPosition nil puts the task at the end of the target column (a caller
+// that does not know the board, such as a shop-floor terminal). expected,
+// when not nil, is the status the caller says the task leaves: the task's
+// row is locked, and when its status differs the move is refused with
+// *TaskStatusConflictError and nothing changes (RFC 0064 §4.1, ruling PV-5).
+//
 // The operation is performed within a transaction to maintain data integrity.
-// Returns an error if the task is not found.
-func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition int) error {
-	return db.InTx(ctx, r.db, func(tx DBTX) error {
+// Returns ErrTaskNotFound if the task is not found.
+func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, newStatus types.TaskStatus, newPosition *int, expected *types.TaskStatus) (*TaskMove, error) {
+	var move *TaskMove
+	err := db.InTx(ctx, r.db, func(tx DBTX) error {
 		var err error
 
-		// Get the current task
+		// Get the current task, locked so the expected status holds until
+		// the move is written.
 		var currentStatus types.TaskStatus
 		var currentPosition int
 		var tenantID uuid.UUID
 
 		err = tx.QueryRowContext(ctx,
-			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch, id,
+			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch+` FOR UPDATE`, id,
 		).Scan(&tenantID, &currentStatus, &currentPosition)
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("task not found")
+			return ErrTaskNotFound
 		}
 		if err != nil {
 			return fmt.Errorf("failed to get task: %w", err)
+		}
+		if expected != nil && currentStatus != *expected {
+			return &TaskStatusConflictError{Current: currentStatus}
+		}
+
+		position := 0
+		if newPosition != nil {
+			position = *newPosition
+		} else {
+			// The end of the target column. Within the same column the end
+			// is the last position, which the task may already hold.
+			var last int
+			if err = tx.QueryRowContext(ctx,
+				`SELECT COALESCE(MAX(kanban_position), 0) FROM tasks WHERE tenant_id = $1 AND status = $2`,
+				tenantID, newStatus,
+			).Scan(&last); err != nil {
+				return fmt.Errorf("failed to find the end of the column: %w", err)
+			}
+			position = last + 1
+			if currentStatus == newStatus {
+				position = last
+			}
 		}
 
 		// If moving to a different status column
@@ -267,28 +326,28 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 			_, err = tx.ExecContext(ctx,
 				`UPDATE tasks SET kanban_position = kanban_position + 1
 			 WHERE tenant_id = $1 AND status = $2 AND kanban_position >= $3`,
-				tenantID, newStatus, newPosition,
+				tenantID, newStatus, position,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to shift new column: %w", err)
 			}
 		} else {
 			// Moving within the same column
-			if newPosition > currentPosition {
+			if position > currentPosition {
 				// Moving down: shift items between current and new position up
 				_, err = tx.ExecContext(ctx,
 					`UPDATE tasks SET kanban_position = kanban_position - 1
 				 WHERE tenant_id = $1 AND status = $2
 				 AND kanban_position > $3 AND kanban_position <= $4`,
-					tenantID, currentStatus, currentPosition, newPosition,
+					tenantID, currentStatus, currentPosition, position,
 				)
-			} else if newPosition < currentPosition {
+			} else if position < currentPosition {
 				// Moving up: shift items between new and current position down
 				_, err = tx.ExecContext(ctx,
 					`UPDATE tasks SET kanban_position = kanban_position + 1
 				 WHERE tenant_id = $1 AND status = $2
 				 AND kanban_position >= $3 AND kanban_position < $4`,
-					tenantID, currentStatus, newPosition, currentPosition,
+					tenantID, currentStatus, position, currentPosition,
 				)
 			}
 			if err != nil {
@@ -299,14 +358,19 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 		// Update the task's status and position
 		_, err = tx.ExecContext(ctx,
 			`UPDATE tasks SET status = $2, kanban_position = $3 WHERE id = $1 AND `+tenantMatch,
-			id, newStatus, newPosition,
+			id, newStatus, position,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}
 
+		move = &TaskMove{OldStatus: currentStatus, OldPosition: currentPosition, NewStatus: newStatus, NewPosition: position}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return move, nil
 }
 
 // AssignTask assigns a task to a user and/or machine.
