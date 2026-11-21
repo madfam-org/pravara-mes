@@ -534,10 +534,19 @@ func (h *WorkInstructionHandler) AcknowledgeStep(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "Step acknowledged successfully",
-		"task_id":     taskID,
-		"wi_id":       wiID,
-		"step_number": req.StepNumber,
+	c.JSON(http.StatusOK, StepAcknowledgedResponse{
+		Message:    "Step acknowledged successfully",
+		TaskID:     taskID,
+		WIID:       wiID,
+		StepNumber: req.StepNumber,
 	})
+}
+
+// StepAcknowledgedResponse is the body of a successful POST
+// /v1/tasks/:id/work-instructions/:wiId/acknowledge.
+type StepAcknowledgedResponse struct {
+	Message    string    `json:"message"`
+	TaskID     uuid.UUID `json:"task_id"`
+	WIID       uuid.UUID `json:"wi_id"`
+	StepNumber int       `json:"step_number"`
 }

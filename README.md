@@ -155,6 +155,10 @@ PRAVARA_MCP_ENABLED=false
 PRAVARA_MCP_RATE_PER_MINUTE=60
 PRAVARA_MCP_BURST=10
 
+# Idempotency-Key on the terminal's writes: days a used key is remembered
+# (docs/operations/shop-floor-terminal.md)
+PRAVARA_IDEMPOTENCY_RETENTION_DAYS=35
+
 # Job consumption to Dhanam as quantity-only cost events: off by default;
 # only the owner turns it on (docs/operations/cost-events.md)
 PRAVARA_COST_EVENTS_ENABLED=false
@@ -368,7 +372,7 @@ HMAC-SHA256 signature header.
 | POST | `/v1/tasks` | Create task |
 | GET | `/v1/tasks/:id` | Get task by ID |
 | PATCH | `/v1/tasks/:id` | Update task |
-| POST | `/v1/tasks/:id/move` | Move task: `status`; optional `from_status` (409 `status_conflict` with `current_status` when the task is elsewhere, nothing changes) and `position` (end of the target column when absent) |
+| POST | `/v1/tasks/:id/move` | Move task (honours `Idempotency-Key`): `status`; optional `from_status` (409 `status_conflict` with `current_status` when the task is elsewhere, nothing changes) and `position` (end of the target column when absent) |
 | POST | `/v1/tasks/:id/assign` | Assign task to user |
 | DELETE | `/v1/tasks/:id` | Delete task |
 | GET | `/v1/tasks/:id/commands` | Get command history for task |

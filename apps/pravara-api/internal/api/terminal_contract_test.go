@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
@@ -46,13 +47,29 @@ type terminalContract struct {
 		Fields map[string]string `json:"fields"`
 		Of     map[string]string `json:"of"`
 	} `json:"shapes"`
+	Idempotency struct {
+		Header       string `json:"header"`
+		Key          string `json:"key"`
+		Scope        string `json:"scope"`
+		FirstUse     string `json:"first_use"`
+		SameRequest  string `json:"same_request"`
+		OtherRequest struct {
+			Status int    `json:"status"`
+			Error  string `json:"error"`
+		} `json:"other_request"`
+		FailedAnswer         string `json:"failed_answer"`
+		ReplayedHeader       string `json:"replayed_header"`
+		RetentionDaysDefault int    `json:"retention_days_default"`
+		Retry                string `json:"retry"`
+	} `json:"idempotency"`
 	Writes []struct {
-		Method    string            `json:"method"`
-		Path      string            `json:"path"`
-		Authority string            `json:"authority"`
-		Request   string            `json:"request"`
-		Responses map[string]string `json:"responses"`
-		Notes     string            `json:"notes"`
+		Method     string            `json:"method"`
+		Path       string            `json:"path"`
+		Authority  string            `json:"authority"`
+		Idempotent bool              `json:"idempotent"`
+		Request    string            `json:"request"`
+		Responses  map[string]string `json:"responses"`
+		Notes      string            `json:"notes"`
 	} `json:"writes"`
 	Requests map[string]struct {
 		Fields map[string]string `json:"fields"`
@@ -74,23 +91,26 @@ func loadTerminalContract(t *testing.T) terminalContract {
 // Pravara writes for it.
 func terminalShapeTypes() map[string]any {
 	return map[string]any{
-		"terminal_order_list":    TerminalOrderList{},
-		"terminal_order":         TerminalOrder{},
-		"terminal_order_items":   TerminalOrderItemsResponse{},
-		"terminal_order_item":    TerminalOrderItem{},
-		"task_list":              TaskListResponse{},
-		"task_board":             KanbanBoardResponse{},
-		"task":                   types.Task{},
-		"task_work_instructions": TaskWorkInstructionsResponse{},
-		"task_work_instruction":  repositories.TaskWorkInstruction{},
-		"lot":                    repositories.LotLookup{},
-		"event_list":             EventListResponse{},
-		"event_types":            EventTypesResponse{},
-		"event_type_count":       repositories.EventTypeCount{},
-		"event":                  repositories.OutboxEvent{},
-		"task_moved":             TaskMoveResponse{},
-		"task_status_conflict":   TaskStatusConflictResponse{},
-		"task_board_busy":        TaskBoardBusyResponse{},
+		"terminal_order_list":          TerminalOrderList{},
+		"terminal_order":               TerminalOrder{},
+		"terminal_order_items":         TerminalOrderItemsResponse{},
+		"terminal_order_item":          TerminalOrderItem{},
+		"task_list":                    TaskListResponse{},
+		"task_board":                   KanbanBoardResponse{},
+		"task":                         types.Task{},
+		"task_work_instructions":       TaskWorkInstructionsResponse{},
+		"task_work_instruction":        repositories.TaskWorkInstruction{},
+		"lot":                          repositories.LotLookup{},
+		"event_list":                   EventListResponse{},
+		"event_types":                  EventTypesResponse{},
+		"event_type_count":             repositories.EventTypeCount{},
+		"event":                        repositories.OutboxEvent{},
+		"task_moved":                   TaskMoveResponse{},
+		"task_status_conflict":         TaskStatusConflictResponse{},
+		"task_board_busy":              TaskBoardBusyResponse{},
+		"consumption_reported":         ConsumptionReportResponse{},
+		"consumption_already_recorded": ConsumptionAlreadyRecordedResponse{},
+		"step_acknowledged":            StepAcknowledgedResponse{},
 	}
 }
 
@@ -98,7 +118,9 @@ func terminalShapeTypes() map[string]any {
 // Go type the route binds.
 func terminalRequestTypes() map[string]any {
 	return map[string]any{
-		"task_move": MoveTaskRequest{},
+		"task_move":          MoveTaskRequest{},
+		"consumption_report": ConsumptionReportRequest{},
+		"step_acknowledge":   AcknowledgeStepRequest{},
 	}
 }
 
@@ -196,6 +218,17 @@ func jsonType(t reflect.Type) string {
 	default:
 		return "any"
 	}
+}
+
+// The idempotency rules the contract states are the middleware's.
+func TestTerminalContractIdempotency(t *testing.T) {
+	c := loadTerminalContract(t)
+	assert.Equal(t, middleware.IdempotencyKeyHeader, c.Idempotency.Header)
+	assert.Equal(t, middleware.IdempotentReplayedHeader, c.Idempotency.ReplayedHeader)
+	assert.Equal(t, 409, c.Idempotency.OtherRequest.Status)
+	assert.Equal(t, "idempotency_key_reused", c.Idempotency.OtherRequest.Error)
+	assert.Equal(t, config.DefaultIdempotencyRetentionDays, c.Idempotency.RetentionDaysDefault)
+	assert.Equal(t, middleware.DefaultIdempotencyRetention, time.Duration(c.Idempotency.RetentionDaysDefault)*24*time.Hour)
 }
 
 func TestTerminalContractNamesThisAPI(t *testing.T) {
@@ -406,5 +439,18 @@ func TestTerminalContractWrites(t *testing.T) {
 	for name := range c.Requests {
 		assert.True(t, used[name], "request %q is declared but no write uses it", name)
 	}
+
+	// The writes marked idempotent are exactly the routes that honour the
+	// header.
+	var idempotent []string
+	for _, w := range c.Writes {
+		if w.Idempotent {
+			idempotent = append(idempotent, middleware.RouteKey(w.Method, w.Path))
+		}
+	}
+	want := IdempotentWriteRoutes()
+	sort.Strings(idempotent)
+	sort.Strings(want)
+	assert.Equal(t, want, idempotent, "the contract's idempotent writes and IdempotentWriteRoutes differ")
 	assert.Len(t, requestTypes, len(c.Requests), "every Go request type in terminalRequestTypes is declared")
 }
