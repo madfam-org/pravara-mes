@@ -27,6 +27,7 @@ const terminalContractPath = "../../../../docs/contracts/terminal.v1.json"
 type terminalContract struct {
 	Contract string            `json:"contract"`
 	Version  int               `json:"version"`
+	About    string            `json:"about"`
 	Audience string            `json:"audience"`
 	Scopes   map[string]string `json:"scopes"`
 	Reads    []struct {
