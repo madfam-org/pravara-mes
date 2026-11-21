@@ -237,6 +237,10 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	v1 := router.Group("/v1")
 	v1.Use(authMiddleware)
 	v1.Use(middleware.EnforceRouteScopes(MachineRouteScopes(), log))
+	// The writes a shop-floor terminal delivers at least once honour an
+	// Idempotency-Key header (RFC 0064 §5, ruling PV-4): IdempotentWriteRoutes.
+	v1.Use(middleware.IdempotentOn(IdempotentWriteRoutes(),
+		repositories.NewIdempotencyRepository(tdb), cfg.Idempotency.Retention(), log))
 	{
 		// Orders endpoints
 		orders := v1.Group("/orders")
@@ -322,6 +326,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			batches := quality.Group("/batches")
 			{
 				batches.GET("", qualityHandler.ListBatchLots)
+				batches.GET("/lookup", qualityHandler.LookupBatchLot)
 				batches.POST("", qualityHandler.CreateBatchLot)
 				batches.GET("/:id", qualityHandler.GetBatchLotByID)
 				batches.PATCH("/:id", qualityHandler.UpdateBatchLot)

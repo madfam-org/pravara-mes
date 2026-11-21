@@ -1,0 +1,368 @@
+{
+  "contract": "pravara-mes.terminal",
+  "version": 1,
+  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. A field is '<presence> <type>'. Presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. In a request presence is 'required' or 'optional'. A write's authority 'person' means no machine scope opens it, the terminal's included (ruling PV-1): it is sent with a person's token. Type is the JSON type: string, integer, number, boolean, object, array or any (raw JSON). A UUID or a time is a string. Unknown fields may be added only by changing this file.",
+  "audience": "pravara-api",
+  "scopes": {
+    "device": "pravara-mes:terminal"
+  },
+  "reads": [
+    {
+      "method": "GET",
+      "path": "/v1/orders",
+      "query": [
+        "status",
+        "priority",
+        "from_date",
+        "to_date",
+        "limit",
+        "offset"
+      ],
+      "response": "terminal_order_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/orders/:id",
+      "response": "terminal_order"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/orders/:id/items",
+      "response": "terminal_order_items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks",
+      "query": [
+        "status",
+        "order_id",
+        "machine_id",
+        "user_id",
+        "limit",
+        "offset"
+      ],
+      "response": "task_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/board",
+      "response": "task_board"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:id",
+      "response": "task"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:id/work-instructions",
+      "response": "task_work_instructions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quality/batches/lookup",
+      "query": [
+        "lot_number"
+      ],
+      "response": "lot"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events",
+      "query": [
+        "type",
+        "types",
+        "since",
+        "until",
+        "limit",
+        "offset"
+      ],
+      "response": "event_list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events/types",
+      "response": "event_types"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events/:id",
+      "response": "event"
+    }
+  ],
+  "shapes": {
+    "terminal_order_list": {
+      "fields": {
+        "data": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "data": "terminal_order"
+      }
+    },
+    "terminal_order": {
+      "fields": {
+        "id": "always string",
+        "tenant_id": "always string",
+        "external_id": "omitempty string",
+        "status": "always string",
+        "priority": "always integer",
+        "due_date": "omitempty string",
+        "created_at": "always string",
+        "updated_at": "always string"
+      }
+    },
+    "terminal_order_items": {
+      "fields": {
+        "order_id": "always string",
+        "items": "always array",
+        "count": "always integer"
+      },
+      "of": {
+        "items": "terminal_order_item"
+      }
+    },
+    "terminal_order_item": {
+      "fields": {
+        "id": "always string",
+        "order_id": "always string",
+        "product_name": "always string",
+        "product_sku": "omitempty string",
+        "quantity": "always integer",
+        "specifications": "omitempty object",
+        "created_at": "always string"
+      }
+    },
+    "task_list": {
+      "fields": {
+        "data": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "data": "task"
+      }
+    },
+    "task_board": {
+      "fields": {
+        "columns": "always object"
+      },
+      "of": {
+        "columns": "task"
+      }
+    },
+    "task": {
+      "fields": {
+        "id": "always string",
+        "tenant_id": "always string",
+        "order_id": "omitempty string",
+        "order_item_id": "omitempty string",
+        "machine_id": "omitempty string",
+        "assigned_user_id": "omitempty string",
+        "title": "always string",
+        "description": "omitempty string",
+        "status": "always string",
+        "priority": "always integer",
+        "estimated_minutes": "omitempty integer",
+        "actual_minutes": "omitempty integer",
+        "kanban_position": "always integer",
+        "started_at": "omitempty string",
+        "completed_at": "omitempty string",
+        "metadata": "omitempty object",
+        "created_at": "always string",
+        "updated_at": "always string"
+      }
+    },
+    "task_work_instructions": {
+      "fields": {
+        "task_id": "always string",
+        "data": "always array"
+      },
+      "of": {
+        "data": "task_work_instruction"
+      }
+    },
+    "task_work_instruction": {
+      "fields": {
+        "id": "always string",
+        "tenant_id": "always string",
+        "task_id": "always string",
+        "work_instruction_id": "always string",
+        "step_acknowledgements": "omitempty any",
+        "all_acknowledged": "always boolean",
+        "created_at": "always string",
+        "updated_at": "always string"
+      }
+    },
+    "lot": {
+      "fields": {
+        "id": "always string",
+        "lot_number": "always string",
+        "status": "always string",
+        "product_name": "always string",
+        "product_code": "omitempty string",
+        "quantity": "always number",
+        "unit": "always string",
+        "expiry_date": "omitempty string",
+        "inventory_item_id": "omitempty string",
+        "sku": "omitempty string",
+        "material_id": "omitempty string",
+        "material_code": "omitempty string"
+      }
+    },
+    "event_list": {
+      "fields": {
+        "events": "always array",
+        "total": "always integer",
+        "limit": "always integer",
+        "offset": "always integer"
+      },
+      "of": {
+        "events": "event"
+      }
+    },
+    "event_types": {
+      "fields": {
+        "event_types": "always array"
+      },
+      "of": {
+        "event_types": "event_type_count"
+      }
+    },
+    "event_type_count": {
+      "fields": {
+        "event_type": "always string",
+        "count": "always integer"
+      }
+    },
+    "event": {
+      "fields": {
+        "id": "always string",
+        "tenant_id": "always string",
+        "event_type": "always string",
+        "channel_namespace": "always string",
+        "payload": "always any",
+        "delivered": "always boolean",
+        "created_at": "always string"
+      }
+    },
+    "task_moved": {
+      "fields": {
+        "message": "always string",
+        "status": "always string",
+        "kanban_position": "always integer",
+        "previous_status": "always string"
+      }
+    },
+    "task_status_conflict": {
+      "fields": {
+        "error": "always string",
+        "message": "always string",
+        "current_status": "always string"
+      }
+    },
+    "consumption_reported": {
+      "fields": {
+        "consumption": "always object",
+        "stock_movements": "always array"
+      }
+    },
+    "consumption_already_recorded": {
+      "fields": {
+        "error": "always string",
+        "message": "always string",
+        "consumption": "always object",
+        "correct_with": "always string"
+      }
+    },
+    "step_acknowledged": {
+      "fields": {
+        "message": "always string",
+        "task_id": "always string",
+        "wi_id": "always string",
+        "step_number": "always integer"
+      }
+    }
+  },
+  "idempotency": {
+    "header": "Idempotency-Key",
+    "key": "1-100 printable ASCII characters; the terminal sends its record identifier",
+    "scope": "the tenant and the client: the OAuth client the token was issued to (the device), else the caller",
+    "first_use": "the write runs; an answer below 400 is stored with a fingerprint of the method, path, query and canonical JSON body",
+    "same_request": "the stored status, content type and body again, with header Idempotent-Replayed: true; the write does not run again",
+    "other_request": {
+      "status": 409,
+      "error": "idempotency_key_reused"
+    },
+    "failed_answer": "an answer of 400 or more stores nothing; the key stays free",
+    "busy": {
+      "status": 503,
+      "error": "idempotency_key_busy",
+      "retry_after_seconds": 1
+    },
+    "outside_the_transaction": "what a write does outside Pravara's database transaction is not undone or deduplicated by the key: a realtime publish, an automation command and its dispatch-stream append happen once per run of the write, and a run whose transaction then fails may have done them",
+    "replayed_header": "Idempotent-Replayed",
+    "retention_days_default": 35,
+    "retry": "5xx, 429 or no answer: deliver again with the same key. Any other 4xx is final: keep the record for a person"
+  },
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/move",
+      "authority": "person",
+      "idempotent": true,
+      "request": "task_move",
+      "responses": {
+        "200": "task_moved",
+        "409": "task_status_conflict"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/consumption",
+      "authority": "person",
+      "idempotent": true,
+      "request": "consumption_report",
+      "responses": {
+        "201": "consumption_reported",
+        "409": "consumption_already_recorded"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/work-instructions/:wiId/acknowledge",
+      "authority": "person",
+      "idempotent": true,
+      "request": "step_acknowledge",
+      "responses": {
+        "200": "step_acknowledged"
+      }
+    }
+  ],
+  "requests": {
+    "task_move": {
+      "fields": {
+        "status": "required string",
+        "from_status": "optional string",
+        "position": "optional integer"
+      }
+    },
+    "consumption_report": {
+      "fields": {
+        "material_code": "optional string",
+        "material_lot": "optional string",
+        "quantity": "required number",
+        "unit": "required string",
+        "disposition": "optional string"
+      }
+    },
+    "step_acknowledge": {
+      "fields": {
+        "step_number": "required integer"
+      }
+    }
+  }
+}

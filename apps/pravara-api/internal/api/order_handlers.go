@@ -171,6 +171,10 @@ func (h *OrderHandler) List(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, TerminalOrderList{Data: terminalOrders(orders), Total: total, Limit: filter.Limit, Offset: filter.Offset})
+		return
+	}
 	c.JSON(http.StatusOK, ListResponse{
 		Data:   orders,
 		Total:  total,
@@ -219,6 +223,10 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, terminalOrder(*order))
+		return
+	}
 	c.JSON(http.StatusOK, order)
 }
 
@@ -634,11 +642,18 @@ func (h *OrderHandler) ListItems(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"order_id": orderID,
-		"items":    items,
-		"count":    len(items),
-	})
+	if isTerminalOnly(c) {
+		c.JSON(http.StatusOK, TerminalOrderItemsResponse{OrderID: orderID, Items: terminalOrderItems(items), Count: len(items)})
+		return
+	}
+	c.JSON(http.StatusOK, OrderItemsResponse{OrderID: orderID, Items: items, Count: len(items)})
+}
+
+// OrderItemsResponse is the body of GET /v1/orders/:id/items.
+type OrderItemsResponse struct {
+	OrderID uuid.UUID         `json:"order_id"`
+	Items   []types.OrderItem `json:"items"`
+	Count   int               `json:"count"`
 }
 
 // AddItem adds an item to an order.

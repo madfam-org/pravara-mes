@@ -24,6 +24,12 @@ const (
 	// ScopeCogsRead: the cost ledger's reads (RFC 0051 M2): job consumption
 	// quantities over HTTP and the native MCP's read tools (POST /mcp).
 	ScopeCogsRead = "pravara-cogs:read"
+	// ScopeTerminal: a shop-floor terminal's own device token (RFC 0064,
+	// ruling PV-10). It opens the terminal's reads and nothing else: orders,
+	// tasks, a task's work instructions, a lot looked up by its number and
+	// the event history. It never opens a write: an operator's act from a
+	// terminal always carries a person's authority (ruling PV-1).
+	ScopeTerminal = "pravara-mes:terminal"
 
 	// ScopeWildcard grants every scope. API keys only: it is never honoured
 	// on a Janua token.
@@ -37,9 +43,10 @@ const (
 )
 
 // MachineScopes are the scopes a Janua machine token may carry for this API.
-var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead, ScopeCogsRead}
+var MachineScopes = []string{ScopeJobs, ScopeNodes, ScopePassports, ScopeRead, ScopeCogsRead, ScopeTerminal}
 
-// APIKeyScopes are the scopes an API key may be issued with.
+// APIKeyScopes are the scopes an API key may be issued with. ScopeTerminal is
+// not one of them: it reaches a terminal only on its Janua device token.
 var APIKeyScopes = []string{
 	ScopeJobs, ScopeNodes, ScopePassports, ScopeRead,
 	LegacyScopeReadEvents, LegacyScopeReadFeeds, LegacyScopeReadStatus,
@@ -94,12 +101,25 @@ func (r ScopeRequirement) allows(caller Caller) bool {
 	case CallerServiceAccount:
 		return containsAny(caller.Scopes, r.AnyOf)
 	case CallerAPIKey:
-		return containsAny(caller.Scopes, []string{ScopeWildcard}) ||
-			containsAny(caller.Scopes, r.AnyOf) ||
-			containsAny(caller.Scopes, r.LegacyAPIKeyScopes)
+		// ScopeTerminal is never an API key's (IsValidAPIKeyScope refuses
+		// it); a key row that carries it anyway gains nothing from it.
+		held := withoutScope(caller.Scopes, ScopeTerminal)
+		return containsAny(held, []string{ScopeWildcard}) ||
+			containsAny(held, r.AnyOf) ||
+			containsAny(held, r.LegacyAPIKeyScopes)
 	default:
 		return false
 	}
+}
+
+func withoutScope(scopes []string, drop string) []string {
+	out := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		if s != drop {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func containsAny(held, wanted []string) bool {

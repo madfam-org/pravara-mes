@@ -31,17 +31,31 @@ func MachineRouteScopes() mw.RouteScopes {
 	events := read.WithLegacy(mw.LegacyScopeReadEvents)
 	feeds := read.WithLegacy(mw.LegacyScopeReadFeeds)
 	status := read.WithLegacy(mw.LegacyScopeReadStatus)
+	// The terminal's reads (RFC 0064, ruling PV-10): TerminalReadRoutes.
+	terminal := mw.Require(mw.ScopeTerminal)
+	ordersRead := mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeTerminal)
+	eventHistory := mw.Require(mw.ScopeRead, mw.ScopeTerminal).WithLegacy(mw.LegacyScopeReadEvents)
 
 	get, post, patch, put := http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut
 	k := mw.RouteKey
 
 	return mw.RouteScopes{
 		// Order and job intake.
-		k(get, "/v1/orders"):            jobsRead,
+		k(get, "/v1/orders"):            ordersRead,
 		k(post, "/v1/orders"):           jobs,
-		k(get, "/v1/orders/:id"):        jobsRead,
-		k(get, "/v1/orders/:id/items"):  jobsRead,
+		k(get, "/v1/orders/:id"):        ordersRead,
+		k(get, "/v1/orders/:id/items"):  ordersRead,
 		k(post, "/v1/orders/:id/items"): jobs,
+
+		// A shop-floor terminal's reads (RFC 0064, ruling PV-10), under
+		// pravara-mes:terminal only. Every task write, the consumption
+		// report and the step acknowledgement stay unlisted: an operator's
+		// act carries a person's authority, never a machine scope (PV-1).
+		k(get, "/v1/tasks"):                       terminal,
+		k(get, "/v1/tasks/board"):                 terminal,
+		k(get, "/v1/tasks/:id"):                   terminal,
+		k(get, "/v1/tasks/:id/work-instructions"): terminal,
+		k(get, "/v1/quality/batches/lookup"):      terminal,
 
 		// Design import from yantra4d.
 		k(post, "/v1/import/yantra4d"):        jobs,
@@ -104,9 +118,9 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(get, "/v1/jobs/consumption/coverage"): mw.Require(mw.ScopeRead, mw.ScopeJobs, mw.ScopeCogsRead),
 
 		// Event history and feeds.
-		k(get, "/v1/events"):                        events,
-		k(get, "/v1/events/types"):                  events,
-		k(get, "/v1/events/:id"):                    events,
+		k(get, "/v1/events"):                        eventHistory,
+		k(get, "/v1/events/types"):                  eventHistory,
+		k(get, "/v1/events/:id"):                    eventHistory,
 		k(get, "/v1/events/stream"):                 events,
 		k(get, "/v1/feeds/crm/orders"):              feeds,
 		k(get, "/v1/feeds/crm/orders/:id/timeline"): feeds,
@@ -135,6 +149,47 @@ func MachineRouteScopes() mw.RouteScopes {
 		k(get, "/v1/inventory/receipts/:id"):       read,
 		k(get, "/v1/inventory/counts"):             read,
 		k(get, "/v1/inventory/counts/:id"):         read,
+	}
+}
+
+// TerminalReadRoutes are exactly the routes pravara-mes:terminal opens (RFC
+// 0064, ruling PV-10): the order reads, the task reads, a task's work
+// instructions, the lot lookup by number and the event history. The live
+// event stream is not one of them: a terminal catches up from the history.
+// TestTerminalScopeOpensExactlyTheTerminalReads holds MachineRouteScopes to
+// this list in both directions, and the terminal contract
+// (docs/contracts/terminal.v1.json) lists the same routes.
+func TerminalReadRoutes() []string {
+	k := mw.RouteKey
+	get := http.MethodGet
+	return []string{
+		k(get, "/v1/orders"),
+		k(get, "/v1/orders/:id"),
+		k(get, "/v1/orders/:id/items"),
+		k(get, "/v1/tasks"),
+		k(get, "/v1/tasks/board"),
+		k(get, "/v1/tasks/:id"),
+		k(get, "/v1/tasks/:id/work-instructions"),
+		k(get, "/v1/quality/batches/lookup"),
+		k(get, "/v1/events"),
+		k(get, "/v1/events/types"),
+		k(get, "/v1/events/:id"),
+	}
+}
+
+// IdempotentWriteRoutes honour an Idempotency-Key header
+// (middleware.Idempotent; RFC 0064 §5, ruling PV-4): the writes a shop-floor
+// terminal delivers at least once, each on a person's authority. The
+// terminal contract (docs/contracts/terminal.v1.json) lists the same writes;
+// TestTerminalContractWrites holds the two together. Receipts keep their own
+// body field.
+func IdempotentWriteRoutes() []string {
+	k := mw.RouteKey
+	post := http.MethodPost
+	return []string{
+		k(post, "/v1/tasks/:id/move"),
+		k(post, "/v1/tasks/:id/consumption"),
+		k(post, "/v1/tasks/:id/work-instructions/:wiId/acknowledge"),
 	}
 }
 

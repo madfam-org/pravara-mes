@@ -37,6 +37,9 @@ type Config struct {
 	// CostEvents: job consumption to Dhanam as quantity-only cost events
 	// (cost_events.go). Off by default.
 	CostEvents CostEventsConfig `mapstructure:"cost_events"`
+	// Idempotency: the Idempotency-Key header on terminal writes
+	// (idempotency.go).
+	Idempotency IdempotencyConfig `mapstructure:"idempotency"`
 }
 
 // OrdersConfig holds order-intake automation settings.
@@ -169,6 +172,7 @@ func Load() (*Config, error) {
 	setEdgeDefaults(v)
 	setMCPDefaults(v)
 	setCostEventsDefaults(v)
+	setIdempotencyDefaults(v)
 
 	// Read from environment variables
 	v.SetEnvPrefix("PRAVARA")
@@ -182,6 +186,7 @@ func Load() (*Config, error) {
 	bindEdgeEnv(v)
 	bindMCPEnv(v)
 	bindCostEventsEnv(v)
+	bindIdempotencyEnv(v)
 
 	// Optionally read from config file
 	v.SetConfigName("config")
