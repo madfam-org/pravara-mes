@@ -46,7 +46,17 @@ type terminalContract struct {
 		Fields map[string]string `json:"fields"`
 		Of     map[string]string `json:"of"`
 	} `json:"shapes"`
-	Writes []json.RawMessage `json:"writes"`
+	Writes []struct {
+		Method    string            `json:"method"`
+		Path      string            `json:"path"`
+		Authority string            `json:"authority"`
+		Request   string            `json:"request"`
+		Responses map[string]string `json:"responses"`
+		Notes     string            `json:"notes"`
+	} `json:"writes"`
+	Requests map[string]struct {
+		Fields map[string]string `json:"fields"`
+	} `json:"requests"`
 }
 
 func loadTerminalContract(t *testing.T) terminalContract {
@@ -78,7 +88,42 @@ func terminalShapeTypes() map[string]any {
 		"event_types":            EventTypesResponse{},
 		"event_type_count":       repositories.EventTypeCount{},
 		"event":                  repositories.OutboxEvent{},
+		"task_moved":             TaskMoveResponse{},
+		"task_status_conflict":   TaskStatusConflictResponse{},
+		"task_board_busy":        TaskBoardBusyResponse{},
 	}
+}
+
+// terminalRequestTypes maps every request body the contract declares to the
+// Go type the route binds.
+func terminalRequestTypes() map[string]any {
+	return map[string]any{
+		"task_move": MoveTaskRequest{},
+	}
+}
+
+// requestFields returns a request type's JSON field names with "<presence>
+// <type>": presence "required" (its binding tag says so) or "optional".
+func requestFields(t reflect.Type) map[string]string {
+	out := map[string]string{}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if name == "-" || !f.IsExported() {
+			continue
+		}
+		if name == "" {
+			name = f.Name
+		}
+		presence := "optional"
+		for _, rule := range strings.Split(f.Tag.Get("binding"), ",") {
+			if rule == "required" {
+				presence = "required"
+			}
+		}
+		out[name] = presence + " " + jsonType(f.Type)
+	}
+	return out
 }
 
 // jsonFields returns a struct type's JSON field names with "<presence>
@@ -327,8 +372,39 @@ func fieldByJSONName(t reflect.Type, name string) (reflect.StructField, bool) {
 	return reflect.StructField{}, false
 }
 
-// Writes join the contract with the pull request that builds them, each
-// with its own test.
-func TestTerminalContractHasNoUntestedWrites(t *testing.T) {
-	assert.Empty(t, loadTerminalContract(t).Writes)
+// Every write is a registered route that no machine scope opens (PV-1); its
+// request body matches the Go type the route binds, and its answers are
+// declared shapes.
+func TestTerminalContractWrites(t *testing.T) {
+	c := loadTerminalContract(t)
+	registered := registeredV1Routes(t)
+	policy := MachineRouteScopes()
+	requestTypes := terminalRequestTypes()
+
+	used := map[string]bool{}
+	for _, w := range c.Writes {
+		key := middleware.RouteKey(w.Method, w.Path)
+		assert.True(t, registered[key], "contract write %s is not a registered route", key)
+		assert.Equal(t, "person", w.Authority, "%s: an operator's act carries a person's authority", key)
+		_, listed := policy[key]
+		assert.False(t, listed, "%s: no machine scope may open an operator's act (PV-1)", key)
+
+		goType, ok := requestTypes[w.Request]
+		if assert.True(t, ok, "%s: request %q has no Go type in terminalRequestTypes", key, w.Request) {
+			declared, ok := c.Requests[w.Request]
+			if assert.True(t, ok, "%s: request %q is not declared", key, w.Request) {
+				assert.Equal(t, requestFields(reflect.TypeOf(goType)), declared.Fields, "request %q drifted from its Go type", w.Request)
+			}
+			used[w.Request] = true
+		}
+		assert.NotEmpty(t, w.Responses, key)
+		for status, shape := range w.Responses {
+			_, ok := c.Shapes[shape]
+			assert.True(t, ok, "%s %s answers with undeclared shape %q", key, status, shape)
+		}
+	}
+	for name := range c.Requests {
+		assert.True(t, used[name], "request %q is declared but no write uses it", name)
+	}
+	assert.Len(t, requestTypes, len(c.Requests), "every Go request type in terminalRequestTypes is declared")
 }

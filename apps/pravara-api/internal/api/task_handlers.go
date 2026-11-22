@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -80,8 +81,54 @@ type UpdateTaskRequest struct {
 
 // MoveTaskRequest represents the request body for moving a task on the Kanban board.
 type MoveTaskRequest struct {
-	Status   string `json:"status" binding:"required"`
-	Position int    `json:"position" binding:"required,min=1"`
+	// Status is the status the task enters.
+	Status string `json:"status" binding:"required"`
+	// FromStatus, when present, is the status the caller says the task
+	// leaves. A task in any other status is not moved: 409 status_conflict
+	// with its current status (RFC 0064 §4.1, ruling PV-5). Absent, the move
+	// applies whatever the task's status is, as it always has.
+	FromStatus string `json:"from_status,omitempty"`
+	// Position is the 1-based board position in the target column. Absent,
+	// the task goes to the end of that column.
+	Position *int `json:"position,omitempty" binding:"omitempty,min=1"`
+}
+
+// TaskMoveResponse is the body of a successful POST /v1/tasks/:id/move.
+type TaskMoveResponse struct {
+	Message        string           `json:"message"`
+	Status         types.TaskStatus `json:"status"`
+	KanbanPosition int              `json:"kanban_position"`
+	PreviousStatus types.TaskStatus `json:"previous_status"`
+}
+
+// TaskStatusConflictResponse is the 409 of POST /v1/tasks/:id/move when the
+// task is not in the request's from_status. Nothing was changed.
+type TaskStatusConflictResponse struct {
+	Error         string           `json:"error"`
+	Message       string           `json:"message"`
+	CurrentStatus types.TaskStatus `json:"current_status"`
+}
+
+// TaskBoardBusyResponse is the 503 of POST /v1/tasks/:id/move when another
+// move held the board or the task for longer than
+// repositories.TaskBoardLockTimeout. Nothing was changed; retry after
+// Retry-After seconds.
+type TaskBoardBusyResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// TaskBoardBusyRetryAfterSeconds is the Retry-After of that 503.
+const TaskBoardBusyRetryAfterSeconds = 1
+
+// validTaskStatuses are the six board columns (migration 001).
+var validTaskStatuses = map[types.TaskStatus]bool{
+	types.TaskStatusBacklog:      true,
+	types.TaskStatusQueued:       true,
+	types.TaskStatusInProgress:   true,
+	types.TaskStatusQualityCheck: true,
+	types.TaskStatusCompleted:    true,
+	types.TaskStatusBlocked:      true,
 }
 
 // AssignTaskRequest represents the request body for assigning a task.
@@ -438,15 +485,17 @@ func (h *TaskHandler) Update(c *gin.Context) {
 
 // Move changes a task's status and/or position on the Kanban board.
 // @Summary Move task on Kanban board
-// @Description Changes task status and position, triggers automation for machine jobs
+// @Description Changes task status and position, triggers automation for machine jobs. from_status (optional) is the status the task leaves: when the task is in any other status nothing changes and the answer is 409 status_conflict with current_status. position (optional, at least 1) is the place in the target column; without it the task goes to the end of that column.
 // @Tags tasks
 // @Accept json
 // @Produce json
 // @Param id path string true "Task ID (UUID)"
-// @Param body body MoveTaskRequest true "Move request with target status and position"
-// @Success 200 {object} map[string]string "Task moved successfully"
-// @Failure 400 {object} map[string]string "Invalid status or position"
+// @Param body body MoveTaskRequest true "Move request: target status, optional from_status and position"
+// @Success 200 {object} TaskMoveResponse "Task moved"
+// @Failure 400 {object} map[string]string "validation_error, invalid_status or invalid_from_status"
 // @Failure 404 {object} map[string]string "Task not found"
+// @Failure 409 {object} TaskStatusConflictResponse "status_conflict: the task is not in from_status"
+// @Failure 503 {object} TaskBoardBusyResponse "task_board_busy: another move held the board for more than 5 s; retry"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /tasks/{id}/move [post]
@@ -470,23 +519,24 @@ func (h *TaskHandler) Move(c *gin.Context) {
 	}
 
 	newStatus := types.TaskStatus(req.Status)
-
-	// Validate status
-	validStatuses := map[types.TaskStatus]bool{
-		types.TaskStatusBacklog:      true,
-		types.TaskStatusQueued:       true,
-		types.TaskStatusInProgress:   true,
-		types.TaskStatusQualityCheck: true,
-		types.TaskStatusCompleted:    true,
-		types.TaskStatusBlocked:      true,
-	}
-
-	if !validStatuses[newStatus] {
+	if !validTaskStatuses[newStatus] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_status",
 			"message": "Invalid task status",
 		})
 		return
+	}
+	var expected *types.TaskStatus
+	if req.FromStatus != "" {
+		from := types.TaskStatus(req.FromStatus)
+		if !validTaskStatuses[from] {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid_from_status",
+				"message": "from_status is not a task status",
+			})
+			return
+		}
+		expected = &from
 	}
 
 	// Get task before move to capture old status for automation
@@ -507,23 +557,38 @@ func (h *TaskHandler) Move(c *gin.Context) {
 		return
 	}
 
-	oldStatus := task.Status
-
-	if err := h.repo.MoveTask(c.Request.Context(), id, newStatus, req.Position); err != nil {
-		if err.Error() == "task not found" {
+	move, err := h.repo.MoveTaskExpecting(c.Request.Context(), id, newStatus, req.Position, expected)
+	if err != nil {
+		var conflict *repositories.TaskStatusConflictError
+		switch {
+		case errors.Is(err, repositories.ErrTaskNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
 				"message": "Task not found",
 			})
-			return
+		case errors.Is(err, repositories.ErrTaskBoardBusy):
+			c.Header("Retry-After", strconv.Itoa(TaskBoardBusyRetryAfterSeconds))
+			c.JSON(http.StatusServiceUnavailable, TaskBoardBusyResponse{
+				Error:   "task_board_busy",
+				Message: "Another move of this board is still running; retry",
+			})
+		case errors.As(err, &conflict):
+			c.JSON(http.StatusConflict, TaskStatusConflictResponse{
+				Error:         "status_conflict",
+				Message:       "The task is not in from_status; nothing was changed",
+				CurrentStatus: conflict.Current,
+			})
+		default:
+			h.log.WithError(err).Error("Failed to move task")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal_error",
+				"message": "Failed to move task",
+			})
 		}
-		h.log.WithError(err).Error("Failed to move task")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "internal_error",
-			"message": "Failed to move task",
-		})
 		return
 	}
+	// The status the move left, read under the row lock.
+	oldStatus := move.OldStatus
 
 	// Trigger automation if status changed
 	if oldStatus != newStatus && h.automation != nil {
@@ -560,8 +625,8 @@ func (h *TaskHandler) Move(c *gin.Context) {
 			TaskTitle:   task.Title,
 			OldStatus:   string(oldStatus),
 			NewStatus:   string(newStatus),
-			OldPosition: task.KanbanPosition,
-			NewPosition: req.Position,
+			OldPosition: move.OldPosition,
+			NewPosition: move.NewPosition,
 			MovedBy:     userUUID,
 			MovedAt:     time.Now().UTC(),
 		})
@@ -570,11 +635,14 @@ func (h *TaskHandler) Move(c *gin.Context) {
 	h.log.WithFields(logrus.Fields{
 		"task_id":  id,
 		"status":   newStatus,
-		"position": req.Position,
+		"position": move.NewPosition,
 	}).Info("Task moved")
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Task moved successfully",
+	c.JSON(http.StatusOK, TaskMoveResponse{
+		Message:        "Task moved successfully",
+		Status:         move.NewStatus,
+		KanbanPosition: move.NewPosition,
+		PreviousStatus: move.OldStatus,
 	})
 }
 

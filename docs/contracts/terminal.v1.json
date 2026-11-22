@@ -1,7 +1,7 @@
 {
   "contract": "pravara-mes.terminal",
   "version": 1,
-  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. A field is '<presence> <type>'. Presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. Type is the JSON type: string, integer, number, boolean, object, array or any (raw JSON). A UUID or a time is a string. Unknown fields may be added only by changing this file.",
+  "about": "What a shop-floor terminal reads from and writes to Pravara MES (RFC 0064). The terminal's software is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/terminal_contract_test.go): a change on either side that the other does not follow is a failing test, not a log line. Change it only together with the terminal's side. A field is '<presence> <type>'. Presence: 'always' is present in every answer (it may be null when its type allows); 'omitempty' is left out when empty. In a request presence is 'required' or 'optional'. A write's authority 'person' means no machine scope opens it, the terminal's included (ruling PV-1): it is sent with a person's token. Type is the JSON type: string, integer, number, boolean, object, array or any (raw JSON). A UUID or a time is a string. Unknown fields may be added only by changing this file.",
   "audience": "pravara-api",
   "scopes": {
     "device": "pravara-mes:terminal"
@@ -248,7 +248,50 @@
         "delivered": "always boolean",
         "created_at": "always string"
       }
+    },
+    "task_moved": {
+      "fields": {
+        "message": "always string",
+        "status": "always string",
+        "kanban_position": "always integer",
+        "previous_status": "always string"
+      }
+    },
+    "task_status_conflict": {
+      "fields": {
+        "error": "always string",
+        "message": "always string",
+        "current_status": "always string"
+      }
+    },
+    "task_board_busy": {
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
     }
   },
-  "writes": []
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/v1/tasks/:id/move",
+      "authority": "person",
+      "request": "task_move",
+      "responses": {
+        "200": "task_moved",
+        "409": "task_status_conflict",
+        "503": "task_board_busy"
+      },
+      "notes": "503 task_board_busy (Retry-After 1, nothing changed) comes after at most 10 s of waiting: up to 5 s for the board lock, then up to 5 s for the task row."
+    }
+  ],
+  "requests": {
+    "task_move": {
+      "fields": {
+        "status": "required string",
+        "from_status": "optional string",
+        "position": "optional integer"
+      }
+    }
+  }
 }
