@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
@@ -237,6 +239,22 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 // does not have. Its text is the "task not found" callers already match.
 var ErrTaskNotFound = errors.New("task not found")
 
+// TaskBoardLockTimeout bounds how long a move waits for another move of the
+// same board (or of the same task) to finish.
+const TaskBoardLockTimeout = 5 * time.Second
+
+// ErrTaskBoardBusy: another move held the board or the task for longer than
+// TaskBoardLockTimeout. Nothing changed; the caller answers with a retryable
+// status.
+var ErrTaskBoardBusy = errors.New("the task board is busy with another move")
+
+// isLockTimeout reports PostgreSQL's lock_not_available (55P03), raised when
+// lock_timeout expires.
+func isLockTimeout(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && string(pqErr.Code) == "55P03"
+}
+
 // TaskStatusConflictError is returned by MoveTaskExpecting when the task is
 // not in the status the caller said it leaves. Nothing was changed.
 type TaskStatusConflictError struct {
@@ -266,7 +284,8 @@ type TaskMove struct {
 // *TaskStatusConflictError and nothing changes (RFC 0064 §4.1, ruling PV-5).
 //
 // Moves on one tenant's board run one at a time (a transaction-scoped
-// advisory lock taken first), so two moves to the end of a column get
+// advisory lock taken first; waiting for it, or for the task's row, is
+// bounded by TaskBoardLockTimeout, then ErrTaskBoardBusy), so two moves to the end of a column get
 // distinct positions. The task's row is locked FOR NO KEY UPDATE, not FOR
 // UPDATE: rows that reference the task (the durable machine command that
 // automation writes in its own transaction while this one is open) take FOR
@@ -280,9 +299,23 @@ func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, ne
 	err := db.InTx(ctx, r.db, func(tx DBTX) error {
 		var err error
 
+		// The two lock waits below are bounded by TaskBoardLockTimeout, for
+		// these statements only; the setting is put back afterwards.
+		var previousTimeout string
+		if err = tx.QueryRowContext(ctx, `SELECT current_setting('lock_timeout')`).Scan(&previousTimeout); err != nil {
+			return fmt.Errorf("failed to read lock_timeout: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `SELECT set_config('lock_timeout', $1, true)`,
+			fmt.Sprintf("%dms", TaskBoardLockTimeout.Milliseconds())); err != nil {
+			return fmt.Errorf("failed to set lock_timeout: %w", err)
+		}
+
 		// One move at a time on this tenant's board.
 		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(
 			'pravara.task_board:' || COALESCE(current_setting('app.current_tenant_id', true), ''), 0))`); err != nil {
+			if isLockTimeout(err) {
+				return ErrTaskBoardBusy
+			}
 			return fmt.Errorf("failed to lock the task board: %w", err)
 		}
 
@@ -295,6 +328,12 @@ func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, ne
 		err = tx.QueryRowContext(ctx,
 			`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = $1 AND `+tenantMatch+` FOR NO KEY UPDATE`, id,
 		).Scan(&tenantID, &currentStatus, &currentPosition)
+		if isLockTimeout(err) {
+			return ErrTaskBoardBusy
+		}
+		if _, rerr := tx.ExecContext(ctx, `SELECT set_config('lock_timeout', $1, true)`, previousTimeout); rerr != nil {
+			return fmt.Errorf("failed to restore lock_timeout: %w", rerr)
+		}
 		if err == sql.ErrNoRows {
 			return ErrTaskNotFound
 		}

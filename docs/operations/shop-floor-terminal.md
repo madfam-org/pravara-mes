@@ -90,6 +90,13 @@ A person's write (no machine scope opens it). Body:
 | `from_status` | optional | The status the caller says the task leaves. The task's row is locked and, when it is in any other status, nothing changes and the answer is **409** `{"error": "status_conflict", "current_status": ...}`. A move delivered twice, or after someone moved the task at a desk, is refused instead of applied |
 | `position` | optional, at least 1 | The place in the target column. Absent, the task goes to the end of that column (a terminal does not know the board) |
 
+Moves on one tenant's board run one at a time (an advisory lock), and the
+task's row is locked `FOR NO KEY UPDATE`. Waiting for either is bounded at
+5 s: then the answer is **503** `{"error": "task_board_busy"}` with
+`Retry-After: 1`, and nothing changed. Automation (a machine command when a
+machine-assigned task enters `in_progress`) still runs inside the move's
+request, so the lock is held until the response is written.
+
 A caller that sends `status` and `position`, as every caller did before, is
 unaffected. The answer is `{"message", "status", "kanban_position",
 "previous_status"}`. No transition table: which moves a terminal offers is

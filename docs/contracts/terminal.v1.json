@@ -263,6 +263,12 @@
         "message": "always string",
         "current_status": "always string"
       }
+    },
+    "task_board_busy": {
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
     }
   },
   "writes": [
@@ -273,7 +279,8 @@
       "request": "task_move",
       "responses": {
         "200": "task_moved",
-        "409": "task_status_conflict"
+        "409": "task_status_conflict",
+        "503": "task_board_busy"
       }
     }
   ],

@@ -58,7 +58,8 @@ func NewTaskCommandRepository(db DBTX) *TaskCommandRepository {
 // Parameters are marshaled to JSON for storage. Empty parameters default to {}.
 // issued_by references users(id), and a person signed in through Janua need
 // not have a users row (migrations 032-036 record such actors without that
-// reference): issued_by is stored only when the row exists, NULL otherwise,
+// reference): issued_by is stored only when that row exists in the command's
+// tenant, NULL otherwise,
 // so the command is never lost to the foreign key.
 // Returns an error if the insertion fails.
 func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) error {
@@ -66,7 +67,7 @@ func (r *TaskCommandRepository) Create(ctx context.Context, cmd *TaskCommand) er
 		INSERT INTO task_commands (
 			id, tenant_id, task_id, machine_id, command_id, command_type,
 			status, parameters, issued_by, issued_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT u.id FROM users u WHERE u.id = $9::uuid), $10)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT u.id FROM users u WHERE u.id = $9::uuid AND u.tenant_id = $2), $10)
 		RETURNING created_at, updated_at
 	`
 

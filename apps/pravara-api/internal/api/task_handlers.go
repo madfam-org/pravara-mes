@@ -109,6 +109,18 @@ type TaskStatusConflictResponse struct {
 	CurrentStatus types.TaskStatus `json:"current_status"`
 }
 
+// TaskBoardBusyResponse is the 503 of POST /v1/tasks/:id/move when another
+// move held the board or the task for longer than
+// repositories.TaskBoardLockTimeout. Nothing was changed; retry after
+// Retry-After seconds.
+type TaskBoardBusyResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// TaskBoardBusyRetryAfterSeconds is the Retry-After of that 503.
+const TaskBoardBusyRetryAfterSeconds = 1
+
 // validTaskStatuses are the six board columns (migration 001).
 var validTaskStatuses = map[types.TaskStatus]bool{
 	types.TaskStatusBacklog:      true,
@@ -483,6 +495,7 @@ func (h *TaskHandler) Update(c *gin.Context) {
 // @Failure 400 {object} map[string]string "validation_error, invalid_status or invalid_from_status"
 // @Failure 404 {object} map[string]string "Task not found"
 // @Failure 409 {object} TaskStatusConflictResponse "status_conflict: the task is not in from_status"
+// @Failure 503 {object} TaskBoardBusyResponse "task_board_busy: another move held the board for more than 5 s; retry"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /tasks/{id}/move [post]
@@ -552,6 +565,12 @@ func (h *TaskHandler) Move(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
 				"message": "Task not found",
+			})
+		case errors.Is(err, repositories.ErrTaskBoardBusy):
+			c.Header("Retry-After", strconv.Itoa(TaskBoardBusyRetryAfterSeconds))
+			c.JSON(http.StatusServiceUnavailable, TaskBoardBusyResponse{
+				Error:   "task_board_busy",
+				Message: "Another move of this board is still running; retry",
 			})
 		case errors.As(err, &conflict):
 			c.JSON(http.StatusConflict, TaskStatusConflictResponse{

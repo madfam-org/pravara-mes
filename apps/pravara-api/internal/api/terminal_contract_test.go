@@ -89,6 +89,7 @@ func terminalShapeTypes() map[string]any {
 		"event":                  repositories.OutboxEvent{},
 		"task_moved":             TaskMoveResponse{},
 		"task_status_conflict":   TaskStatusConflictResponse{},
+		"task_board_busy":        TaskBoardBusyResponse{},
 	}
 }
 

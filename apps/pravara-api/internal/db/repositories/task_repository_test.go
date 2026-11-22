@@ -10,6 +10,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -596,6 +597,8 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 
 	// Test moving task to different status
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Get current task
@@ -604,6 +607,7 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 	mock.ExpectQuery("SELECT tenant_id, status, kanban_position FROM tasks WHERE id").
 		WithArgs(taskID).
 		WillReturnRows(currentRows)
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Shift positions in old column
 	mock.ExpectExec("UPDATE tasks SET kanban_position = kanban_position - 1").
@@ -644,11 +648,14 @@ func TestTaskRepository_MoveTaskExpecting_Conflict(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = \$1 AND .* FOR NO KEY UPDATE`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
 			AddRow(tenantID, types.TaskStatusInProgress, 1))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
 	expected := types.TaskStatusQueued
@@ -679,11 +686,14 @@ func TestTaskRepository_MoveTaskExpecting_EndOfColumn(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
 			AddRow(tenantID, types.TaskStatusQueued, 2))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT COALESCE\(MAX\(kanban_position\), 0\) FROM tasks`).
 		WithArgs(tenantID, types.TaskStatusInProgress).
 		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(4))
@@ -723,11 +733,14 @@ func TestTaskRepository_MoveTaskExpecting_EndOfOwnColumn(t *testing.T) {
 	taskID, tenantID := uuid.New(), uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
 			AddRow(tenantID, types.TaskStatusQueued, 2))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT COALESCE\(MAX\(kanban_position\), 0\) FROM tasks`).
 		WithArgs(tenantID, types.TaskStatusQueued).
 		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(3))
@@ -761,10 +774,13 @@ func TestTaskRepository_MoveTaskExpecting_NotFound(t *testing.T) {
 	taskID := uuid.New()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
 		WithArgs(taskID).
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
 	if _, err := repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusQueued, nil, nil); !errors.Is(err, ErrTaskNotFound) {
@@ -838,6 +854,30 @@ func TestTaskRepository_GetKanbanBoard(t *testing.T) {
 		}
 	}
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// A move that cannot get the board within the lock timeout is refused as
+// busy, with nothing written.
+func TestTaskRepository_MoveTaskExpecting_BoardBusy(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnError(&pq.Error{Code: "55P03", Message: "canceling statement due to lock timeout"})
+	mock.ExpectRollback()
+
+	if _, err := repo.MoveTaskExpecting(context.Background(), uuid.New(), types.TaskStatusInProgress, nil, nil); !errors.Is(err, ErrTaskBoardBusy) {
+		t.Fatalf("want ErrTaskBoardBusy, got %v", err)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}

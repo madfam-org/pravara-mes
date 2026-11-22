@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
@@ -183,4 +184,33 @@ func TestTaskMoveConcurrentEndOfColumnAgainstPostgres(t *testing.T) {
 		got = append(got, p)
 	}
 	assert.Equal(t, []int{1, 2, 3, 4, 5}, got)
+}
+
+// While another move holds the board past the lock timeout, a move answers
+// a retryable 503 and changes nothing; once the board is free it runs.
+func TestTaskMoveBoardBusyAgainstPostgres(t *testing.T) {
+	rig := newScopeRig(t)
+	person := rig.userToken(t, "operator")
+	var taskID uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, title, status) VALUES ($1, 'Held board', 'queued') RETURNING id`,
+		rig.tenantID).Scan(&taskID))
+
+	holder, err := rig.sqlDB.Begin()
+	require.NoError(t, err)
+	_, err = holder.Exec(`SELECT pg_advisory_xact_lock(hashtextextended('pravara.task_board:' || $1::text, 0))`, rig.tenantID.String())
+	require.NoError(t, err)
+
+	start := time.Now()
+	w := rig.do(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", person, map[string]any{"status": "in_progress", "from_status": "queued"})
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "task_board_busy")
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
+	assert.Less(t, time.Since(start), repositories.TaskBoardLockTimeout+5*time.Second)
+	var status string
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT status FROM tasks WHERE id = $1`, taskID).Scan(&status))
+	assert.Equal(t, "queued", status)
+
+	require.NoError(t, holder.Rollback())
+	w = rig.do(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", person, map[string]any{"status": "in_progress", "from_status": "queued"})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
