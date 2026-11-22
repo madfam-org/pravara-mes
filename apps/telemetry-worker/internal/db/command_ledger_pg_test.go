@@ -199,6 +199,32 @@ func TestLedgerPG_MarkSentDoesNotOverwriteEarlyAck(t *testing.T) {
 	require.Equal(t, 1, attempts)
 }
 
+// The machine can report completion (or failure) before the dispatcher
+// records the publish: the attempt is still counted and the final status,
+// deadline and error stay as the answer left them. The command-channel e2e
+// test hit this race on its first CI run.
+func TestLedgerPG_MarkSentAfterAnEarlyFinalAnswerCountsTheAttempt(t *testing.T) {
+	db := openTestDB(t)
+	f := newFixture(t, db)
+	l := NewCommandLedgerWithScope(db, TxTenantScope{DB: db})
+
+	machineID := f.machine(t, "p4b", "o/s/a/l/p4b", "online")
+	for _, final := range []string{"completed", "failed", "timeout"} {
+		cmdID := f.command(t, machineID, nil, "home", final)
+		_, err := db.Exec(`UPDATE task_commands SET error_message = 'answered first', deadline_at = NULL WHERE command_id = $1`, cmdID)
+		require.NoError(t, err)
+		now := time.Now().UTC()
+		require.NoError(t, l.MarkSent(context.Background(), f.tenantID, cmdID, now, now.Add(time.Minute)))
+		status, attempts, msg := f.commandStatus(t, cmdID)
+		require.Equal(t, final, status)
+		require.Equal(t, 1, attempts, final)
+		require.Equal(t, "answered first", msg, final)
+		var deadlineSet bool
+		require.NoError(t, db.QueryRow(`SELECT deadline_at IS NOT NULL FROM task_commands WHERE command_id = $1`, cmdID).Scan(&deadlineSet))
+		require.False(t, deadlineSet, final)
+	}
+}
+
 func TestLedgerPG_ExpireOverdueTimesOutUnsentAndUnacked(t *testing.T) {
 	db := openTestDB(t)
 	f := newFixture(t, db)
