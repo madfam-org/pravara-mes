@@ -15,6 +15,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
 | [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
 | [operations/sign-in-tokens.md](./operations/sign-in-tokens.md) | Which bearer tokens the API accepts: machine tokens, session tokens and application roles |
+| [operations/shop-floor-terminal.md](./operations/shop-floor-terminal.md) | What a shop-floor terminal reads under `pravara-mes:terminal`, and why it never writes on its own authority; wire contract in [contracts/terminal.v1.json](./contracts/terminal.v1.json) |
 | [operations/schema-guard.md](./operations/schema-guard.md) | Why a new API image stays not ready until its migrations are applied, and what to do when a rollout waits |
 | [operations/fabrication-dispatch.md](./operations/fabrication-dispatch.md) | Matchmaking, dispatch (render → slice → start_job) and the passport updater |
 | [operations/job-consumption.md](./operations/job-consumption.md) | Per-job consumption (quantities only), stock relief, order engagement and the consumption read |

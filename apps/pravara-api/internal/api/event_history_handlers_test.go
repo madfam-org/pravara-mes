@@ -345,3 +345,17 @@ func TestQueryInt_DefaultValues(t *testing.T) {
 		})
 	}
 }
+
+// limit is 1-1000 and offset at least 0 for every caller; anything else is
+// refused before the database is asked (a negative limit used to drop the
+// LIMIT clause).
+func TestEventHistoryHandler_ListEvents_RefusesOutOfRangePaging(t *testing.T) {
+	handler, mock, router := setupEventHistoryTest(t)
+	router.GET("/v1/events", handler.ListEvents)
+	for _, q := range []string{"limit=-1", "limit=0", "limit=1001", "limit=abc", "offset=-1", "offset=x"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/events?"+q, nil))
+		assert.Equal(t, http.StatusBadRequest, w.Code, q)
+	}
+	assert.NoError(t, mock.ExpectationsWereMet(), "no query reached the database")
+}

@@ -152,7 +152,10 @@ func (h *TaskHandler) List(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, ListResponse{
+	if isTerminalOnly(c) {
+		tasks = terminalTasks(tasks)
+	}
+	c.JSON(http.StatusOK, TaskListResponse{
 		Data:   tasks,
 		Total:  total,
 		Limit:  filter.Limit,
@@ -200,6 +203,10 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		narrowed := terminalTask(*task)
+		task = &narrowed
+	}
 	c.JSON(http.StatusOK, task)
 }
 
@@ -696,7 +703,24 @@ func (h *TaskHandler) GetKanbanBoard(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"columns": board,
-	})
+	if isTerminalOnly(c) {
+		for status, tasks := range board {
+			board[status] = terminalTasks(tasks)
+		}
+	}
+	c.JSON(http.StatusOK, KanbanBoardResponse{Columns: board})
+}
+
+// TaskListResponse is the body of GET /v1/tasks (ListResponse's JSON, typed).
+type TaskListResponse struct {
+	Data   []types.Task `json:"data"`
+	Total  int          `json:"total"`
+	Limit  int          `json:"limit"`
+	Offset int          `json:"offset"`
+}
+
+// KanbanBoardResponse is the body of GET /v1/tasks/board: the tenant's
+// tasks keyed by status.
+type KanbanBoardResponse struct {
+	Columns map[types.TaskStatus][]types.Task `json:"columns"`
 }

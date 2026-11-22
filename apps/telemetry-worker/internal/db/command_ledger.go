@@ -72,18 +72,21 @@ func (l *CommandLedger) LoadForDispatch(ctx context.Context, tenantID, commandID
 	return lc, err
 }
 
-// MarkSent implements command.DispatchLedger.
+// MarkSent implements command.DispatchLedger. The dispatcher calls it after
+// a publish, so the attempt is always counted and sent_at recorded. The
+// machine may answer before this runs: an acknowledgement, a completion or a
+// failure that already arrived (or the deadline sweep) keeps its status, its
+// deadline and its error message.
 func (l *CommandLedger) MarkSent(ctx context.Context, tenantID, commandID uuid.UUID, sentAt, deadline time.Time) error {
 	return l.scope.WithTenant(ctx, tenantID, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 			UPDATE task_commands
 			SET attempts = attempts + 1,
 			    sent_at = $3,
-			    deadline_at = $4,
-			    error_message = NULL,
+			    deadline_at = CASE WHEN status IN ('completed', 'failed', 'timeout') THEN deadline_at ELSE $4 END,
+			    error_message = CASE WHEN status IN ('completed', 'failed', 'timeout') THEN error_message ELSE NULL END,
 			    status = CASE WHEN status = 'pending' THEN 'sent' ELSE status END
-			WHERE command_id = $1 AND tenant_id = $2
-			  AND status NOT IN ('completed', 'failed', 'timeout')`,
+			WHERE command_id = $1 AND tenant_id = $2`,
 			commandID, tenantID, sentAt, deadline)
 		if err != nil {
 			return fmt.Errorf("mark command sent: %w", err)

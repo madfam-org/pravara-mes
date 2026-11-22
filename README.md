@@ -533,6 +533,7 @@ POST /v1/machines/:id/command
 | POST | `/v1/quality/inspections/:id/complete` | Complete inspection with result |
 | GET | `/v1/quality/batches` | List batch lots |
 | POST | `/v1/quality/batches` | Create batch lot |
+| GET | `/v1/quality/batches/lookup` | One lot by its exact `lot_number`, with its stock item's SKU and registry material code (a shop-floor terminal's read; [docs/operations/shop-floor-terminal.md](docs/operations/shop-floor-terminal.md)) |
 | GET | `/v1/quality/batches/:id` | Get batch lot by ID |
 | PATCH | `/v1/quality/batches/:id` | Update batch lot |
 
@@ -869,6 +870,7 @@ infra/k8s/production` is break-glass only.
 | Tezca → Pravara law-change webhook | `POST /v1/webhooks/tezca`, `X-Tezca-Signature: sha256=<hex>` | [tezca `apps/api/tasks.py`](https://github.com/madfam-org/tezca/blob/main/apps/api/tasks.py) (signs and delivers) |
 | Forj → Pravara orders; Pravara → Forj status | `POST /v1/orders` with an API key; `order.status_changed` and `task.assignment_failed` via webhook subscriptions (`X-Pravara-Signature`) | forj (private repository) |
 | Dhanam billing events; ForgeSight benchmark feed (reference only, never written to inventory) | `POST /v1/webhooks/dhanam` (`X-Dhanam-Signature`); `POST /v1/webhooks/forgesight` (`X-ForgeSight-Signature`) | Dhanam and ForgeSight (private repositories; sender side not re-verified in the 2026-10-02 pass) |
+| Shop-floor terminal reads (and, later, operator writes) | `pravara-mes:terminal` routes ([docs/operations/shop-floor-terminal.md](docs/operations/shop-floor-terminal.md)); wire contract [docs/contracts/terminal.v1.json](docs/contracts/terminal.v1.json), held by `internal/api/terminal_contract_test.go` | the terminal's software (private repository), written against the same file |
 | Karafiel CFDI on completed jobs | not wired; see [ROADMAP pending item 18](./ROADMAP.md#pending-work-and-roadmap-ahead) | Karafiel (private repository) |
 | Build, sign and digest pin; ecosystem context | `.github/workflows/build-deploy.yml`, `deploy-admin.yml`; `ECOSYSTEM.md` (generated) | [enclii `docs/runbooks/SIGNED_GITOPS_DIGESTS.md`](https://github.com/madfam-org/enclii/blob/main/docs/runbooks/SIGNED_GITOPS_DIGESTS.md); ECOSYSTEM.md source: [enclii `docs/templates/ecosystem/metadata_fabrication.py`](https://github.com/madfam-org/enclii/blob/main/docs/templates/ecosystem/metadata_fabrication.py) |
 
