@@ -882,3 +882,32 @@ func TestTaskRepository_MoveTaskExpecting_BoardBusy(t *testing.T) {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
+
+// A failure of the row-lock statement other than the lock timeout is
+// returned as it is; lock_timeout is not restored on the aborted savepoint.
+func TestTaskRepository_MoveTaskExpecting_RowReadFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).WithArgs(taskID).
+		WillReturnError(&pq.Error{Code: "40P01", Message: "deadlock detected"})
+	mock.ExpectRollback()
+
+	_, err = repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusInProgress, nil, nil)
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) || pqErr.Code != "40P01" || errors.Is(err, ErrTaskBoardBusy) {
+		t.Fatalf("want the row read's own error, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations (no restore after the failed statement): %v", err)
+	}
+}

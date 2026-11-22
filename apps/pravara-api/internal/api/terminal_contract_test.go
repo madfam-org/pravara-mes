@@ -52,6 +52,7 @@ type terminalContract struct {
 		Authority string            `json:"authority"`
 		Request   string            `json:"request"`
 		Responses map[string]string `json:"responses"`
+		Notes     string            `json:"notes"`
 	} `json:"writes"`
 	Requests map[string]struct {
 		Fields map[string]string `json:"fields"`

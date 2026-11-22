@@ -91,8 +91,9 @@ A person's write (no machine scope opens it). Body:
 | `position` | optional, at least 1 | The place in the target column. Absent, the task goes to the end of that column (a terminal does not know the board) |
 
 Moves on one tenant's board run one at a time (an advisory lock), and the
-task's row is locked `FOR NO KEY UPDATE`. Waiting for either is bounded at
-5 s: then the answer is **503** `{"error": "task_board_busy"}` with
+task's row is locked `FOR NO KEY UPDATE`. Each of the two waits is bounded
+at 5 s, so a move waits at most 10 s in all (5 s for the board, then 5 s for
+the row) before the answer is **503** `{"error": "task_board_busy"}` with
 `Retry-After: 1`, and nothing changed. Automation (a machine command when a
 machine-assigned task enters `in_progress`) still runs inside the move's
 request, so the lock is held until the response is written.

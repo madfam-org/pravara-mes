@@ -281,7 +281,8 @@
         "200": "task_moved",
         "409": "task_status_conflict",
         "503": "task_board_busy"
-      }
+      },
+      "notes": "503 task_board_busy (Retry-After 1, nothing changed) comes after at most 10 s of waiting: up to 5 s for the board lock, then up to 5 s for the task row."
     }
   ],
   "requests": {

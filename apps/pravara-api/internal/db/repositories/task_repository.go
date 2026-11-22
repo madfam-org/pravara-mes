@@ -239,8 +239,9 @@ func (r *TaskRepository) MoveTask(ctx context.Context, id uuid.UUID, newStatus t
 // does not have. Its text is the "task not found" callers already match.
 var ErrTaskNotFound = errors.New("task not found")
 
-// TaskBoardLockTimeout bounds how long a move waits for another move of the
-// same board (or of the same task) to finish.
+// TaskBoardLockTimeout bounds each of a move's two lock waits: for the
+// tenant's board lock, then for the task's row. A move that answers
+// ErrTaskBoardBusy has waited at most twice this long.
 const TaskBoardLockTimeout = 5 * time.Second
 
 // ErrTaskBoardBusy: another move held the board or the task for longer than
@@ -331,14 +332,16 @@ func (r *TaskRepository) MoveTaskExpecting(ctx context.Context, id uuid.UUID, ne
 		if isLockTimeout(err) {
 			return ErrTaskBoardBusy
 		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			// The statement failed and the savepoint is aborted; its
+			// rollback also reverts lock_timeout, so nothing to restore.
+			return fmt.Errorf("failed to get task: %w", err)
+		}
 		if _, rerr := tx.ExecContext(ctx, `SELECT set_config('lock_timeout', $1, true)`, previousTimeout); rerr != nil {
 			return fmt.Errorf("failed to restore lock_timeout: %w", rerr)
 		}
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return ErrTaskNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("failed to get task: %w", err)
 		}
 		if expected != nil && currentStatus != *expected {
 			return &TaskStatusConflictError{Current: currentStatus}

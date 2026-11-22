@@ -186,8 +186,9 @@ func TestTaskMoveConcurrentEndOfColumnAgainstPostgres(t *testing.T) {
 	assert.Equal(t, []int{1, 2, 3, 4, 5}, got)
 }
 
-// While another move holds the board past the lock timeout, a move answers
-// a retryable 503 and changes nothing; once the board is free it runs.
+// While another move holds the board, or another transaction holds the
+// task's row, past the lock timeout, a move answers a retryable 503 and
+// changes nothing; once both are free it runs.
 func TestTaskMoveBoardBusyAgainstPostgres(t *testing.T) {
 	rig := newScopeRig(t)
 	person := rig.userToken(t, "operator")
@@ -211,6 +212,23 @@ func TestTaskMoveBoardBusyAgainstPostgres(t *testing.T) {
 	assert.Equal(t, "queued", status)
 
 	require.NoError(t, holder.Rollback())
+
+	// The board is free but another transaction holds the task's row: the
+	// second wait is bounded the same way.
+	rowHolder, err := rig.sqlDB.Begin()
+	require.NoError(t, err)
+	_, err = rowHolder.Exec(`SELECT 1 FROM tasks WHERE id = $1 FOR NO KEY UPDATE`, taskID)
+	require.NoError(t, err)
+	start = time.Now()
+	w = rig.do(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", person, map[string]any{"status": "in_progress", "from_status": "queued"})
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "task_board_busy")
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
+	assert.Less(t, time.Since(start), repositories.TaskBoardLockTimeout+5*time.Second)
+	require.NoError(t, rig.sqlDB.QueryRow(`SELECT status FROM tasks WHERE id = $1`, taskID).Scan(&status))
+	assert.Equal(t, "queued", status)
+	require.NoError(t, rowHolder.Rollback())
+
 	w = rig.do(http.MethodPost, "/v1/tasks/"+taskID.String()+"/move", person, map[string]any{"status": "in_progress", "from_status": "queued"})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
