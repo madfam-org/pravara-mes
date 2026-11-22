@@ -54,12 +54,23 @@ out (`terminalTaskMetadataKeys`).
 
 The same caller's **event history** keeps every event type (ruling PV-10),
 with the customer's name removed (owner ruling 2026-11-22: "Yes, remove
-them"): `data.name` of `order.created`, `order.updated` and `order.deleted`
-(the order's customer name) and `data.customer_name` of
-`order.status_changed`. No other event type carries customer data: task,
-machine, telemetry, notification, maintenance, quality, inventory and
-genealogy events name tasks, machines, items and people's ids, not
-customers (`terminalEventRedactions`).
+them"). Order events are narrowed by allow-list (`terminalEventRules` in
+`internal/api/terminal_view.go`), so the customer's name (`data.name` of an
+order event, `data.customer_name` of `order.status_changed`) and any key not
+listed never reach a terminal:
+
+| Event type | `data` keys a terminal gets |
+|---|---|
+| `order.created` | `entity_id`, `entity_type`, `created_by`, `created_at`, `metadata` (`external_id`, `item_count`, `source` only) |
+| `order.updated` | `entity_id`, `entity_type`, `changed_fields`, `updated_by`, `updated_at`, `metadata` (as above) |
+| `order.deleted` | `entity_id`, `entity_type`, `deleted_by`, `deleted_at` |
+| `order.status_changed` | `order_id`, `order_external_id`, `old_status`, `new_status`, `updated_at` |
+| any other `order.*` type | none: `data` is `{}` |
+| `machine.command_sent` | every field, with `parameters` narrowed to the task metadata keys above (no file ids or names, no free-form parameters) |
+
+No other event type carries customer data: task, machine, telemetry,
+notification, maintenance, quality, inventory and genealogy events name
+tasks, machines, items and people's ids, not customers, and pass unchanged.
 
 `GET /v1/events` takes `limit` 1-1000 (default 50) and `offset` from 0, for
 every caller; anything else is 400 `invalid_limit` / `invalid_offset`.

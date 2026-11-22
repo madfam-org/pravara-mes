@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -144,23 +145,74 @@ func terminalTasks(tasks []types.Task) []types.Task {
 	return out
 }
 
-// terminalEventRedactions are the fields of an event's data that a terminal
-// does not receive: the customer's name, which order events carry
-// (EntityCreatedData.Name is the order's customer name; OrderStatusData
-// carries customer_name). No other event type carries customer data.
-var terminalEventRedactions = map[string][]string{
-	"order.created":        {"name"},
-	"order.updated":        {"name"},
-	"order.deleted":        {"name"},
-	"order.status_changed": {"customer_name"},
+// terminalEventRule is what a terminal keeps of one event type's data.
+type terminalEventRule struct {
+	// keep lists the data keys kept; nil keeps every key.
+	keep map[string]bool
+	// narrow lists, for an object-valued data key, the sub-keys kept.
+	narrow map[string]map[string]bool
 }
 
-// terminalEvent removes terminalEventRedactions from an event's payload
-// ({id, type, tenant_id, timestamp, data}). A payload of a redacted type
-// that cannot be read as that envelope is replaced by an empty object rather
-// than passed on unread.
+func keySet(k ...string) map[string]bool {
+	out := make(map[string]bool, len(k))
+	for _, v := range k {
+		out[v] = true
+	}
+	return out
+}
+
+// orderEventMetadataKeys are the order events' metadata keys a terminal
+// keeps (what the order handlers and the quoting webhook write).
+var orderEventMetadataKeys = keySet("external_id", "item_count", "source")
+
+// terminalEventRules narrow event payloads for a terminal (owner ruling
+// 2026-11-22: the customer's name is removed; everything else stays
+// readable). Order events are an allow-list of their data keys: the
+// customer's name (EntityCreatedData.Name of an order, OrderStatusData's
+// customer_name) and any key not listed here never reach a terminal, and an
+// order.* type that is not listed is answered with empty data
+// (terminalEvent). machine.command_sent keeps its fields with its
+// parameters narrowed to the task metadata a terminal reads
+// (terminalTaskMetadataKeys): no file names or ids and no free-form manual
+// parameters. Other event types carry no customer data and pass unchanged.
+var terminalEventRules = map[string]terminalEventRule{
+	"order.created": {
+		keep:   keySet("entity_id", "entity_type", "created_by", "created_at", "metadata"),
+		narrow: map[string]map[string]bool{"metadata": orderEventMetadataKeys},
+	},
+	"order.updated": {
+		keep:   keySet("entity_id", "entity_type", "changed_fields", "updated_by", "updated_at", "metadata"),
+		narrow: map[string]map[string]bool{"metadata": orderEventMetadataKeys},
+	},
+	"order.deleted": {
+		keep: keySet("entity_id", "entity_type", "deleted_by", "deleted_at"),
+	},
+	"order.status_changed": {
+		keep: keySet("order_id", "order_external_id", "old_status", "new_status", "updated_at"),
+	},
+	"machine.command_sent": {
+		narrow: map[string]map[string]bool{"parameters": terminalTaskMetadataKeys},
+	},
+}
+
+// terminalEventRuleFor returns the rule for an event type: its own, or, for an
+// order.* type with none, a rule that keeps no data key.
+func terminalEventRuleFor(eventType string) (terminalEventRule, bool) {
+	if r, ok := terminalEventRules[eventType]; ok {
+		return r, true
+	}
+	if strings.HasPrefix(eventType, "order.") {
+		return terminalEventRule{keep: map[string]bool{}}, true
+	}
+	return terminalEventRule{}, false
+}
+
+// terminalEvent applies terminalEventRules to an event's payload ({id, type,
+// tenant_id, timestamp, data}). A payload of a narrowed type that cannot be
+// read as that envelope is replaced by an empty object rather than passed on
+// unread.
 func terminalEvent(e repositories.OutboxEvent) repositories.OutboxEvent {
-	fields, ok := terminalEventRedactions[e.EventType]
+	rule, ok := terminalEventRuleFor(e.EventType)
 	if !ok {
 		return e
 	}
@@ -169,16 +221,18 @@ func terminalEvent(e repositories.OutboxEvent) repositories.OutboxEvent {
 		e.Payload = json.RawMessage(`{}`)
 		return e
 	}
-	var data map[string]json.RawMessage
 	if raw, ok := envelope["data"]; ok && len(raw) > 0 && string(raw) != "null" {
+		var data map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &data); err != nil {
 			e.Payload = json.RawMessage(`{}`)
 			return e
 		}
-		for _, f := range fields {
-			delete(data, f)
+		narrowed, ok := applyTerminalEventRule(data, rule)
+		if !ok {
+			e.Payload = json.RawMessage(`{}`)
+			return e
 		}
-		if envelope["data"], ok = marshalRaw(data); !ok {
+		if envelope["data"], ok = marshalRaw(narrowed); !ok {
 			e.Payload = json.RawMessage(`{}`)
 			return e
 		}
@@ -189,6 +243,35 @@ func terminalEvent(e repositories.OutboxEvent) repositories.OutboxEvent {
 	}
 	e.Payload = out
 	return e
+}
+
+// applyTerminalEventRule keeps rule.keep (all keys when nil) and narrows the
+// object-valued keys in rule.narrow; false when such a key is not an object.
+func applyTerminalEventRule(data map[string]json.RawMessage, rule terminalEventRule) (map[string]json.RawMessage, bool) {
+	out := make(map[string]json.RawMessage, len(data))
+	for k, v := range data {
+		if rule.keep != nil && !rule.keep[k] {
+			continue
+		}
+		if allowed, ok := rule.narrow[k]; ok && string(v) != "null" {
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(v, &inner); err != nil {
+				return nil, false
+			}
+			for ik := range inner {
+				if !allowed[ik] {
+					delete(inner, ik)
+				}
+			}
+			b, ok := marshalRaw(inner)
+			if !ok {
+				return nil, false
+			}
+			v = b
+		}
+		out[k] = v
+	}
+	return out, true
 }
 
 func marshalRaw(v any) (json.RawMessage, bool) {

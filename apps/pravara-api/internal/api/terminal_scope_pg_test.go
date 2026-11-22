@@ -127,6 +127,10 @@ func TestTerminalNarrowedEventsAndTaskMetadataAgainstPostgres(t *testing.T) {
 			orderID.String() + `","entity_type":"order","name":"` + customer + `","metadata":{"item_count":1}}}`,
 		"order.status_changed": `{"id":"e-status","type":"order.status_changed","tenant_id":"` + rig.tenantID.String() + `","data":{"order_id":"` +
 			orderID.String() + `","new_status":"in_progress","customer_name":"` + customer + `"}}`,
+		"order.item_added": `{"id":"e-item","type":"order.item_added","tenant_id":"` + rig.tenantID.String() + `","data":{"order_id":"` +
+			orderID.String() + `","customer_name":"` + customer + `"}}`,
+		"machine.command_sent": `{"id":"e-cmd","type":"machine.command_sent","tenant_id":"` + rig.tenantID.String() + `","data":{"command":"start_job",` +
+			`"order_id":"` + orderID.String() + `","parameters":{"file_name":"` + customer + `.3mf","product_sku":"SOP-1"}}}`,
 	}
 	ids := map[string]uuid.UUID{}
 	for typ, payload := range payloads {
@@ -142,7 +146,9 @@ func TestTerminalNarrowedEventsAndTaskMetadataAgainstPostgres(t *testing.T) {
 
 	device := rig.deviceToken(t, "pravara-mes:terminal")
 	reader := rig.machineToken(t, "pravara-mes:read", nil)
-	routes := []string{"/v1/events?types=order.*", "/v1/events/" + ids["order.created"].String(), "/v1/events/" + ids["order.status_changed"].String()}
+	routes := []string{"/v1/events?types=order.*", "/v1/events?type=machine.command_sent",
+		"/v1/events/" + ids["order.created"].String(), "/v1/events/" + ids["order.status_changed"].String(),
+		"/v1/events/" + ids["machine.command_sent"].String()}
 	for _, path := range routes {
 		w := rig.do(http.MethodGet, path, device, nil)
 		require.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
@@ -154,6 +160,14 @@ func TestTerminalNarrowedEventsAndTaskMetadataAgainstPostgres(t *testing.T) {
 		assert.Contains(t, w.Body.String(), customer, "a pravara-mes:read caller is unchanged: GET %s", path)
 	}
 
+	w := rig.do(http.MethodGet, "/v1/events/"+ids["order.item_added"].String(), device, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.NotContains(t, w.Body.String(), orderID.String(), "an order.* type without a rule keeps no data")
+	assert.NotContains(t, w.Body.String(), customer)
+	w = rig.do(http.MethodGet, "/v1/events/"+ids["machine.command_sent"].String(), device, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "SOP-1", "allowed command parameters stay")
+
 	for _, path := range []string{"/v1/tasks/" + taskID.String(), "/v1/tasks", "/v1/tasks/board"} {
 		w := rig.do(http.MethodGet, path, device, nil)
 		require.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
@@ -161,7 +175,7 @@ func TestTerminalNarrowedEventsAndTaskMetadataAgainstPostgres(t *testing.T) {
 		assert.NotContains(t, w.Body.String(), "files.example.test", "GET %s", path)
 		assert.Contains(t, w.Body.String(), `"product_sku":"SOP-1"`, "GET %s", path)
 	}
-	w := rig.do(http.MethodGet, "/v1/tasks/"+taskID.String(), rig.userToken(t, "operator"), nil)
+	w = rig.do(http.MethodGet, "/v1/tasks/"+taskID.String(), rig.userToken(t, "operator"), nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "cad_file_url", "a person's task read is unchanged")
 }

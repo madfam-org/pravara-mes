@@ -12,10 +12,12 @@
 #   PRAVARA_TEST_REDIS_URL     a Redis (telemetry-worker command channel)
 #
 # The set is discovered, not hand-kept: with the variables unset (and -short,
-# as the main Go job runs), every top-level test whose skip message names one
-# of them is a gated test. Those tests then run with the variables set. The
-# script fails if none were found, if none passed, if any test or subtest
-# skipped, or if fewer passed than were found.
+# as the main Go job runs), every top-level test in every package of both
+# modules whose skip message names one of them is a gated test, identified
+# by package and name. Those tests then run with the variables set. The
+# script fails if a module has none, if any test or subtest of them failed or
+# skipped, or if fewer passed than were found. Each go test has a 12-minute
+# timeout, so a hang ends with a goroutine dump inside the job's 30 minutes.
 #
 # Usage (from the repository root, with the three variables exported):
 #   scripts/ci-postgres-tests.sh
@@ -29,10 +31,10 @@ WORK="${RUNNER_TEMP:-$(mktemp -d)}/db-gated"
 mkdir -p "$WORK"
 SKIP_PATTERN='(PRAVARA_TEST_DATABASE_URL|PRAVARA_ISOLATION_DB_URL|PRAVARA_TEST_REDIS_URL) not set|needs PostgreSQL; skipped in -short mode'
 
-# module directory : packages
+# module directory : packages (every package of the module)
 SUITES=(
-  "apps/pravara-api:./internal/api/ ./internal/db/..."
-  "apps/telemetry-worker:./internal/db/..."
+  "apps/pravara-api:./..."
+  "apps/telemetry-worker:./..."
 )
 
 expected=0 passed=0 failed=0 skipped=0 rc=0
@@ -42,36 +44,47 @@ for suite in "${SUITES[@]}"; do
   name="$(basename "$module")"
   cd "$ROOT/$module"
 
-  # 1. Discover: run without the variables.
+  # 1. Discover: run without the variables. A gated test is identified by
+  #    its package and its top-level name.
   if ! env -u PRAVARA_TEST_DATABASE_URL -u PRAVARA_ISOLATION_DB_URL -u PRAVARA_TEST_REDIS_URL \
-      go test "${pkgs[@]}" -short -count=1 -json >"$WORK/$name.discover.json"; then
+      go test "${pkgs[@]}" -short -count=1 -timeout 12m -json >"$WORK/$name.discover.json"; then
     echo "::error::$module: go test failed while listing the database-gated tests"
     exit 1
   fi
   jq -r --arg re "$SKIP_PATTERN" \
-    'select(.Action == "output" and .Test != null and (.Output | test($re))) | .Test | split("/")[0]' \
-    "$WORK/$name.discover.json" | sort -u >"$WORK/$name.gated.txt"
-  n=$(wc -l <"$WORK/$name.gated.txt")
+    'select(.Action == "output" and .Test != null and (.Output | test($re))) | .Package + "\t" + (.Test | split("/")[0])' \
+    "$WORK/$name.discover.json" | sort -u >"$WORK/$name.gated.tsv"
+  n=$(wc -l <"$WORK/$name.gated.tsv")
   echo "== $module: $n database-gated tests"
-  cat "$WORK/$name.gated.txt"
+  cat "$WORK/$name.gated.tsv"
+  if [ "$n" -eq 0 ]; then
+    echo "::error::$module: no database-gated tests found"
+    exit 1
+  fi
   expected=$((expected + n))
-  [ "$n" -gt 0 ] || continue
 
-  # 2. Run them with the variables set.
-  pattern="^($(paste -sd'|' "$WORK/$name.gated.txt"))\$"
+  # 2. Run them with the variables set. -run matches names in every
+  #    package; only the discovered (package, name) pairs are counted.
+  pattern="^($(cut -f2 "$WORK/$name.gated.tsv" | sort -u | paste -sd'|' -))\$"
   set +e
-  go test "${pkgs[@]}" -count=1 -v -json -timeout 20m -run "$pattern" >"$WORK/$name.run.json"
+  go test "${pkgs[@]}" -count=1 -v -json -timeout 12m -run "$pattern" >"$WORK/$name.run.json"
   code=$?
   set -e
   jq -j 'select(.Action == "output") | .Output' "$WORK/$name.run.json"
   [ "$code" -eq 0 ] || rc=$code
 
-  top='select(.Test != null and (.Test | contains("/") | not))'
-  p=$(jq -r "$top | select(.Action == \"pass\") | .Package + \" \" + .Test" "$WORK/$name.run.json" | sort -u | wc -l)
-  f=$(jq -r "select(.Test != null and .Action == \"fail\") | .Package + \" \" + .Test" "$WORK/$name.run.json" | sort -u | wc -l)
+  # (package, top-level name, action) for every test and subtest event.
+  jq -r 'select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip"))
+         | .Package + "\t" + (.Test | split("/")[0]) + "\t" + .Action + "\t" + .Test' \
+    "$WORK/$name.run.json" >"$WORK/$name.results.tsv"
+  # Only events of discovered pairs count.
+  awk -F'\t' 'NR == FNR { gated[$1 "\t" $2] = 1; next } ($1 "\t" $2) in gated' \
+    "$WORK/$name.gated.tsv" "$WORK/$name.results.tsv" >"$WORK/$name.gated-results.tsv"
+  p=$(awk -F'\t' '$3 == "pass" && $2 == $4 { print $1 "\t" $2 }' "$WORK/$name.gated-results.tsv" | sort -u | wc -l)
+  f=$(awk -F'\t' '$3 == "fail"' "$WORK/$name.gated-results.tsv" | wc -l)
   # Every skip counts, subtests included: with the databases present none
   # should skip.
-  s=$(jq -r "select(.Test != null and .Action == \"skip\") | .Package + \" \" + .Test" "$WORK/$name.run.json" | sort -u)
+  s=$(awk -F'\t' '$3 == "skip" { print $1 " " $4 }' "$WORK/$name.gated-results.tsv" | sort -u)
   ns=$(printf '%s' "$s" | grep -c . || true)
   if [ "$ns" -gt 0 ]; then
     echo "::error::$module: tests skipped with the databases present:"

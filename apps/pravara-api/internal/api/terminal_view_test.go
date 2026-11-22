@@ -160,3 +160,38 @@ func TestTerminalEventRemovesTheCustomerName(t *testing.T) {
 	broken := terminalEvent(repositories.OutboxEvent{EventType: "order.created", Payload: json.RawMessage(`not json`)})
 	assert.Equal(t, "{}", string(broken.Payload), "an unreadable order payload is not passed on")
 }
+
+// Order events are an allow-list: an unlisted key, an unlisted metadata key
+// and an unlisted order.* type reach a terminal as nothing.
+func TestTerminalEventOrderAllowList(t *testing.T) {
+	created := terminalEvent(repositories.OutboxEvent{EventType: "order.created", Payload: json.RawMessage(
+		`{"type":"order.created","data":{"entity_id":"o1","entity_type":"order","name":"Taller Ejemplo","customer_phone":"+52 000",` +
+			`"created_at":"2026-11-22T00:00:00Z","metadata":{"external_id":"Q-1","item_count":2,"contact":"Persona Ejemplo"}}}`)})
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(created.Payload, &env))
+	assert.Equal(t, map[string]any{"entity_id": "o1", "entity_type": "order", "created_at": "2026-11-22T00:00:00Z",
+		"metadata": map[string]any{"external_id": "Q-1", "item_count": float64(2)}}, env.Data)
+
+	added := terminalEvent(repositories.OutboxEvent{EventType: "order.item_added", Payload: json.RawMessage(
+		`{"id":"e3","type":"order.item_added","data":{"order_id":"o1","customer_name":"Taller Ejemplo","unit_price":99}}`)})
+	assert.JSONEq(t, `{"id":"e3","type":"order.item_added","data":{}}`, string(added.Payload), "an unlisted order.* type keeps no data")
+
+	status := terminalEvent(repositories.OutboxEvent{EventType: "order.status_changed", Payload: json.RawMessage(
+		`{"data":{"order_id":"o1","new_status":"in_progress","customer_name":"Taller Ejemplo","customer_email":"x@example.test"}}`)})
+	assert.JSONEq(t, `{"data":{"order_id":"o1","new_status":"in_progress"}}`, string(status.Payload))
+}
+
+// A machine command's parameters reach a terminal narrowed to the task
+// metadata a terminal reads; its other fields are unchanged.
+func TestTerminalEventCommandParametersAreNarrowed(t *testing.T) {
+	sent := terminalEvent(repositories.OutboxEvent{EventType: "machine.command_sent", Payload: json.RawMessage(
+		`{"data":{"command_id":"c1","machine_id":"m1","command":"start_job","task_id":"t1","parameters":` +
+			`{"task_title":"Soporte","file_id":"f-9","file_name":"cliente-soporte.3mf","manual_note":"x","product_sku":"SOP-1","quantity":4}}}`)})
+	assert.JSONEq(t, `{"data":{"command_id":"c1","machine_id":"m1","command":"start_job","task_id":"t1",`+
+		`"parameters":{"product_sku":"SOP-1","quantity":4}}}`, string(sent.Payload))
+
+	ack := repositories.OutboxEvent{EventType: "machine.command_ack", Payload: json.RawMessage(`{"data":{"command_id":"c1","success":true}}`)}
+	assert.Equal(t, string(ack.Payload), string(terminalEvent(ack).Payload), "other machine events are unchanged")
+}
