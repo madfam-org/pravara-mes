@@ -129,6 +129,10 @@ already have for their `idempotency_key` body field. The routes are
 - **Atomic.** The key is claimed inside the request's transaction before the
   write runs, and its answer stored before that transaction commits; a
   concurrent request with the same key waits, then gets the stored answer.
+- **Worst-case wait.** The key's claim waits up to 5 s for another request
+  holding the same key; a task move then waits up to 5 s for the board lock
+  and up to 5 s for the task's row. A keyed move therefore answers within
+  about 15 s of waiting, with a 503 and `Retry-After: 1` if a wait ran out.
 - **What the key covers.** "Nothing runs twice" is about what the write
   does in Pravara's database transaction. What it does outside it is not
   undone or deduplicated by the key: a realtime publish, an automation

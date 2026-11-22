@@ -326,7 +326,7 @@
         "409": "task_status_conflict",
         "503": "task_board_busy"
       },
-      "notes": "503 task_board_busy (Retry-After 1, nothing changed) comes after at most 10 s of waiting: up to 5 s for the board lock, then up to 5 s for the task row."
+      "notes": "503 task_board_busy (Retry-After 1, nothing changed) comes after at most 10 s of waiting in the move: up to 5 s for the board lock, then up to 5 s for the task row. With an Idempotency-Key the claim of the key comes first and waits up to 5 s more (503 idempotency_key_busy), so a move waits at most 15 s in all."
     },
     {
       "method": "POST",
@@ -337,7 +337,8 @@
       "responses": {
         "201": "consumption_reported",
         "409": "consumption_already_recorded"
-      }
+      },
+      "notes": "With an Idempotency-Key the claim of the key waits up to 5 s for another request holding it (503 idempotency_key_busy)."
     },
     {
       "method": "POST",
@@ -347,7 +348,8 @@
       "request": "step_acknowledge",
       "responses": {
         "200": "step_acknowledged"
-      }
+      },
+      "notes": "With an Idempotency-Key the claim of the key waits up to 5 s for another request holding it (503 idempotency_key_busy)."
     }
   ],
   "requests": {
