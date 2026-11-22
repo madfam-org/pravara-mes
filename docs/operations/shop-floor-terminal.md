@@ -44,7 +44,25 @@ an order's id, external id, status, priority, due date and times; an item's
 id, product name and SKU, quantity and specifications. No customer name or
 email, shipping address, engagement slug, amount, currency or metadata; no
 unit price or CAD file URL. Every other caller gets the full order as before.
-The event history is served as ruled (every event type).
+
+The same caller's **task reads** (`GET /v1/tasks`, `/v1/tasks/board`,
+`/v1/tasks/:id`) carry only these metadata keys, the ones order
+decomposition writes to describe the work: `source`, `product_name`,
+`product_sku`, `quantity`, `specifications`, `assignment_basis`,
+`assigned_machine_code`. Any other key, the CAD file URL included, is left
+out (`terminalTaskMetadataKeys`).
+
+The same caller's **event history** keeps every event type (ruling PV-10),
+with the customer's name removed (owner ruling 2026-11-22: "Yes, remove
+them"): `data.name` of `order.created`, `order.updated` and `order.deleted`
+(the order's customer name) and `data.customer_name` of
+`order.status_changed`. No other event type carries customer data: task,
+machine, telemetry, notification, maintenance, quality, inventory and
+genealogy events name tasks, machines, items and people's ids, not
+customers (`terminalEventRedactions`).
+
+`GET /v1/events` takes `limit` 1-1000 (default 50) and `offset` from 0, for
+every caller; anything else is 400 `invalid_limit` / `invalid_offset`.
 
 `pravara-mes:terminal` is not an API-key scope: it reaches a terminal only
 on its Janua device token, and an API-key row that carries it anyway gains

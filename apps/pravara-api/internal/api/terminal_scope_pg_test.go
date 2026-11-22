@@ -113,3 +113,55 @@ func TestTerminalDeviceTokenAgainstPostgres(t *testing.T) {
 	w = rig.do(http.MethodGet, task, rig.machineToken(t, "pravara-mes:read", nil), nil)
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 }
+
+// Event history for a terminal (owner ruling 2026-11-22, "Yes, remove
+// them"): the customer's name is removed from order events on the list and
+// the by-id read; a pravara-mes:read caller still gets it. Task metadata for
+// a terminal carries no CAD file URL.
+func TestTerminalNarrowedEventsAndTaskMetadataAgainstPostgres(t *testing.T) {
+	rig := newScopeRig(t)
+	orderID := uuid.New()
+	const customer = "Taller Ejemplo SA"
+	payloads := map[string]string{
+		"order.created": `{"id":"e-created","type":"order.created","tenant_id":"` + rig.tenantID.String() + `","data":{"entity_id":"` +
+			orderID.String() + `","entity_type":"order","name":"` + customer + `","metadata":{"item_count":1}}}`,
+		"order.status_changed": `{"id":"e-status","type":"order.status_changed","tenant_id":"` + rig.tenantID.String() + `","data":{"order_id":"` +
+			orderID.String() + `","new_status":"in_progress","customer_name":"` + customer + `"}}`,
+	}
+	ids := map[string]uuid.UUID{}
+	for typ, payload := range payloads {
+		var id uuid.UUID
+		require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO event_outbox (id, tenant_id, event_type, channel_namespace, payload)
+			VALUES (gen_random_uuid(), $1, $2, 'orders', $3::jsonb) RETURNING id`, rig.tenantID, typ, payload).Scan(&id))
+		ids[typ] = id
+	}
+	var taskID uuid.UUID
+	require.NoError(t, rig.sqlDB.QueryRow(`INSERT INTO tasks (tenant_id, title, status, metadata) VALUES ($1, 'Bracket', 'queued',
+		'{"source":"order_decomposition","product_sku":"SOP-1","cad_file_url":"https://files.example.test/bracket.step"}') RETURNING id`,
+		rig.tenantID).Scan(&taskID))
+
+	device := rig.deviceToken(t, "pravara-mes:terminal")
+	reader := rig.machineToken(t, "pravara-mes:read", nil)
+	routes := []string{"/v1/events?types=order.*", "/v1/events/" + ids["order.created"].String(), "/v1/events/" + ids["order.status_changed"].String()}
+	for _, path := range routes {
+		w := rig.do(http.MethodGet, path, device, nil)
+		require.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
+		assert.NotContains(t, w.Body.String(), customer, "a terminal reads no customer name: GET %s", path)
+		assert.Contains(t, w.Body.String(), orderID.String(), "the order id stays: GET %s", path)
+
+		w = rig.do(http.MethodGet, path, reader, nil)
+		require.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
+		assert.Contains(t, w.Body.String(), customer, "a pravara-mes:read caller is unchanged: GET %s", path)
+	}
+
+	for _, path := range []string{"/v1/tasks/" + taskID.String(), "/v1/tasks", "/v1/tasks/board"} {
+		w := rig.do(http.MethodGet, path, device, nil)
+		require.Equal(t, http.StatusOK, w.Code, "GET %s: %s", path, w.Body.String())
+		assert.NotContains(t, w.Body.String(), "cad_file_url", "GET %s", path)
+		assert.NotContains(t, w.Body.String(), "files.example.test", "GET %s", path)
+		assert.Contains(t, w.Body.String(), `"product_sku":"SOP-1"`, "GET %s", path)
+	}
+	w := rig.do(http.MethodGet, "/v1/tasks/"+taskID.String(), rig.userToken(t, "operator"), nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "cad_file_url", "a person's task read is unchanged")
+}

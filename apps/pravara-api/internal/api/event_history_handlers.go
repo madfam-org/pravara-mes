@@ -23,11 +23,29 @@ func NewEventHistoryHandler(outboxRepo *repositories.OutboxRepository, log *logr
 	return &EventHistoryHandler{outboxRepo: outboxRepo, log: log}
 }
 
-// ListEvents returns paginated, filterable event history.
+// eventsDefaultLimit is GET /v1/events' page size when none is given; the
+// largest is recordsMaxLimit, as on the other paged reads.
+const eventsDefaultLimit = 50
+
+// ListEvents returns paginated, filterable event history. limit is 1-1000
+// (default 50) and offset at least 0; anything else is 400.
 func (h *EventHistoryHandler) ListEvents(c *gin.Context) {
-	filter := repositories.OutboxEventFilter{
-		Limit:  queryInt(c, "limit", 50),
-		Offset: queryInt(c, "offset", 0),
+	filter := repositories.OutboxEventFilter{Limit: eventsDefaultLimit}
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > recordsMaxLimit {
+			badRequest(c, "invalid_limit", "limit must be 1-1000")
+			return
+		}
+		filter.Limit = n
+	}
+	if raw := c.Query("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			badRequest(c, "invalid_offset", "offset must be >= 0")
+			return
+		}
+		filter.Offset = n
 	}
 
 	if t := c.Query("type"); t != "" {
@@ -54,6 +72,9 @@ func (h *EventHistoryHandler) ListEvents(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		events = terminalEvents(events)
+	}
 	c.JSON(http.StatusOK, EventListResponse{Events: events, Total: total, Limit: filter.Limit, Offset: filter.Offset})
 }
 
@@ -89,6 +110,10 @@ func (h *EventHistoryHandler) GetEventByID(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		narrowed := terminalEvent(*event)
+		event = &narrowed
+	}
 	c.JSON(http.StatusOK, event)
 }
 

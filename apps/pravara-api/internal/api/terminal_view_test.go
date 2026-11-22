@@ -128,3 +128,35 @@ func TestTerminalOnlyCallerIsADeviceTokenWithoutReadOrJobs(t *testing.T) {
 		assert.Equal(t, tc.want, isTerminalOnly(c), "%s %v", tc.caller.Kind, tc.caller.Scopes)
 	}
 }
+
+func TestTerminalTaskKeepsOnlyKnownMetadata(t *testing.T) {
+	task := terminalTask(types.Task{ID: uuid.New(), Title: "Soporte", Metadata: map[string]any{
+		"source": "order_decomposition", "product_name": "Soporte", "product_sku": "SOP-1", "quantity": 4,
+		"specifications": map[string]any{"material": "PLA"}, "assignment_basis": "capability_match",
+		"assigned_machine_code": "SIM-01", "cad_file_url": "https://files.example.test/part.step",
+		"note_by_a_person": "anything else",
+	}})
+	assert.NotContains(t, task.Metadata, "cad_file_url")
+	assert.NotContains(t, task.Metadata, "note_by_a_person")
+	for _, k := range []string{"source", "product_name", "product_sku", "quantity", "specifications", "assignment_basis", "assigned_machine_code"} {
+		assert.Contains(t, task.Metadata, k)
+	}
+	assert.Nil(t, terminalTask(types.Task{Metadata: map[string]any{"cad_file_url": "x"}}).Metadata)
+}
+
+func TestTerminalEventRemovesTheCustomerName(t *testing.T) {
+	created := repositories.OutboxEvent{EventType: "order.created", Payload: json.RawMessage(
+		`{"id":"e1","type":"order.created","data":{"entity_id":"o1","entity_type":"order","name":"Taller Ejemplo","metadata":{"item_count":2}}}`)}
+	status := repositories.OutboxEvent{EventType: "order.status_changed", Payload: json.RawMessage(
+		`{"id":"e2","type":"order.status_changed","data":{"order_id":"o1","new_status":"confirmed","customer_name":"Taller Ejemplo"}}`)}
+	moved := repositories.OutboxEvent{EventType: "task.moved", Payload: json.RawMessage(`{"data":{"task_title":"Soporte"}}`)}
+	for _, e := range []repositories.OutboxEvent{created, status} {
+		got := terminalEvent(e)
+		assert.NotContains(t, string(got.Payload), "Taller Ejemplo", e.EventType)
+		assert.Contains(t, string(got.Payload), `"o1"`, "the order id stays")
+	}
+	assert.Contains(t, string(terminalEvent(created).Payload), `"item_count":2`)
+	assert.Equal(t, string(moved.Payload), string(terminalEvent(moved).Payload), "other event types are untouched")
+	broken := terminalEvent(repositories.OutboxEvent{EventType: "order.created", Payload: json.RawMessage(`not json`)})
+	assert.Equal(t, "{}", string(broken.Payload), "an unreadable order payload is not passed on")
+}

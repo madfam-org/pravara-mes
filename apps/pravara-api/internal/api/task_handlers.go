@@ -152,6 +152,9 @@ func (h *TaskHandler) List(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		tasks = terminalTasks(tasks)
+	}
 	c.JSON(http.StatusOK, TaskListResponse{
 		Data:   tasks,
 		Total:  total,
@@ -200,6 +203,10 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		narrowed := terminalTask(*task)
+		task = &narrowed
+	}
 	c.JSON(http.StatusOK, task)
 }
 
@@ -696,6 +703,11 @@ func (h *TaskHandler) GetKanbanBoard(c *gin.Context) {
 		return
 	}
 
+	if isTerminalOnly(c) {
+		for status, tasks := range board {
+			board[status] = terminalTasks(tasks)
+		}
+	}
 	c.JSON(http.StatusOK, KanbanBoardResponse{Columns: board})
 }
 
