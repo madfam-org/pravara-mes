@@ -68,7 +68,7 @@ func TestMCPToolsOnPostgresAreTenantScoped(t *testing.T) {
 			'2026-10-15T12:00:00Z')`, tn.id, uuid.New(), order, sku, qty, uuid.New())
 		require.NoError(t, err)
 		_, err = admin.Exec(`INSERT INTO inventory_items (tenant_id, sku, name, unit, quantity_on_hand, quantity_reserved, unit_cost, currency)
-			VALUES ($1, $2, 'Filament', 'g', 1000, 50, 321.00, 'MXN')`, tn.id, sku)
+			VALUES ($1, $2, 'Filament', 'g', 1000, 50, 321.17, 'MXN')`, tn.id, sku)
 		require.NoError(t, err)
 		tn.rig = &mcpRig{scopeRig: &scopeRig{router: router, key: key, tenantID: tn.id, sqlDB: admin}}
 		return tn
@@ -105,7 +105,11 @@ func TestMCPToolsOnPostgresAreTenantScoped(t *testing.T) {
 		assert.Equal(t, []any{tc.sku, 1000.0, 50.0, 950.0, ""},
 			[]any{levels.Data[0].SKU, levels.Data[0].QuantityOnHand, levels.Data[0].QuantityReserved, levels.Data[0].QuantityAvailable,
 				levels.Data[0].Category}, "a NULL category reads as empty")
-		assert.NotContains(t, string(reply.Result.StructuredContent), "321")
+		// No cost reaches the tool: neither the fields nor the value (a
+		// bare "321" also matched random ids in the output).
+		for _, leak := range []string{"321.17", `"unit_cost"`, `"currency"`, "MXN"} {
+			assert.NotContains(t, string(reply.Result.StructuredContent), leak)
+		}
 
 		reply = readReply(t, tc.tn.rig.mcp(token, toolCall(4, MCPToolInventoryLevels, map[string]any{"material_code": tc.other})))
 		require.NoError(t, json.Unmarshal(reply.Result.StructuredContent, &levels))
