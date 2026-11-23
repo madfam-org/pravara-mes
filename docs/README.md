@@ -13,6 +13,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | [ECOSYSTEM.md](../ECOSYSTEM.md) | MADFAM ecosystem and Enclii operations context (generated) |
 | [README «Related repositories / contracts»](../README.md#related-repositories--contracts) | Cross-repo contracts, linked to the other side's doc |
 | [OBSERVABILITY.md](../OBSERVABILITY.md) | Metrics, logging, and monitoring |
+| [operations/applying-migrations.md](./operations/applying-migrations.md) | Applying migrations in production (the deploy does not), guarded records, rollback; the 2026-11-05 catch-up of 029, 032 and 033 |
 | [operations/database-app-role.md](./operations/database-app-role.md) | Database application role, row-level security and tenant context |
 | [operations/sign-in-tokens.md](./operations/sign-in-tokens.md) | Which bearer tokens the API accepts: machine tokens, session tokens and application roles |
 | [operations/shop-floor-terminal.md](./operations/shop-floor-terminal.md) | What a shop-floor terminal reads under `pravara-mes:terminal`, and why it never writes on its own authority; wire contract in [contracts/terminal.v1.json](./contracts/terminal.v1.json) |

@@ -62,6 +62,15 @@ State on 2026-10-04:
   an in-namespace database yet). Never paste a step together with its
   verification or with the next step.
 
+State on 2026-11-05: 028, 030 and 031 are recorded; **029 and 032 are not**,
+though the deployed code uses 032's tables. The catch-up in
+[applying-migrations.md](./applying-migrations.md) applies 029 (without the
+role: `FORCE` only, which changes nothing while the services connect as a
+superuser), then 032 and 033. Once it has run, step 2 below is done except for
+the grants: after step 1 creates the role, apply
+`infra/db/roles/pravara_app_grants.sql` as the schema owner (the same grants
+029 would have given). The role and the switch (steps 1 and 3) remain.
+
 ### Preconditions (each must be true before the switch in step 3)
 
 1. **Database identity.** The target is `postgres-pravara-0`, database
