@@ -8,7 +8,7 @@
 //
 // @contact.name PravaraMES Team
 // @contact.url https://github.com/madfam-org/pravara-mes
-// @contact.email support@pravara.io
+// @contact.email support@madfam.io
 //
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html

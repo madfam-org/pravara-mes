@@ -37,7 +37,7 @@ export default function NotFound() {
         <p className="mt-8 text-sm text-muted-foreground">
           If you believe this is an error, please{" "}
           <a
-            href="mailto:support@pravara.io"
+            href="mailto:support@madfam.io"
             className="text-primary underline-offset-4 hover:underline"
           >
             contact support
