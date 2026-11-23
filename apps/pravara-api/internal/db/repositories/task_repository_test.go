@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/madfam-org/pravara-mes/packages/sdk-go/pkg/types"
 )
 
@@ -595,6 +597,9 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 
 	// Test moving task to different status
 	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Get current task
 	currentRows := sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
@@ -602,6 +607,7 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 	mock.ExpectQuery("SELECT tenant_id, status, kanban_position FROM tasks WHERE id").
 		WithArgs(taskID).
 		WillReturnRows(currentRows)
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Shift positions in old column
 	mock.ExpectExec("UPDATE tasks SET kanban_position = kanban_position - 1").
@@ -625,6 +631,164 @@ func TestTaskRepository_MoveTask(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// A move that states the status it leaves is refused, with nothing written,
+// when the task is elsewhere (RFC 0064 §4.1, ruling PV-5).
+func TestTaskRepository_MoveTaskExpecting_Conflict(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID, tenantID := uuid.New(), uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id = \$1 AND .* FOR NO KEY UPDATE`).
+		WithArgs(taskID).
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
+			AddRow(tenantID, types.TaskStatusInProgress, 1))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
+
+	expected := types.TaskStatusQueued
+	move, err := repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusInProgress, nil, &expected)
+	var conflict *TaskStatusConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("want a status conflict, got %v", err)
+	}
+	if conflict.Current != types.TaskStatusInProgress {
+		t.Errorf("current status: got %s", conflict.Current)
+	}
+	if move != nil {
+		t.Errorf("a refused move reports no move")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// Without a position the task goes to the end of the target column.
+func TestTaskRepository_MoveTaskExpecting_EndOfColumn(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID, tenantID := uuid.New(), uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
+		WithArgs(taskID).
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
+			AddRow(tenantID, types.TaskStatusQueued, 2))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT COALESCE\(MAX\(kanban_position\), 0\) FROM tasks`).
+		WithArgs(tenantID, types.TaskStatusInProgress).
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(4))
+	mock.ExpectExec("UPDATE tasks SET kanban_position = kanban_position - 1").
+		WithArgs(tenantID, types.TaskStatusQueued, 2).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE tasks SET kanban_position = kanban_position \\+ 1").
+		WithArgs(tenantID, types.TaskStatusInProgress, 5).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("UPDATE tasks SET status").
+		WithArgs(taskID, types.TaskStatusInProgress, 5).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	expected := types.TaskStatusQueued
+	move, err := repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusInProgress, nil, &expected)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := TaskMove{OldStatus: types.TaskStatusQueued, OldPosition: 2, NewStatus: types.TaskStatusInProgress, NewPosition: 5}
+	if *move != want {
+		t.Errorf("move: got %+v, want %+v", *move, want)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// Without a position, within its own column, the task goes to the last place.
+func TestTaskRepository_MoveTaskExpecting_EndOfOwnColumn(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID, tenantID := uuid.New(), uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
+		WithArgs(taskID).
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}).
+			AddRow(tenantID, types.TaskStatusQueued, 2))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT COALESCE\(MAX\(kanban_position\), 0\) FROM tasks`).
+		WithArgs(tenantID, types.TaskStatusQueued).
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(3))
+	mock.ExpectExec("UPDATE tasks SET kanban_position = kanban_position - 1").
+		WithArgs(tenantID, types.TaskStatusQueued, 2, 3).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE tasks SET status").
+		WithArgs(taskID, types.TaskStatusQueued, 3).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	move, err := repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusQueued, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if move.NewPosition != 3 {
+		t.Errorf("new position: got %d, want 3", move.NewPosition)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestTaskRepository_MoveTaskExpecting_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).
+		WithArgs(taskID).
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "status", "kanban_position"}))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("0").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
+
+	if _, err := repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusQueued, nil, nil); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("want ErrTaskNotFound, got %v", err)
+	}
+	if ErrTaskNotFound.Error() != "task not found" {
+		t.Errorf("ErrTaskNotFound keeps the text existing callers match")
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
@@ -692,5 +856,58 @@ func TestTaskRepository_GetKanbanBoard(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// A move that cannot get the board within the lock timeout is refused as
+// busy, with nothing written.
+func TestTaskRepository_MoveTaskExpecting_BoardBusy(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnError(&pq.Error{Code: "55P03", Message: "canceling statement due to lock timeout"})
+	mock.ExpectRollback()
+
+	if _, err := repo.MoveTaskExpecting(context.Background(), uuid.New(), types.TaskStatusInProgress, nil, nil); !errors.Is(err, ErrTaskBoardBusy) {
+		t.Fatalf("want ErrTaskBoardBusy, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// A failure of the row-lock statement other than the lock timeout is
+// returned as it is; lock_timeout is not restored on the aborted savepoint.
+func TestTaskRepository_MoveTaskExpecting_RowReadFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+	repo := NewTaskRepository(db)
+	taskID := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`current_setting\('lock_timeout'\)`).WillReturnRows(sqlmock.NewRows([]string{"lock_timeout"}).AddRow("0"))
+	mock.ExpectExec(`set_config\('lock_timeout'`).WithArgs("5000ms").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT tenant_id, status, kanban_position FROM tasks WHERE id`).WithArgs(taskID).
+		WillReturnError(&pq.Error{Code: "40P01", Message: "deadlock detected"})
+	mock.ExpectRollback()
+
+	_, err = repo.MoveTaskExpecting(context.Background(), taskID, types.TaskStatusInProgress, nil, nil)
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) || pqErr.Code != "40P01" || errors.Is(err, ErrTaskBoardBusy) {
+		t.Fatalf("want the row read's own error, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations (no restore after the failed statement): %v", err)
 	}
 }

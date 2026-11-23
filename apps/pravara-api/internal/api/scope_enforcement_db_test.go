@@ -39,6 +39,7 @@ import (
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db"
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/db/repositories"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/pubsub"
 )
 
 const (
@@ -99,6 +100,13 @@ func newScratchDatabase(t *testing.T) *sql.DB {
 
 func newScopeRig(t *testing.T) *scopeRig {
 	t.Helper()
+	return newScopeRigWith(t, nil)
+}
+
+// newScopeRigWith is newScopeRig with an event publisher, which also wires
+// the task automation (machine commands on a move into in_progress).
+func newScopeRigWith(t *testing.T, publisher *pubsub.Publisher) *scopeRig {
+	t.Helper()
 	sqlDB := newScratchDatabase(t)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -126,9 +134,14 @@ func newScopeRig(t *testing.T) *scopeRig {
 	router := gin.New()
 	log := logrus.New()
 	log.SetLevel(logrus.PanicLevel)
-	RegisterRoutesAll(router, &db.DB{DB: sqlDB}, cfg, log, nil, nil, RoutesDeps{
-		APIKeyRepo: repositories.NewAPIKeyRepository(sqlDB),
-		OutboxRepo: repositories.NewOutboxRepository(sqlDB),
+	// The API connects as pravara_app (NOSUPERUSER NOBYPASSRLS), as in
+	// production, so every request runs under row-level security; sqlDB
+	// (the scratch database's owner) seeds and inspects rows.
+	app := &db.DB{DB: openAsApp(t, sqlDB)}
+	tdb := app.Tenant(log)
+	RegisterRoutesAll(router, app, cfg, log, publisher, nil, RoutesDeps{
+		APIKeyRepo: repositories.NewAPIKeyRepository(tdb),
+		OutboxRepo: repositories.NewOutboxRepository(tdb),
 	})
 	return &scopeRig{router: router, key: key, tenantID: tenantID, sqlDB: sqlDB}
 }
@@ -165,7 +178,12 @@ func (r *scopeRig) machineToken(t *testing.T, scope string, mutate func(jwt.MapC
 }
 
 func (r *scopeRig) userToken(t *testing.T, roles ...string) string {
-	c := r.baseClaims(uuid.NewString())
+	return r.userTokenFor(t, uuid.New(), roles...)
+}
+
+// userTokenFor is userToken for a given subject.
+func (r *scopeRig) userTokenFor(t *testing.T, sub uuid.UUID, roles ...string) string {
+	c := r.baseClaims(sub.String())
 	c["email"] = "person@example.test"
 	// A person's token as Janua issues it: type "access", and authority here
 	// only through this application's roles. Everyone here holds
@@ -229,7 +247,7 @@ func TestScopeEnforcementAgainstPostgres(t *testing.T) {
 		{"machine read: events", http.MethodGet, "/v1/events", rig.machineToken(t, "pravara-mes:read", nil), nil, http.StatusOK},
 		{"machine legacy name on events", http.MethodGet, "/v1/events", rig.machineToken(t, "read:events", nil), nil, http.StatusForbidden},
 		{"machine nodes: machine registry", http.MethodGet, "/v1/machines", rig.machineToken(t, "pravara-mes:nodes", nil), nil, http.StatusOK},
-		{"machine all scopes: unlisted route", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:jobs pravara-mes:nodes pravara-mes:passports pravara-mes:read", nil), nil, http.StatusForbidden},
+		{"machine, every scope but the terminal's: task reads", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:jobs pravara-mes:nodes pravara-mes:passports pravara-mes:read", nil), nil, http.StatusForbidden},
 		{"machine on admin route", http.MethodGet, "/v1/api-keys", rig.machineToken(t, "pravara-mes:read", nil), nil, http.StatusForbidden},
 		{"machine scope as JSON array", http.MethodPost, "/v1/orders", rig.machineToken(t, "", func(c jwt.MapClaims) { c["scope"] = []string{"pravara-mes:jobs"} }), order, http.StatusCreated},
 		{"machine token_use only (partial markers)", http.MethodGet, "/v1/tasks", rig.machineToken(t, "pravara-mes:read", func(c jwt.MapClaims) { delete(c, "actor_type"); c["sub"] = "x" }), nil, http.StatusForbidden},
@@ -250,7 +268,7 @@ func TestScopeEnforcementAgainstPostgres(t *testing.T) {
 		{"api key jobs: order intake", http.MethodPost, "/v1/orders", rig.apiKey(t, "pravara-mes:jobs"), order, http.StatusCreated},
 		{"api key legacy read:events", http.MethodGet, "/v1/events", rig.apiKey(t, "read:events"), nil, http.StatusOK},
 		{"api key legacy read:events: no intake", http.MethodPost, "/v1/orders", rig.apiKey(t, "read:events"), order, http.StatusForbidden},
-		{"api key read: unlisted route", http.MethodGet, "/v1/tasks", rig.apiKey(t, "pravara-mes:read"), nil, http.StatusForbidden},
+		{"api key read: task reads are the terminal's", http.MethodGet, "/v1/tasks", rig.apiKey(t, "pravara-mes:read"), nil, http.StatusForbidden},
 		{"api key wildcard: unlisted route", http.MethodGet, "/v1/tasks", rig.apiKey(t, "*"), nil, http.StatusOK},
 		{"no credentials", http.MethodGet, "/v1/orders", "", nil, http.StatusUnauthorized},
 	}

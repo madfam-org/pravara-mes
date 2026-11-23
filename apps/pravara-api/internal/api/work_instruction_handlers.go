@@ -456,10 +456,15 @@ func (h *WorkInstructionHandler) GetTaskWorkInstructions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"task_id": taskID,
-		"data":    taskWIs,
-	})
+	c.JSON(http.StatusOK, TaskWorkInstructionsResponse{TaskID: taskID, Data: taskWIs})
+}
+
+// TaskWorkInstructionsResponse is the body of GET
+// /v1/tasks/:id/work-instructions: the instructions attached to the task and
+// which of their steps were acknowledged.
+type TaskWorkInstructionsResponse struct {
+	TaskID uuid.UUID                          `json:"task_id"`
+	Data   []repositories.TaskWorkInstruction `json:"data"`
 }
 
 // AcknowledgeStep records that an operator acknowledged a specific step.

@@ -103,3 +103,12 @@ func TestIsValidAPIKeyScope(t *testing.T) {
 		assert.False(t, IsValidAPIKeyScope(s), s)
 	}
 }
+
+// An API key row carrying pravara-mes:terminal (never issuable) passes no
+// terminal route; the same scope on a Janua machine token does.
+func TestTerminalScopeOnAnAPIKeyRowOpensNothing(t *testing.T) {
+	req := Require(ScopeTerminal)
+	assert.False(t, req.Allows(Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeTerminal}}))
+	assert.True(t, req.Allows(Caller{Kind: CallerServiceAccount, ID: "jnc", Scopes: []string{ScopeTerminal}}))
+	assert.True(t, req.Allows(Caller{Kind: CallerAPIKey, ID: "k", Scopes: []string{ScopeTerminal, ScopeWildcard}}), "the wildcard still opens everything")
+}

@@ -87,11 +87,24 @@ func TestTenantIsolation_CrossTenantWritesRejected(t *testing.T) {
 		})
 		assert.ErrorContains(t, err, "read-only")
 	})
-	t.Run("truncate and migration table are not granted", func(t *testing.T) {
+	t.Run("truncate and migration-table writes are not granted", func(t *testing.T) {
 		_, err := r.pool.Exec(`TRUNCATE machines`)
 		assert.ErrorContains(t, err, "permission denied")
+		// schema_migrations is SELECT-only for the application role
+		// (infra/db/roles/pravara_app_grants.sql, docs/operations/
+		// database-app-role.md): the schema guard reads it; recording,
+		// changing or removing a migration stays with the owner.
 		_, err = r.pool.Exec(`SELECT 1 FROM schema_migrations LIMIT 1`)
-		assert.ErrorContains(t, err, "permission denied")
+		assert.NoError(t, err, "the schema guard reads schema_migrations")
+		for _, stmt := range []string{
+			`INSERT INTO schema_migrations (version) VALUES ('999_isolation_probe')`,
+			`UPDATE schema_migrations SET applied_at = applied_at`,
+			`DELETE FROM schema_migrations`,
+			`TRUNCATE schema_migrations`,
+		} {
+			_, err = r.pool.Exec(stmt)
+			assert.ErrorContains(t, err, "permission denied", stmt)
+		}
 	})
 }
 

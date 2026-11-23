@@ -322,6 +322,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 			batches := quality.Group("/batches")
 			{
 				batches.GET("", qualityHandler.ListBatchLots)
+				batches.GET("/lookup", qualityHandler.LookupBatchLot)
 				batches.POST("", qualityHandler.CreateBatchLot)
 				batches.GET("/:id", qualityHandler.GetBatchLotByID)
 				batches.PATCH("/:id", qualityHandler.UpdateBatchLot)
