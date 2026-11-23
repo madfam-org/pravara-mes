@@ -67,6 +67,12 @@ spec:
               value: "janua.dev"
             - name: OIDC_SESSION_ROLE_APP
               value: "pravara-mes"
+            # RFC 0051 native MCP (POST /mcp), off = 404, owner's switch (M6).
+            # ON since the owner's ruling of 2026-11-23 (internal-devops
+            # decisions/2026-11-23-ops-agents-mcp-access-wave-2.md): the ops
+            # agents read it with their org-bound pravara-cogs:read client.
+            - name: PRAVARA_MCP_ENABLED
+              value: "true"
           envFrom:
             - configMapRef:
                 name: pravara-config
