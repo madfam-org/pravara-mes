@@ -177,6 +177,22 @@ func TerminalReadRoutes() []string {
 	}
 }
 
+// IdempotentWriteRoutes honour an Idempotency-Key header
+// (middleware.Idempotent; RFC 0064 §5, ruling PV-4): the writes a shop-floor
+// terminal delivers at least once, each on a person's authority. The
+// terminal contract (docs/contracts/terminal.v1.json) lists the same writes;
+// TestTerminalContractWrites holds the two together. Receipts keep their own
+// body field.
+func IdempotentWriteRoutes() []string {
+	k := mw.RouteKey
+	post := http.MethodPost
+	return []string{
+		k(post, "/v1/tasks/:id/move"),
+		k(post, "/v1/tasks/:id/consumption"),
+		k(post, "/v1/tasks/:id/work-instructions/:wiId/acknowledge"),
+	}
+}
+
 // NonJWTRoute documents a /v1 route that takes neither a Janua token nor an
 // API key, and what protects it instead.
 type NonJWTRoute struct {
