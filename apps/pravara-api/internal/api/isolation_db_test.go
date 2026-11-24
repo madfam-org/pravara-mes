@@ -108,6 +108,66 @@ func TestTenantIsolation_CrossTenantWritesRejected(t *testing.T) {
 	})
 }
 
+// TestTenantIsolation_MachineReferencesValidated: routes that write a row
+// referencing a machine look the machine up in the caller's tenant first and
+// answer 404 for any other machine; nothing is written.
+func TestTenantIsolation_MachineReferencesValidated(t *testing.T) {
+	r := newIsolationRig(t)
+	aMachine := r.aMachine()
+	bMachine := r.createID(r.B, "/v1/machines", map[string]any{"name": "B printer", "code": "B-REF-1", "type": "3d_printer"})
+
+	writes := func(machine string) []call {
+		return []call{
+			{http.MethodPost, "/v1/maintenance/schedules", map[string]any{
+				"machine_id": machine, "name": "B schedule", "trigger_type": "calendar"}},
+			{http.MethodPost, "/v1/maintenance/work-orders", map[string]any{
+				"machine_id": machine, "work_order_number": "WO-" + uuid.NewString()[:8], "title": "B work order"}},
+			{http.MethodPost, "/v1/telemetry/batch", map[string]any{
+				"records": []map[string]any{{"machine_id": machine, "metric_type": "temperature", "value": 2.0}}}},
+		}
+	}
+
+	for _, c := range writes(aMachine) {
+		res := r.do(r.B, c.method, c.path, c.body)
+		assert.Equalf(t, http.StatusNotFound, res.Code, "B %s %s with A's machine: %s", c.method, c.path, res.Body)
+	}
+	// A batch mixing B's machine with A's is refused as a whole.
+	res := r.do(r.B, http.MethodPost, "/v1/telemetry/batch", map[string]any{"records": []map[string]any{
+		{"machine_id": bMachine, "metric_type": "temperature", "value": 3.0},
+		{"machine_id": aMachine, "metric_type": "temperature", "value": 4.0},
+	}})
+	assert.Equal(t, http.StatusNotFound, res.Code, string(res.Body))
+
+	// Nothing reached A's machine.
+	for _, q := range []string{
+		`SELECT COUNT(*) FROM maintenance_schedules WHERE machine_id = $1`,
+		`SELECT COUNT(*) FROM maintenance_work_orders WHERE machine_id = $1`,
+		`SELECT COUNT(*) FROM telemetry WHERE machine_id = $1`,
+	} {
+		var n int
+		require.NoError(t, db.RunInTenantTx(context.Background(), r.pool, r.A.ID.String(), func(ctx context.Context) error {
+			return r.tdb.QueryRowContext(ctx, q, aMachine).Scan(&n)
+		}))
+		assert.Zero(t, n, q)
+	}
+
+	// The same writes against B's own machine succeed; a work order opened
+	// through the route starts as "scheduled".
+	for _, c := range writes(bMachine) {
+		res := r.do(r.B, c.method, c.path, c.body)
+		require.Equalf(t, http.StatusCreated, res.Code, "B %s %s with its own machine: %s", c.method, c.path, res.Body)
+		if c.path == "/v1/maintenance/work-orders" {
+			var wo struct {
+				Status    string `json:"status"`
+				MachineID string `json:"machine_id"`
+			}
+			require.NoError(t, json.Unmarshal(res.Body, &wo))
+			assert.Equal(t, "scheduled", wo.Status)
+			assert.Equal(t, bMachine, wo.MachineID)
+		}
+	}
+}
+
 // TestTenantIsolation_APIKeyPath: a tenant's API key reads only that tenant.
 func TestTenantIsolation_APIKeyPath(t *testing.T) {
 	r := newIsolationRig(t)

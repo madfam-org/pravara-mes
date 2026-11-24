@@ -97,7 +97,7 @@ func (r *PassportRepository) RecordByDispatch(ctx context.Context, dispatchID uu
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, tenant_id, dispatch_id, command_id, task_id, machine_id, genealogy_id, instance_uuid,
 		       completion_event_id, record, record_sha256, created_at
-		FROM manufacturing_records WHERE dispatch_id = $1`, dispatchID).Scan(&rec.ID, &rec.TenantID, &rec.DispatchID,
+		FROM manufacturing_records WHERE dispatch_id = $1 AND `+tenantMatch, dispatchID).Scan(&rec.ID, &rec.TenantID, &rec.DispatchID,
 		&rec.CommandID, &task, &machine, &gen, &rec.InstanceUUID, &ev, &body, &rec.RecordSHA256, &rec.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -120,7 +120,7 @@ func (r *PassportRepository) Enqueue(ctx context.Context, row *PassportOutboxRow
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO passport_outbox (id, tenant_id, manufacturing_record_id, kind, sequence, event_id, payload, payload_sha256)
 		VALUES ($1, $2, $3, $4,
-			COALESCE((SELECT max(sequence) + 1 FROM passport_outbox WHERE manufacturing_record_id = $3), 0),
+			COALESCE((SELECT max(sequence) + 1 FROM passport_outbox WHERE manufacturing_record_id = $3 AND `+tenantMatch+`), 0),
 			$5, $6, $7)
 		RETURNING sequence, status, next_attempt_at`,
 		row.ID, row.TenantID, row.ManufacturingRecordID, row.Kind, nullUUID(row.EventID), []byte(row.Payload), row.PayloadSHA256,
@@ -139,10 +139,10 @@ func (r *PassportRepository) DuePassportDeliveries(ctx context.Context, limit in
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT o.id, o.tenant_id, o.manufacturing_record_id, o.kind, o.sequence, o.event_id, o.payload,
 		       o.payload_sha256, o.status, o.attempts, o.next_attempt_at, m.instance_uuid
-		FROM passport_outbox o JOIN manufacturing_records m ON m.id = o.manufacturing_record_id
-		WHERE o.status = 'pending' AND o.next_attempt_at <= NOW()
+		FROM passport_outbox o JOIN manufacturing_records m ON m.id = o.manufacturing_record_id AND m.tenant_id = o.tenant_id
+		WHERE o.status = 'pending' AND o.next_attempt_at <= NOW() AND `+tenantMatchOn("o")+`
 		  AND NOT EXISTS (SELECT 1 FROM passport_outbox p
-		                  WHERE p.manufacturing_record_id = o.manufacturing_record_id
+		                  WHERE p.manufacturing_record_id = o.manufacturing_record_id AND p.tenant_id = o.tenant_id
 		                    AND p.sequence < o.sequence AND p.status <> 'delivered')
 		ORDER BY o.next_attempt_at, o.sequence
 		LIMIT $1`, limit)
@@ -173,7 +173,7 @@ func (r *PassportRepository) MarkDelivered(ctx context.Context, id uuid.UUID, st
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE passport_outbox SET status = 'delivered', attempts = attempts + 1, last_status_code = $2,
 			response = $3, delivered_at = NOW(), last_error = NULL, updated_at = NOW()
-		WHERE id = $1`, id, status, response)
+		WHERE id = $1 AND `+tenantMatch, id, status, response)
 	if err != nil {
 		return fmt.Errorf("mark passport delivered: %w", err)
 	}
@@ -193,7 +193,7 @@ func (r *PassportRepository) MarkAttemptFailed(ctx context.Context, id uuid.UUID
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE passport_outbox SET status = $2, attempts = attempts + 1, last_status_code = NULLIF($3, 0),
 			last_error = $4, next_attempt_at = $5, updated_at = NOW()
-		WHERE id = $1`, id, newStatus, status, msg, next)
+		WHERE id = $1 AND `+tenantMatch, id, newStatus, status, msg, next)
 	if err != nil {
 		return fmt.Errorf("record passport attempt: %w", err)
 	}
@@ -205,7 +205,7 @@ func (r *PassportRepository) Deliveries(ctx context.Context, recordID uuid.UUID)
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, tenant_id, manufacturing_record_id, kind, sequence, event_id, payload_sha256, status, attempts,
 		       next_attempt_at, COALESCE(last_error, ''), COALESCE(last_status_code, 0), delivered_at
-		FROM passport_outbox WHERE manufacturing_record_id = $1 ORDER BY sequence`, recordID)
+		FROM passport_outbox WHERE manufacturing_record_id = $1 AND `+tenantMatch+` ORDER BY sequence`, recordID)
 	if err != nil {
 		return nil, fmt.Errorf("list deliveries: %w", err)
 	}

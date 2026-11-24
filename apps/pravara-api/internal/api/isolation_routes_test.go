@@ -102,6 +102,25 @@ func isolationCases() []isoCase {
 		}, lists: []string{"/v1/maintenance/work-orders"}, item: "/v1/maintenance/work-orders/%s",
 			patch: map[string]any{"title": pwned},
 			extra: []call{{http.MethodPost, "/v1/maintenance/work-orders/%s/complete", map[string]any{"notes": pwned}}}},
+		{name: "maintenance work orders created through the route", setup: func(r *isolationRig) string {
+			return r.createID(r.A, "/v1/maintenance/work-orders", map[string]any{
+				"machine_id": r.aMachine(), "work_order_number": "WO-" + uuid.NewString()[:8], "title": "A secret routed work order"})
+		}, lists: []string{"/v1/maintenance/work-orders"}, item: "/v1/maintenance/work-orders/%s",
+			patch: map[string]any{"title": pwned},
+			extra: []call{{http.MethodPost, "/v1/maintenance/work-orders/%s/complete", map[string]any{"notes": pwned}}}},
+		{name: "dispatches and passport records", setup: func(r *isolationRig) string {
+			task := r.createID(r.A, "/v1/tasks", map[string]any{"title": "A secret dispatched task"})
+			id, rec := uuid.NewString(), uuid.NewString()
+			r.seed(r.A.ID, `INSERT INTO dispatch_jobs (id, tenant_id, task_id, status, completed_at)
+				VALUES ($1, $2, $3, 'completed', NOW())`, id, r.A.ID, task)
+			r.seed(r.A.ID, `INSERT INTO manufacturing_records (id, tenant_id, dispatch_id, command_id, task_id, instance_uuid, record, record_sha256)
+				VALUES ($1, $2, $3, $4, $5, $6, '{"marker":"A secret record"}', repeat('0', 64))`,
+				rec, r.A.ID, id, uuid.NewString(), task, uuid.NewString())
+			r.seed(r.A.ID, `INSERT INTO passport_outbox (tenant_id, manufacturing_record_id, kind, sequence, payload, payload_sha256)
+				VALUES ($1, $2, 'instance', 0, '{}', repeat('0', 64))`, r.A.ID, rec)
+			return id
+		}, lists: []string{"/v1/dispatches", "/v1/dispatches?status=completed"}, item: "/v1/dispatches/%s",
+			extra: []call{{http.MethodGet, "/v1/dispatches/%s/artifacts/artifact", nil}}},
 		{name: "products and BOM", setup: func(r *isolationRig) string {
 			id := r.createID(r.A, "/v1/products", map[string]any{
 				"sku": "SKU-" + uuid.NewString()[:8], "name": "A secret bracket", "version": "1.0", "category": "3d_print"})
