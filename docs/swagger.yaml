@@ -4044,6 +4044,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Machine not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -4252,6 +4258,12 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Machine not found
           schema:
             additionalProperties:
               type: string
@@ -6394,6 +6406,12 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Machine not found
           schema:
             additionalProperties:
               type: string

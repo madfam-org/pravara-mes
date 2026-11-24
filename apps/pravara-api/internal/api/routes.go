@@ -97,7 +97,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	taskHandler := NewTaskHandler(taskRepo, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	machineHandler.SetCommandLedger(taskCmdRepo)
-	telemetryHandler := NewTelemetryHandler(telemetryRepo, log)
+	telemetryHandler := NewTelemetryHandler(telemetryRepo, machineRepo, log)
 	webhookHandler := NewWebhookHandler(orderRepo, orderItemRepo, log, cfg.Cotiza.WebhookSecret)
 	tezcaSvc := services.NewTezcaService(cfg.Tezca, log)
 	tezcaWebhookHandler := NewTezcaWebhookHandler(log, cfg.Tezca.WebhookSecret, tezcaSvc)
@@ -110,7 +110,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 
 	// Phase 2.6+ handlers
 	analyticsHandler := NewAnalyticsHandler(oeeRepo, log)
-	maintenanceHandler := NewMaintenanceHandler(maintRepo, log)
+	maintenanceHandler := NewMaintenanceHandler(maintRepo, machineRepo, log)
 	productHandler := NewProductHandler(productRepo, log)
 	genealogyHandler := NewGenealogyHandler(genealogyRepo, log)
 	wiHandler := NewWorkInstructionHandler(wiRepo, log)

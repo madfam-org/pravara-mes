@@ -165,7 +165,7 @@ func (r *DispatchRepository) Create(ctx context.Context, d *DispatchJob) error {
 
 // Get reads one dispatch (nil when not found in the tenant).
 func (r *DispatchRepository) Get(ctx context.Context, id uuid.UUID) (*DispatchJob, error) {
-	d, err := scanDispatch(r.db.QueryRowContext(ctx, `SELECT `+dispatchColumns+` FROM dispatch_jobs WHERE id = $1`, id))
+	d, err := scanDispatch(r.db.QueryRowContext(ctx, `SELECT `+dispatchColumns+` FROM dispatch_jobs WHERE id = $1 AND `+tenantMatch, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -189,7 +189,7 @@ func (r *DispatchRepository) List(ctx context.Context, f DispatchFilter) ([]Disp
 		limit = 50
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT `+dispatchColumns+` FROM dispatch_jobs
-		WHERE ($1::uuid IS NULL OR task_id = $1) AND ($2 = '' OR status = $2)
+		WHERE ($1::uuid IS NULL OR task_id = $1) AND ($2 = '' OR status = $2) AND `+tenantMatch+`
 		ORDER BY created_at DESC LIMIT $3`, nullUUID(f.TaskID), f.Status, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list dispatches: %w", err)
@@ -212,9 +212,9 @@ func (r *DispatchRepository) List(ctx context.Context, f DispatchFilter) ([]Disp
 func (r *DispatchRepository) ClaimDue(ctx context.Context, tenantID uuid.UUID, owner string, lease time.Duration, limit int) ([]DispatchJob, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		UPDATE dispatch_jobs d SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-		WHERE d.id IN (
+		WHERE `+tenantMatchOn("d")+` AND d.id IN (
 			SELECT id FROM dispatch_jobs
-			WHERE tenant_id = $1 AND status = ANY($5) AND next_attempt_at <= NOW()
+			WHERE tenant_id = $1 AND `+tenantMatch+` AND status = ANY($5) AND next_attempt_at <= NOW()
 			  AND (lease_until IS NULL OR lease_until < NOW())
 			ORDER BY next_attempt_at
 			LIMIT $4
@@ -242,7 +242,7 @@ func (r *DispatchRepository) ClaimDue(ctx context.Context, tenantID uuid.UUID, o
 func (r *DispatchRepository) ExtendLease(ctx context.Context, id uuid.UUID, owner string, lease time.Duration) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE dispatch_jobs SET lease_until = NOW() + make_interval(secs => $3)
-		WHERE id = $1 AND lease_owner = $2`, id, owner, lease.Seconds())
+		WHERE id = $1 AND lease_owner = $2 AND `+tenantMatch, id, owner, lease.Seconds())
 	if err != nil {
 		return fmt.Errorf("extend dispatch lease: %w", err)
 	}
@@ -265,7 +265,7 @@ func (r *DispatchRepository) Save(ctx context.Context, d *DispatchJob, owner str
 			render_bundle = $10, slice_result = $11, command_id = $12, attempts = $13, next_attempt_at = $14,
 			error_code = NULLIF($15, ''), error_message = NULLIF($16, ''), error_retryable = $17,
 			completed_at = $18, lease_owner = NULL, lease_until = NULL, updated_at = NOW()
-		WHERE id = $1 AND lease_owner = $19`,
+		WHERE id = $1 AND lease_owner = $19 AND `+tenantMatch,
 		d.ID, d.Status, nullUUID(d.MachineID), nullUUID(d.ProductDefinitionID), nullUUID(d.OrderItemID),
 		d.TypeShellID, d.Part, jsonArg(d.Requirements), jsonArg(d.MatchResult), jsonArg(d.RenderBundle),
 		jsonArg(d.SliceResult), nullUUID(d.CommandID), d.Attempts, d.NextAttemptAt, d.ErrorCode, d.ErrorMessage,
@@ -286,14 +286,14 @@ func (r *DispatchRepository) Save(ctx context.Context, d *DispatchJob, owner str
 func (r *DispatchRepository) AcquireReservation(ctx context.Context, tenantID, machineID, dispatchID uuid.UUID, ttl time.Duration) (uuid.UUID, time.Time, error) {
 	if _, err := r.db.ExecContext(ctx, `
 		UPDATE machine_reservations SET status = 'expired', released_at = NOW(), release_reason = 'ttl elapsed'
-		WHERE machine_id = $1 AND status = 'active' AND expires_at <= NOW()`, machineID); err != nil {
+		WHERE machine_id = $1 AND status = 'active' AND expires_at <= NOW() AND `+tenantMatch, machineID); err != nil {
 		return uuid.Nil, time.Time{}, fmt.Errorf("expire reservations: %w", err)
 	}
 	var id uuid.UUID
 	var expires time.Time
 	err := r.db.QueryRowContext(ctx, `
 		UPDATE machine_reservations SET expires_at = NOW() + make_interval(secs => $3)
-		WHERE machine_id = $1 AND dispatch_id = $2 AND status = 'active'
+		WHERE machine_id = $1 AND dispatch_id = $2 AND status = 'active' AND `+tenantMatch+`
 		RETURNING id, expires_at`, machineID, dispatchID, ttl.Seconds()).Scan(&id, &expires)
 	if err == nil {
 		return id, expires, nil
@@ -320,7 +320,7 @@ func (r *DispatchRepository) AcquireReservation(ctx context.Context, tenantID, m
 func (r *DispatchRepository) ExtendReservation(ctx context.Context, dispatchID uuid.UUID, ttl time.Duration) (bool, error) {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE machine_reservations SET expires_at = NOW() + make_interval(secs => $2)
-		WHERE dispatch_id = $1 AND status = 'active' AND expires_at > NOW()`, dispatchID, ttl.Seconds())
+		WHERE dispatch_id = $1 AND status = 'active' AND expires_at > NOW() AND `+tenantMatch, dispatchID, ttl.Seconds())
 	if err != nil {
 		return false, fmt.Errorf("extend reservation: %w", err)
 	}
@@ -332,7 +332,7 @@ func (r *DispatchRepository) ExtendReservation(ctx context.Context, dispatchID u
 func (r *DispatchRepository) ReleaseReservations(ctx context.Context, dispatchID uuid.UUID, reason string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE machine_reservations SET status = 'released', released_at = NOW(), release_reason = $2
-		WHERE dispatch_id = $1 AND status = 'active'`, dispatchID, reason)
+		WHERE dispatch_id = $1 AND status = 'active' AND `+tenantMatch, dispatchID, reason)
 	if err != nil {
 		return fmt.Errorf("release reservations: %w", err)
 	}
@@ -342,7 +342,7 @@ func (r *DispatchRepository) ReleaseReservations(ctx context.Context, dispatchID
 // ActiveReservations maps machine id → dispatch id for unexpired reservations.
 func (r *DispatchRepository) ActiveReservations(ctx context.Context) (map[uuid.UUID]uuid.UUID, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT machine_id, dispatch_id FROM machine_reservations
-		WHERE status = 'active' AND expires_at > NOW()`)
+		WHERE status = 'active' AND expires_at > NOW() AND `+tenantMatch)
 	if err != nil {
 		return nil, fmt.Errorf("list reservations: %w", err)
 	}

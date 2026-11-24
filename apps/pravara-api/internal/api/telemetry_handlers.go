@@ -16,15 +16,18 @@ import (
 
 // TelemetryHandler handles telemetry-related HTTP requests.
 type TelemetryHandler struct {
-	repo *repositories.TelemetryRepository
-	log  *logrus.Logger
+	repo        *repositories.TelemetryRepository
+	machineRepo *repositories.MachineRepository
+	log         *logrus.Logger
 }
 
-// NewTelemetryHandler creates a new telemetry handler.
-func NewTelemetryHandler(repo *repositories.TelemetryRepository, log *logrus.Logger) *TelemetryHandler {
+// NewTelemetryHandler creates a new telemetry handler. machineRepo is used to
+// check that each referenced machine belongs to the caller's tenant.
+func NewTelemetryHandler(repo *repositories.TelemetryRepository, machineRepo *repositories.MachineRepository, log *logrus.Logger) *TelemetryHandler {
 	return &TelemetryHandler{
-		repo: repo,
-		log:  log,
+		repo:        repo,
+		machineRepo: machineRepo,
+		log:         log,
 	}
 }
 
@@ -245,6 +248,7 @@ func (h *TelemetryHandler) GetAggregated(c *gin.Context) {
 // @Success 201 {object} map[string]interface{} "Insertion confirmation with count"
 // @Failure 400 {object} map[string]string "Validation error or empty batch"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Machine not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /telemetry/batch [post]
@@ -318,6 +322,19 @@ func (h *TelemetryHandler) BatchInsert(c *gin.Context) {
 			"message": "No valid records to insert",
 		})
 		return
+	}
+
+	// Every referenced machine must belong to the caller's tenant; the batch
+	// is refused as a whole otherwise.
+	checked := make(map[uuid.UUID]bool, len(records))
+	for _, r := range records {
+		if checked[r.MachineID] {
+			continue
+		}
+		if !requireTenantMachine(c, h.machineRepo, h.log, r.MachineID) {
+			return
+		}
+		checked[r.MachineID] = true
 	}
 
 	if err := h.repo.CreateBatch(c.Request.Context(), records); err != nil {

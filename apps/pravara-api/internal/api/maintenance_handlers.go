@@ -19,16 +19,19 @@ import (
 // MaintenanceHandler handles maintenance-related HTTP requests.
 type MaintenanceHandler struct {
 	maintRepo    *repositories.MaintenanceRepository
+	machineRepo  *repositories.MachineRepository
 	maintService *services.MaintenanceService
 	publisher    *pubsub.Publisher
 	log          *logrus.Logger
 }
 
-// NewMaintenanceHandler creates a new maintenance handler.
-func NewMaintenanceHandler(maintRepo *repositories.MaintenanceRepository, log *logrus.Logger) *MaintenanceHandler {
+// NewMaintenanceHandler creates a new maintenance handler. machineRepo is
+// used to check that a referenced machine belongs to the caller's tenant.
+func NewMaintenanceHandler(maintRepo *repositories.MaintenanceRepository, machineRepo *repositories.MachineRepository, log *logrus.Logger) *MaintenanceHandler {
 	return &MaintenanceHandler{
-		maintRepo: maintRepo,
-		log:       log,
+		maintRepo:   maintRepo,
+		machineRepo: machineRepo,
+		log:         log,
 	}
 }
 
@@ -239,6 +242,7 @@ func (h *MaintenanceHandler) GetScheduleByID(c *gin.Context) {
 // @Success 201 {object} repositories.MaintenanceSchedule "Created schedule"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Machine not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/schedules [post]
@@ -262,6 +266,10 @@ func (h *MaintenanceHandler) CreateSchedule(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantMachine(c, h.machineRepo, h.log, req.MachineID) {
+		return
+	}
 
 	schedule := &repositories.MaintenanceSchedule{
 		TenantID:           tenantUUID,
@@ -590,6 +598,7 @@ func (h *MaintenanceHandler) GetWorkOrderByID(c *gin.Context) {
 // @Success 201 {object} repositories.MaintenanceWorkOrder "Created work order"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Machine not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/work-orders [post]
@@ -614,6 +623,12 @@ func (h *MaintenanceHandler) CreateWorkOrder(c *gin.Context) {
 
 	tenantUUID, _ := uuid.Parse(tenantID)
 
+	if !requireTenantMachine(c, h.machineRepo, h.log, req.MachineID) {
+		return
+	}
+
+	// A new work order starts as "scheduled", the initial value of the
+	// work_order_status enum (migration 017).
 	wo := &repositories.MaintenanceWorkOrder{
 		TenantID:        tenantUUID,
 		ScheduleID:      req.ScheduleID,
@@ -621,7 +636,7 @@ func (h *MaintenanceHandler) CreateWorkOrder(c *gin.Context) {
 		WorkOrderNumber: req.WorkOrderNumber,
 		Title:           req.Title,
 		Description:     req.Description,
-		Status:          "open",
+		Status:          "scheduled",
 		Priority:        req.Priority,
 		AssignedTo:      req.AssignedTo,
 		Checklist:       req.Checklist,

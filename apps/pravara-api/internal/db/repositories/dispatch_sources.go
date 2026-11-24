@@ -48,7 +48,8 @@ func (s *DispatchSources) TaskContext(ctx context.Context, taskID uuid.UUID) (*T
 	err := s.db.QueryRowContext(ctx, `
 		SELECT t.status, t.order_id, t.order_item_id, oi.product_sku, oi.specifications
 		FROM tasks t LEFT JOIN order_items oi ON oi.id = t.order_item_id
-		WHERE t.id = $1`, taskID).Scan(&tc.TaskStatus, &orderID, &itemID, &sku, &specs)
+			AND oi.order_id IN (SELECT id FROM orders WHERE `+tenantMatch+`)
+		WHERE t.id = $1 AND `+tenantMatchOn("t"), taskID).Scan(&tc.TaskStatus, &orderID, &itemID, &sku, &specs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -64,7 +65,7 @@ func (s *DispatchSources) TaskContext(ctx context.Context, taskID uuid.UUID) (*T
 	var meta, params []byte
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id, metadata, parametric_specs FROM product_definitions
-		WHERE sku = $1 AND is_active ORDER BY updated_at DESC LIMIT 1`, tc.ProductSKU).Scan(&pid, &meta, &params)
+		WHERE sku = $1 AND is_active AND `+tenantMatch+` ORDER BY updated_at DESC LIMIT 1`, tc.ProductSKU).Scan(&pid, &meta, &params)
 	if errors.Is(err, sql.ErrNoRows) {
 		return tc, nil
 	}
@@ -92,10 +93,12 @@ func (s *DispatchSources) MatchMachines(ctx context.Context) ([]matchmaking.Mach
 		       COALESCE(m.specifications -> 'fabrication_capabilities', '{}'::jsonb),
 		       COALESCE(m.metadata -> 'fabrication_prep', '{}'::jsonb),
 		       COALESCE(m.metadata -> 'material_lots', '{}'::jsonb),
-		       (SELECT count(*) FROM tasks t WHERE t.machine_id = m.id AND t.status IN ('queued', 'in_progress')),
+		       (SELECT count(*) FROM tasks t WHERE t.machine_id = m.id AND t.tenant_id = m.tenant_id
+		          AND t.status IN ('queued', 'in_progress')),
 		       (SELECT r.dispatch_id FROM machine_reservations r
-		         WHERE r.machine_id = m.id AND r.status = 'active' AND r.expires_at > NOW() LIMIT 1)
-		FROM machines m ORDER BY m.code`)
+		         WHERE r.machine_id = m.id AND r.tenant_id = m.tenant_id AND r.status = 'active'
+		           AND r.expires_at > NOW() LIMIT 1)
+		FROM machines m WHERE `+tenantMatchOn("m")+` ORDER BY m.code`)
 	if err != nil {
 		return nil, fmt.Errorf("list machines: %w", err)
 	}
@@ -130,7 +133,7 @@ func (s *DispatchSources) MatchMachines(ctx context.Context) ([]matchmaking.Mach
 // MachineCode returns a machine's code ("" when not found).
 func (s *DispatchSources) MachineCode(ctx context.Context, id uuid.UUID) (string, error) {
 	var code string
-	err := s.db.QueryRowContext(ctx, `SELECT code FROM machines WHERE id = $1`, id).Scan(&code)
+	err := s.db.QueryRowContext(ctx, `SELECT code FROM machines WHERE id = $1 AND `+tenantMatch, id).Scan(&code)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -152,7 +155,7 @@ func (s *DispatchSources) LiveStates(ctx context.Context, _ uuid.UUID, ids []uui
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT machine_id, online, COALESCE(state_status, ''), material_slots, capabilities,
 		       born_at, died_at, COALESCE(reported_at, updated_at)
-		FROM machine_live_state WHERE machine_id = ANY($1::uuid[])`, pq.Array(args))
+		FROM machine_live_state WHERE machine_id = ANY($1::uuid[]) AND `+tenantMatch, pq.Array(args))
 	if err != nil {
 		return nil, fmt.Errorf("read live state: %w", err)
 	}
@@ -203,7 +206,7 @@ func (s *DispatchSources) FindCompletionEvent(ctx context.Context, types []strin
 	var payload []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, event_type, created_at, payload FROM event_outbox
-		WHERE event_type = ANY($1) AND payload -> 'data' ->> 'command_id' = $2
+		WHERE event_type = ANY($1) AND payload -> 'data' ->> 'command_id' = $2 AND `+tenantMatch+`
 		ORDER BY array_position($1::text[], event_type::text), created_at LIMIT 1`, pq.Array(types), commandID.String()).Scan(&ev.EventID, &ev.Type, &ev.CreatedAt, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -223,7 +226,7 @@ func (s *DispatchSources) FindCompletionEvent(ctx context.Context, types []strin
 func (s *DispatchSources) CommandLedgerState(ctx context.Context, commandID uuid.UUID) (status string, machineID uuid.UUID, completedAt *time.Time, errMsg string, err error) {
 	var done sql.NullTime
 	var msg sql.NullString
-	err = s.db.QueryRowContext(ctx, `SELECT status, machine_id, completed_at, error_message FROM task_commands WHERE command_id = $1`,
+	err = s.db.QueryRowContext(ctx, `SELECT status, machine_id, completed_at, error_message FROM task_commands WHERE command_id = $1 AND `+tenantMatch,
 		commandID).Scan(&status, &machineID, &done, &msg)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", uuid.Nil, nil, "", nil
@@ -238,7 +241,7 @@ func (s *DispatchSources) CommandLedgerState(ctx context.Context, commandID uuid
 // (the job started) and completed; nil for a time not recorded.
 func (s *DispatchSources) CommandTimes(ctx context.Context, commandID uuid.UUID) (ackedAt, completedAt *time.Time, err error) {
 	var acked, done sql.NullTime
-	err = s.db.QueryRowContext(ctx, `SELECT acked_at, completed_at FROM task_commands WHERE command_id = $1`,
+	err = s.db.QueryRowContext(ctx, `SELECT acked_at, completed_at FROM task_commands WHERE command_id = $1 AND `+tenantMatch,
 		commandID).Scan(&acked, &done)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil
