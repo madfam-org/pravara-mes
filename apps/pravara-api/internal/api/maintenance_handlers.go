@@ -20,17 +20,20 @@ import (
 type MaintenanceHandler struct {
 	maintRepo    *repositories.MaintenanceRepository
 	machineRepo  *repositories.MachineRepository
+	refs         repositories.DBTX
 	maintService *services.MaintenanceService
 	publisher    *pubsub.Publisher
 	log          *logrus.Logger
 }
 
-// NewMaintenanceHandler creates a new maintenance handler. machineRepo is
-// used to check that a referenced machine belongs to the caller's tenant.
-func NewMaintenanceHandler(maintRepo *repositories.MaintenanceRepository, machineRepo *repositories.MachineRepository, log *logrus.Logger) *MaintenanceHandler {
+// NewMaintenanceHandler creates a new maintenance handler. machineRepo and
+// refs are used to check that a referenced machine, schedule or user belongs
+// to the caller's tenant.
+func NewMaintenanceHandler(maintRepo *repositories.MaintenanceRepository, machineRepo *repositories.MachineRepository, refs repositories.DBTX, log *logrus.Logger) *MaintenanceHandler {
 	return &MaintenanceHandler{
 		maintRepo:   maintRepo,
 		machineRepo: machineRepo,
+		refs:        refs,
 		log:         log,
 	}
 }
@@ -242,7 +245,7 @@ func (h *MaintenanceHandler) GetScheduleByID(c *gin.Context) {
 // @Success 201 {object} repositories.MaintenanceSchedule "Created schedule"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
-// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 404 {object} map[string]string "Machine or assigned user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/schedules [post]
@@ -268,6 +271,9 @@ func (h *MaintenanceHandler) CreateSchedule(c *gin.Context) {
 	tenantUUID, _ := uuid.Parse(tenantID)
 
 	if !requireTenantMachine(c, h.machineRepo, h.log, req.MachineID) {
+		return
+	}
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefUsers, req.AssignedTo)) {
 		return
 	}
 
@@ -324,7 +330,7 @@ func (h *MaintenanceHandler) CreateSchedule(c *gin.Context) {
 // @Param body body UpdateScheduleRequest true "Updated schedule data"
 // @Success 200 {object} repositories.MaintenanceSchedule "Updated schedule"
 // @Failure 400 {object} map[string]string "Invalid ID or validation error"
-// @Failure 404 {object} map[string]string "Schedule not found"
+// @Failure 404 {object} map[string]string "Schedule or assigned user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/schedules/{id} [put]
@@ -362,6 +368,10 @@ func (h *MaintenanceHandler) UpdateSchedule(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefUsers, req.AssignedTo)) {
 		return
 	}
 
@@ -598,7 +608,7 @@ func (h *MaintenanceHandler) GetWorkOrderByID(c *gin.Context) {
 // @Success 201 {object} repositories.MaintenanceWorkOrder "Created work order"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
-// @Failure 404 {object} map[string]string "Machine not found"
+// @Failure 404 {object} map[string]string "Machine, schedule or assigned user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/work-orders [post]
@@ -624,6 +634,11 @@ func (h *MaintenanceHandler) CreateWorkOrder(c *gin.Context) {
 	tenantUUID, _ := uuid.Parse(tenantID)
 
 	if !requireTenantMachine(c, h.machineRepo, h.log, req.MachineID) {
+		return
+	}
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefMaintenanceSchedule, req.ScheduleID),
+		optRef(repositories.RefUsers, req.AssignedTo)) {
 		return
 	}
 
@@ -673,7 +688,7 @@ func (h *MaintenanceHandler) CreateWorkOrder(c *gin.Context) {
 // @Param body body UpdateWorkOrderRequest true "Updated work order data"
 // @Success 200 {object} repositories.MaintenanceWorkOrder "Updated work order"
 // @Failure 400 {object} map[string]string "Invalid ID or validation error"
-// @Failure 404 {object} map[string]string "Work order not found"
+// @Failure 404 {object} map[string]string "Work order or assigned user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /maintenance/work-orders/{id} [put]
@@ -711,6 +726,10 @@ func (h *MaintenanceHandler) UpdateWorkOrder(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefUsers, req.AssignedTo)) {
 		return
 	}
 

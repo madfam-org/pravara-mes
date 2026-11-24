@@ -94,7 +94,7 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		healthHandler.WithSchemaGuard(guard, mode == config.SchemaGuardEnforce)
 	}
 	orderHandler := NewOrderHandler(orderRepo, orderItemRepo, log)
-	taskHandler := NewTaskHandler(taskRepo, log)
+	taskHandler := NewTaskHandler(taskRepo, tdb, log)
 	machineHandler := NewMachineHandler(machineRepo, telemetryRepo, log)
 	machineHandler.SetCommandLedger(taskCmdRepo)
 	telemetryHandler := NewTelemetryHandler(telemetryRepo, machineRepo, log)
@@ -106,15 +106,15 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 	invoiceRepo := billing.NewInvoiceRepository(tdb)
 	dhanamWebhookHandler := billing.NewWebhookHandler(invoiceRepo, cfg.Dhanam.WebhookSecret, log)
 	realtimeHandler := NewRealtimeHandler(&cfg.Centrifugo, log)
-	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, log)
+	qualityHandler := NewQualityHandler(qualityCertRepo, inspectionRepo, batchLotRepo, tdb, log)
 
 	// Phase 2.6+ handlers
-	analyticsHandler := NewAnalyticsHandler(oeeRepo, log)
-	maintenanceHandler := NewMaintenanceHandler(maintRepo, machineRepo, log)
+	analyticsHandler := NewAnalyticsHandler(oeeRepo, tdb, log)
+	maintenanceHandler := NewMaintenanceHandler(maintRepo, machineRepo, tdb, log)
 	productHandler := NewProductHandler(productRepo, log)
-	genealogyHandler := NewGenealogyHandler(genealogyRepo, log)
-	wiHandler := NewWorkInstructionHandler(wiRepo, log)
-	spcHandler := NewSPCHandler(spcRepo, log)
+	genealogyHandler := NewGenealogyHandler(genealogyRepo, tdb, log)
+	wiHandler := NewWorkInstructionHandler(wiRepo, tdb, log)
+	spcHandler := NewSPCHandler(spcRepo, tdb, log)
 	inventoryHandler := NewInventoryHandler(inventoryRepo, log)
 	inventoryHandler.SetMaterialRepository(repositories.NewMaterialRepository(tdb))
 	consumptionService := services.NewConsumptionService(tdb, consumptionRepo, genealogyRepo, log)
@@ -443,13 +443,15 @@ func RegisterRoutesAll(router *gin.Engine, database *db.DB, cfg *config.Config, 
 		registerDispatchRoutes(v1, database, cfg, log, publisher, deps.Dispatch)
 		// --- end fabrication dispatch ---
 
-		// Factory layout endpoints (proxy to viz-engine)
+		// Factory layout endpoints. /active reads the tenant's layout; the
+		// others answer 503 until the layout service is tenant-aware
+		// (layout_handlers.go).
 		layouts := v1.Group("/layouts")
 		{
 			layouts.GET("/active", handleGetActiveLayout(database, log))
-			layouts.GET("", handleProxyLayouts(log))
-			layouts.GET("/:id", handleProxyLayout(log))
-			layouts.PUT("/:id", handleProxyLayoutUpdate(log))
+			layouts.GET("", handleLayoutServiceUnavailable())
+			layouts.GET("/:id", handleLayoutServiceUnavailable())
+			layouts.PUT("/:id", handleLayoutServiceUnavailable())
 		}
 
 		// 3D model endpoints (proxy to viz-engine)

@@ -20,6 +20,7 @@ import (
 // TaskHandler handles task-related HTTP requests (Kanban board operations).
 type TaskHandler struct {
 	repo       *repositories.TaskRepository
+	refs       repositories.DBTX
 	log        *logrus.Logger
 	publisher  *pubsub.Publisher
 	automation *services.AutomationService
@@ -43,11 +44,24 @@ func (h *TaskHandler) SetRollup(r *services.OrderRollupService) {
 	h.rollup = r
 }
 
-// NewTaskHandler creates a new task handler.
-func NewTaskHandler(repo *repositories.TaskRepository, log *logrus.Logger) *TaskHandler {
+// NewTaskHandler creates a new task handler. refs is used to check that the
+// order, order item, machine and user a request references belong to the
+// caller's tenant.
+func NewTaskHandler(repo *repositories.TaskRepository, refs repositories.DBTX, log *logrus.Logger) *TaskHandler {
 	return &TaskHandler{
 		repo: repo,
+		refs: refs,
 		log:  log,
+	}
+}
+
+// taskRefs lists the rows a task create or update references.
+func taskRefs(orderID, orderItemID, machineID, userID *uuid.UUID) []tenantRef {
+	return []tenantRef{
+		optRef(repositories.RefOrders, orderID),
+		optRef(repositories.RefOrderItems, orderItemID),
+		optRef(repositories.RefMachines, machineID),
+		optRef(repositories.RefUsers, userID),
 	}
 }
 
@@ -267,6 +281,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 // @Success 201 {object} types.Task "Created task"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Referenced order, order item, machine or user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /tasks [post]
@@ -290,6 +305,10 @@ func (h *TaskHandler) Create(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log, taskRefs(req.OrderID, req.OrderItemID, req.MachineID, req.AssignedUserID)...) {
+		return
+	}
 
 	task := &types.Task{
 		TenantID:         tenantUUID,
@@ -354,7 +373,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 // @Param body body UpdateTaskRequest true "Task update data"
 // @Success 200 {object} types.Task "Updated task"
 // @Failure 400 {object} map[string]string "Validation error"
-// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 404 {object} map[string]string "Task, or a referenced row, not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /tasks/{id} [put]
@@ -392,6 +411,10 @@ func (h *TaskHandler) Update(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, taskRefs(req.OrderID, req.OrderItemID, req.MachineID, req.AssignedUserID)...) {
 		return
 	}
 
@@ -656,7 +679,7 @@ func (h *TaskHandler) Move(c *gin.Context) {
 // @Param body body AssignTaskRequest true "Assignment data"
 // @Success 200 {object} map[string]string "Task assigned successfully"
 // @Failure 400 {object} map[string]string "Validation error"
-// @Failure 404 {object} map[string]string "Task not found"
+// @Failure 404 {object} map[string]string "Task, or a referenced row, not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /tasks/{id}/assign [post]
@@ -676,6 +699,12 @@ func (h *TaskHandler) Assign(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefUsers, req.UserID),
+		optRef(repositories.RefMachines, req.MachineID)) {
 		return
 	}
 

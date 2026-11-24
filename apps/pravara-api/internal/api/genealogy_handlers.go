@@ -19,14 +19,30 @@ type GenealogyHandler struct {
 	genealogyRepo    *repositories.GenealogyRepository
 	genealogyService *services.GenealogyService
 	publisher        *pubsub.Publisher
+	refs             repositories.DBTX
 	log              *logrus.Logger
 }
 
-// NewGenealogyHandler creates a new genealogy handler.
-func NewGenealogyHandler(genealogyRepo *repositories.GenealogyRepository, log *logrus.Logger) *GenealogyHandler {
+// NewGenealogyHandler creates a new genealogy handler. refs is used to check
+// that the rows a record references belong to the caller's tenant.
+func NewGenealogyHandler(genealogyRepo *repositories.GenealogyRepository, refs repositories.DBTX, log *logrus.Logger) *GenealogyHandler {
 	return &GenealogyHandler{
 		genealogyRepo: genealogyRepo,
+		refs:          refs,
 		log:           log,
+	}
+}
+
+// genealogyRefs lists the rows a genealogy create or update references.
+func genealogyRefs(productDefinitionID, orderID, orderItemID, taskID, machineID, inspectionID, certificateID *uuid.UUID) []tenantRef {
+	return []tenantRef{
+		optRef(repositories.RefProductDefinitions, productDefinitionID),
+		optRef(repositories.RefOrders, orderID),
+		optRef(repositories.RefOrderItems, orderItemID),
+		optRef(repositories.RefTasks, taskID),
+		optRef(repositories.RefMachines, machineID),
+		optRef(repositories.RefInspections, inspectionID),
+		optRef(repositories.RefCertificates, certificateID),
 	}
 }
 
@@ -213,6 +229,7 @@ func (h *GenealogyHandler) GetGenealogyByID(c *gin.Context) {
 // @Success 201 {object} repositories.ProductGenealogy "Created genealogy record"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Referenced row not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /genealogy [post]
@@ -236,6 +253,11 @@ func (h *GenealogyHandler) CreateGenealogy(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log, genealogyRefs(req.ProductDefinitionID, req.OrderID, req.OrderItemID,
+		req.TaskID, req.MachineID, req.InspectionID, req.CertificateID)...) {
+		return
+	}
 
 	record := &repositories.ProductGenealogy{
 		TenantID:            tenantUUID,
@@ -279,7 +301,7 @@ func (h *GenealogyHandler) CreateGenealogy(c *gin.Context) {
 // @Param body body UpdateGenealogyRequest true "Genealogy record update data"
 // @Success 200 {object} repositories.ProductGenealogy "Updated genealogy record"
 // @Failure 400 {object} map[string]string "Validation error"
-// @Failure 404 {object} map[string]string "Record not found"
+// @Failure 404 {object} map[string]string "Record or a referenced row not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /genealogy/{id} [put]
@@ -326,6 +348,11 @@ func (h *GenealogyHandler) UpdateGenealogy(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, genealogyRefs(req.ProductDefinitionID, req.OrderID, req.OrderItemID,
+		req.TaskID, req.MachineID, req.InspectionID, req.CertificateID)...) {
 		return
 	}
 
@@ -387,7 +414,7 @@ func (h *GenealogyHandler) UpdateGenealogy(c *gin.Context) {
 // @Param body body SealGenealogyRequest true "Seal request with sealed_by user ID"
 // @Success 200 {object} map[string]string "Seal confirmation"
 // @Failure 400 {object} map[string]string "Invalid request or already sealed"
-// @Failure 404 {object} map[string]string "Record not found"
+// @Failure 404 {object} map[string]string "Record or sealing user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /genealogy/{id}/seal [post]
@@ -407,6 +434,10 @@ func (h *GenealogyHandler) SealGenealogy(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, ref(repositories.RefUsers, req.SealedBy)) {
 		return
 	}
 
