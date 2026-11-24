@@ -168,6 +168,147 @@ func TestTenantIsolation_MachineReferencesValidated(t *testing.T) {
 	}
 }
 
+// refRows are one tenant's rows that other writes can reference.
+type refRows struct {
+	order, item, task, machine, user, schedule, lot, cert, inspection, product string
+}
+
+func (r *isolationRig) refRows(f tenantFixture) refRows {
+	r.t.Helper()
+	var x refRows
+	x.order = r.createID(f, "/v1/orders", map[string]any{"customer_name": "ref customer"})
+	x.item = r.createID(f, "/v1/orders/"+x.order+"/items", map[string]any{"product_name": "ref item", "quantity": 1})
+	x.task = r.createID(f, "/v1/tasks", map[string]any{"title": "ref task"})
+	x.machine = r.createID(f, "/v1/machines", map[string]any{"name": "ref printer", "code": "R-" + uuid.NewString()[:8], "type": "3d_printer"})
+	x.user = f.UserID.String()
+	x.schedule = r.createID(f, "/v1/maintenance/schedules", map[string]any{"machine_id": x.machine, "name": "ref PM", "trigger_type": "calendar"})
+	x.lot = r.createID(f, "/v1/quality/batches", map[string]any{
+		"lot_number": "LOT-" + uuid.NewString()[:8], "product_name": "ref resin", "quantity": 1, "unit": "kg"})
+	x.cert = r.createID(f, "/v1/quality/certificates", map[string]any{
+		"certificate_number": "CERT-" + uuid.NewString()[:8], "type": "coc", "title": "ref cert"})
+	x.inspection = r.createID(f, "/v1/quality/inspections", map[string]any{
+		"inspection_number": "INS-" + uuid.NewString()[:8], "type": "final"})
+	x.product = r.createID(f, "/v1/products", map[string]any{
+		"sku": "SKU-" + uuid.NewString()[:8], "name": "ref bracket", "version": "1.0", "category": "3d_print"})
+	return x
+}
+
+// TestTenantIsolation_ReferencesValidated: writes that reference an order,
+// order item, task, machine, user, schedule, lot, certificate, inspection or
+// product definition look it up in the caller's tenant first and answer 404
+// for a row of another tenant; nothing is written. The same writes with the
+// caller's own rows succeed.
+func TestTenantIsolation_ReferencesValidated(t *testing.T) {
+	r := newIsolationRig(t)
+	a, own := r.refRows(r.A), r.refRows(r.B)
+	bWorkOrder := r.createID(r.B, "/v1/maintenance/work-orders", map[string]any{
+		"machine_id": own.machine, "work_order_number": "WO-" + uuid.NewString()[:8], "title": "B work order"})
+	bGenealogy := r.createID(r.B, "/v1/genealogy", map[string]any{"serial_number": "B-ref-serial"})
+	bInstruction := r.createID(r.B, "/v1/work-instructions", map[string]any{"title": "B setup", "version": "1.0", "category": "setup"})
+
+	// Each write is B's, on B's rows, with one reference taken from x.
+	// ownFails marks writes that fail in this rig for another reason when
+	// every reference is B's (the genealogy service is not wired here).
+	type refWrite struct {
+		call
+		ownFails bool
+	}
+	writes := func(x refRows) []refWrite {
+		w := func(method, path string, body map[string]any) refWrite {
+			return refWrite{call: call{method, path, body}}
+		}
+		wo := func() string { return "WO-" + uuid.NewString()[:8] }
+		cert := func(field, id string) map[string]any {
+			return map[string]any{"certificate_number": "CERT-" + uuid.NewString()[:8], "type": "coc", "title": "B cert", field: id}
+		}
+		insp := func(field, id string) map[string]any {
+			return map[string]any{"inspection_number": "INS-" + uuid.NewString()[:8], "type": "final", field: id}
+		}
+		return []refWrite{
+			w(http.MethodPost, "/v1/tasks", map[string]any{"title": "B task", "order_id": x.order}),
+			w(http.MethodPost, "/v1/tasks", map[string]any{"title": "B task", "order_item_id": x.item}),
+			w(http.MethodPost, "/v1/tasks", map[string]any{"title": "B task", "machine_id": x.machine}),
+			w(http.MethodPost, "/v1/tasks", map[string]any{"title": "B task", "assigned_user_id": x.user}),
+			w(http.MethodPatch, "/v1/tasks/"+own.task, map[string]any{"order_id": x.order}),
+			w(http.MethodPatch, "/v1/tasks/"+own.task, map[string]any{"machine_id": x.machine}),
+			w(http.MethodPost, "/v1/tasks/"+own.task+"/assign", map[string]any{"machine_id": x.machine}),
+			w(http.MethodPost, "/v1/tasks/"+own.task+"/assign", map[string]any{"user_id": x.user}),
+			w(http.MethodPost, "/v1/maintenance/schedules", map[string]any{
+				"machine_id": own.machine, "name": "B PM", "trigger_type": "calendar", "assigned_to": x.user}),
+			w(http.MethodPatch, "/v1/maintenance/schedules/"+own.schedule, map[string]any{"assigned_to": x.user}),
+			w(http.MethodPost, "/v1/maintenance/work-orders", map[string]any{
+				"machine_id": own.machine, "work_order_number": wo(), "title": "B work order", "schedule_id": x.schedule}),
+			w(http.MethodPost, "/v1/maintenance/work-orders", map[string]any{
+				"machine_id": own.machine, "work_order_number": wo(), "title": "B work order", "assigned_to": x.user}),
+			w(http.MethodPatch, "/v1/maintenance/work-orders/"+bWorkOrder, map[string]any{"assigned_to": x.user}),
+			w(http.MethodPost, "/v1/quality/certificates", cert("order_id", x.order)),
+			w(http.MethodPost, "/v1/quality/certificates", cert("task_id", x.task)),
+			w(http.MethodPost, "/v1/quality/certificates", cert("machine_id", x.machine)),
+			w(http.MethodPost, "/v1/quality/certificates", cert("batch_lot_id", x.lot)),
+			w(http.MethodPost, "/v1/quality/certificates", cert("issued_by", x.user)),
+			w(http.MethodPatch, "/v1/quality/certificates/"+own.cert, map[string]any{"approved_by": x.user}),
+			w(http.MethodPost, "/v1/quality/inspections", insp("order_id", x.order)),
+			w(http.MethodPost, "/v1/quality/inspections", insp("task_id", x.task)),
+			w(http.MethodPost, "/v1/quality/inspections", insp("machine_id", x.machine)),
+			w(http.MethodPost, "/v1/quality/inspections", insp("inspector_id", x.user)),
+			w(http.MethodPatch, "/v1/quality/inspections/"+own.inspection, map[string]any{"certificate_id": x.cert}),
+			w(http.MethodPost, "/v1/quality/inspections/"+own.inspection+"/complete", map[string]any{"result": "pass", "certificate_id": x.cert}),
+			w(http.MethodPost, "/v1/quality/batches", map[string]any{
+				"lot_number": "LOT-" + uuid.NewString()[:8], "product_name": "B resin", "quantity": 1, "unit": "kg", "order_id": x.order}),
+			w(http.MethodPost, "/v1/genealogy", map[string]any{"serial_number": "B-" + uuid.NewString()[:8], "product_definition_id": x.product}),
+			w(http.MethodPost, "/v1/genealogy", map[string]any{"serial_number": "B-" + uuid.NewString()[:8], "order_item_id": x.item}),
+			w(http.MethodPost, "/v1/genealogy", map[string]any{"serial_number": "B-" + uuid.NewString()[:8], "inspection_id": x.inspection}),
+			w(http.MethodPost, "/v1/genealogy", map[string]any{"serial_number": "B-" + uuid.NewString()[:8], "certificate_id": x.cert}),
+			w(http.MethodPatch, "/v1/genealogy/"+bGenealogy, map[string]any{"task_id": x.task}),
+			{call: call{http.MethodPost, "/v1/genealogy/" + bGenealogy + "/seal", map[string]any{"sealed_by": x.user}}, ownFails: true},
+			w(http.MethodPost, "/v1/work-instructions", map[string]any{
+				"title": "B setup", "version": "1.0", "category": "setup", "product_definition_id": x.product}),
+			w(http.MethodPatch, "/v1/work-instructions/"+bInstruction, map[string]any{"product_definition_id": x.product}),
+			w(http.MethodPost, "/v1/tasks/"+x.task+"/work-instructions", map[string]any{"work_instruction_id": bInstruction}),
+		}
+	}
+
+	for _, c := range writes(a) {
+		res := r.do(r.B, c.method, c.path, c.body)
+		assert.Equalf(t, http.StatusNotFound, res.Code, "B %s %s referencing A's row %v: %s", c.method, c.path, c.body, res.Body)
+	}
+
+	// No row of B's references any of A's rows.
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`SELECT COUNT(*) FROM tasks WHERE order_id = $1 OR order_item_id = $2 OR machine_id = $3 OR assigned_user_id = $4`,
+			[]any{a.order, a.item, a.machine, a.user}},
+		{`SELECT COUNT(*) FROM maintenance_schedules WHERE assigned_to = $1`, []any{a.user}},
+		{`SELECT COUNT(*) FROM maintenance_work_orders WHERE schedule_id = $1 OR assigned_to = $2`, []any{a.schedule, a.user}},
+		{`SELECT COUNT(*) FROM quality_certificates WHERE order_id = $1 OR task_id = $2 OR machine_id = $3 OR batch_lot_id = $4 OR issued_by = $5 OR approved_by = $5`,
+			[]any{a.order, a.task, a.machine, a.lot, a.user}},
+		{`SELECT COUNT(*) FROM inspections WHERE order_id = $1 OR task_id = $2 OR machine_id = $3 OR inspector_id = $4 OR certificate_id = $5`,
+			[]any{a.order, a.task, a.machine, a.user, a.cert}},
+		{`SELECT COUNT(*) FROM batch_lots WHERE order_id = $1`, []any{a.order}},
+		{`SELECT COUNT(*) FROM product_genealogy WHERE product_definition_id = $1 OR order_item_id = $2 OR task_id = $3 OR inspection_id = $4 OR certificate_id = $5 OR sealed_by = $6`,
+			[]any{a.product, a.item, a.task, a.inspection, a.cert, a.user}},
+		{`SELECT COUNT(*) FROM work_instructions WHERE product_definition_id = $1`, []any{a.product}},
+		{`SELECT COUNT(*) FROM task_work_instructions WHERE task_id = $1`, []any{a.task}},
+	} {
+		var n int
+		require.NoError(t, db.RunInTenantTx(context.Background(), r.pool, r.B.ID.String(), func(ctx context.Context) error {
+			return r.tdb.QueryRowContext(ctx, q.sql, q.args...).Scan(&n)
+		}))
+		assert.Zero(t, n, q.sql)
+	}
+
+	// The same writes with B's own rows succeed.
+	for _, c := range writes(own) {
+		if c.ownFails {
+			continue
+		}
+		res := r.do(r.B, c.method, c.path, c.body)
+		assert.Truef(t, isSuccess(res.Code), "B %s %s with its own rows %v: %d %s", c.method, c.path, c.body, res.Code, res.Body)
+	}
+}
+
 // TestTenantIsolation_APIKeyPath: a tenant's API key reads only that tenant.
 func TestTenantIsolation_APIKeyPath(t *testing.T) {
 	r := newIsolationRig(t)

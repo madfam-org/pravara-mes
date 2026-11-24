@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -74,23 +73,21 @@ func handleGetActiveLayout(database *db.DB, log *logrus.Logger) gin.HandlerFunc 
 	}
 }
 
+// handleLayoutServiceUnavailable answers GET /v1/layouts, GET
+// /v1/layouts/:id and PUT /v1/layouts/:id. Those routes belong to the layout
+// service, which does not scope layouts by tenant; until it does they answer
+// 503 without calling it. GET /v1/layouts/active (handleGetActiveLayout)
+// reads the caller's tenant directly and is not affected.
+func handleLayoutServiceUnavailable() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "layout_service_unavailable",
+			"message": "layout service is not available",
+		})
+	}
+}
+
 // Proxy helpers for viz-engine routes
-
-func handleProxyLayouts(log *logrus.Logger) gin.HandlerFunc {
-	return proxyToVizEngine("/v1/layouts", log)
-}
-
-func handleProxyLayout(log *logrus.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		proxyToVizEngine(fmt.Sprintf("/v1/layouts/%s", c.Param("id")), log)(c)
-	}
-}
-
-func handleProxyLayoutUpdate(log *logrus.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		proxyToVizEngineMutate("PUT", fmt.Sprintf("/v1/layouts/%s", c.Param("id")), log)(c)
-	}
-}
 
 func handleProxyModels(log *logrus.Logger) gin.HandlerFunc {
 	return proxyToVizEngine("/v1/models", log)
@@ -126,30 +123,6 @@ func proxyToVizEngine(path string, log *logrus.Logger) gin.HandlerFunc {
 		url := vizEngineURL + path
 
 		resp, err := http.Get(url) // #nosec G107 -- vizEngineURL comes from config; path is the fixed route string given at registration, never request input
-		if err != nil {
-			log.WithError(err).WithField("path", path).Error("Failed to proxy to viz-engine")
-			c.JSON(http.StatusBadGateway, gin.H{"error": "viz-engine unavailable"})
-			return
-		}
-		defer resp.Body.Close()
-
-		body, _ := io.ReadAll(resp.Body)
-		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
-	}
-}
-
-func proxyToVizEngineMutate(method, path string, log *logrus.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		url := vizEngineURL + path
-
-		req, err := http.NewRequestWithContext(c.Request.Context(), method, url, c.Request.Body)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create proxy request"})
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.WithError(err).WithField("path", path).Error("Failed to proxy to viz-engine")
 			c.JSON(http.StatusBadGateway, gin.H{"error": "viz-engine unavailable"})

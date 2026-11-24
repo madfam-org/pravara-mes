@@ -20,13 +20,17 @@ type AnalyticsHandler struct {
 	oeeRepo    *repositories.OEERepository
 	oeeService *services.OEEService
 	publisher  *pubsub.Publisher
+	refs       repositories.DBTX
 	log        *logrus.Logger
 }
 
-// NewAnalyticsHandler creates a new analytics handler.
-func NewAnalyticsHandler(oeeRepo *repositories.OEERepository, log *logrus.Logger) *AnalyticsHandler {
+// NewAnalyticsHandler creates a new analytics handler. refs is used to check
+// that a machine named in a computation request belongs to the caller's
+// tenant.
+func NewAnalyticsHandler(oeeRepo *repositories.OEERepository, refs repositories.DBTX, log *logrus.Logger) *AnalyticsHandler {
 	return &AnalyticsHandler{
 		oeeRepo: oeeRepo,
+		refs:    refs,
 		log:     log,
 	}
 }
@@ -186,6 +190,7 @@ func (h *AnalyticsHandler) GetOEESummary(c *gin.Context) {
 // @Success 200 {object} interface{} "Computed OEE snapshot(s)"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Machine not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /analytics/oee/compute [post]
@@ -229,6 +234,9 @@ func (h *AnalyticsHandler) ComputeOEE(c *gin.Context) {
 	}
 
 	if req.MachineID != nil {
+		if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefMachines, req.MachineID)) {
+			return
+		}
 		// Compute for a specific machine
 		snapshot, err := h.oeeService.ComputeDaily(c.Request.Context(), tenantUUID, *req.MachineID, date)
 		if err != nil {

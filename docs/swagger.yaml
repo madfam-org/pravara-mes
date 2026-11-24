@@ -2228,6 +2228,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Machine not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -2462,6 +2468,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Referenced row not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -2542,7 +2554,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Record not found
+          description: Record or a referenced row not found
           schema:
             additionalProperties:
               type: string
@@ -2592,7 +2604,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Record not found
+          description: Record or sealing user not found
           schema:
             additionalProperties:
               type: string
@@ -4045,7 +4057,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Machine not found
+          description: Machine or assigned user not found
           schema:
             additionalProperties:
               type: string
@@ -4170,7 +4182,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Schedule not found
+          description: Schedule or assigned user not found
           schema:
             additionalProperties:
               type: string
@@ -4263,7 +4275,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Machine not found
+          description: Machine, schedule or assigned user not found
           schema:
             additionalProperties:
               type: string
@@ -4348,7 +4360,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Work order not found
+          description: Work order or assigned user not found
           schema:
             additionalProperties:
               type: string
@@ -5230,6 +5242,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Referenced order not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -5459,6 +5477,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Referenced order, task, machine, batch lot or user not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal server error
           schema:
@@ -5579,7 +5603,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Certificate not found
+          description: Certificate or referenced user not found
           schema:
             additionalProperties:
               type: string
@@ -5679,6 +5703,12 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Referenced order, task, machine or inspector not found
           schema:
             additionalProperties:
               type: string
@@ -5803,7 +5833,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Inspection not found
+          description: Inspection, inspector or certificate not found
           schema:
             additionalProperties:
               type: string
@@ -5850,7 +5880,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Inspection not found
+          description: Inspection or certificate not found
           schema:
             additionalProperties:
               type: string
@@ -5954,6 +5984,12 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Referenced order, order item, machine or user not found
           schema:
             additionalProperties:
               type: string
@@ -6078,7 +6114,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Task not found
+          description: Task, or a referenced row, not found
           schema:
             additionalProperties:
               type: string
@@ -6127,7 +6163,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Task not found
+          description: Task, or a referenced row, not found
           schema:
             additionalProperties:
               type: string

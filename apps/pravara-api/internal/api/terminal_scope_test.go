@@ -156,7 +156,7 @@ func lotLookupRouter(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	log := logrus.New()
 	log.SetLevel(logrus.PanicLevel)
-	h := NewQualityHandler(nil, nil, repositories.NewBatchLotRepository(sqlDB), log)
+	h := NewQualityHandler(nil, nil, repositories.NewBatchLotRepository(sqlDB), nil, log)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/v1/quality/batches/lookup", h.LookupBatchLot)

@@ -19,13 +19,16 @@ type SPCHandler struct {
 	spcRepo    *repositories.SPCRepository
 	spcService *services.SPCService
 	publisher  *pubsub.Publisher
+	refs       repositories.DBTX
 	log        *logrus.Logger
 }
 
-// NewSPCHandler creates a new SPC handler.
-func NewSPCHandler(spcRepo *repositories.SPCRepository, log *logrus.Logger) *SPCHandler {
+// NewSPCHandler creates a new SPC handler. refs is used to check that the
+// machine named in a computation request belongs to the caller's tenant.
+func NewSPCHandler(spcRepo *repositories.SPCRepository, refs repositories.DBTX, log *logrus.Logger) *SPCHandler {
 	return &SPCHandler{
 		spcRepo: spcRepo,
+		refs:    refs,
 		log:     log,
 	}
 }
@@ -104,6 +107,10 @@ func (h *SPCHandler) ComputeLimits(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, ref(repositories.RefMachines, req.MachineID)) {
 		return
 	}
 

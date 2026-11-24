@@ -21,21 +21,26 @@ type QualityHandler struct {
 	certRepo       *repositories.QualityCertificateRepository
 	inspectionRepo *repositories.InspectionRepository
 	batchLotRepo   *repositories.BatchLotRepository
+	refs           repositories.DBTX
 	log            *logrus.Logger
 	usageRecorder  billing.UsageRecorder
 }
 
-// NewQualityHandler creates a new quality handler.
+// NewQualityHandler creates a new quality handler. refs is used to check
+// that the orders, tasks, machines, lots, certificates and users a request
+// references belong to the caller's tenant.
 func NewQualityHandler(
 	certRepo *repositories.QualityCertificateRepository,
 	inspectionRepo *repositories.InspectionRepository,
 	batchLotRepo *repositories.BatchLotRepository,
+	refs repositories.DBTX,
 	log *logrus.Logger,
 ) *QualityHandler {
 	return &QualityHandler{
 		certRepo:       certRepo,
 		inspectionRepo: inspectionRepo,
 		batchLotRepo:   batchLotRepo,
+		refs:           refs,
 		log:            log,
 	}
 }
@@ -228,6 +233,7 @@ func (h *QualityHandler) GetCertificateByID(c *gin.Context) {
 // @Success 201 {object} types.QualityCertificate "Created certificate"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Referenced order, task, machine, batch lot or user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/certificates [post]
@@ -251,6 +257,15 @@ func (h *QualityHandler) CreateCertificate(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefOrders, req.OrderID),
+		optRef(repositories.RefTasks, req.TaskID),
+		optRef(repositories.RefMachines, req.MachineID),
+		optRef(repositories.RefBatchLots, req.BatchLotID),
+		optRef(repositories.RefUsers, req.IssuedBy)) {
+		return
+	}
 
 	certificate := &types.QualityCertificate{
 		TenantID:          tenantUUID,
@@ -297,7 +312,7 @@ func (h *QualityHandler) CreateCertificate(c *gin.Context) {
 // @Param body body UpdateCertificateRequest true "Updated certificate data"
 // @Success 200 {object} types.QualityCertificate "Updated certificate"
 // @Failure 400 {object} map[string]string "Invalid ID or validation error"
-// @Failure 404 {object} map[string]string "Certificate not found"
+// @Failure 404 {object} map[string]string "Certificate or referenced user not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/certificates/{id} [put]
@@ -335,6 +350,12 @@ func (h *QualityHandler) UpdateCertificate(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefUsers, req.IssuedBy),
+		optRef(repositories.RefUsers, req.ApprovedBy)) {
 		return
 	}
 
@@ -629,6 +650,7 @@ func (h *QualityHandler) GetInspectionByID(c *gin.Context) {
 // @Success 201 {object} types.Inspection "Created inspection"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Referenced order, task, machine or inspector not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/inspections [post]
@@ -652,6 +674,14 @@ func (h *QualityHandler) CreateInspection(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefOrders, req.OrderID),
+		optRef(repositories.RefTasks, req.TaskID),
+		optRef(repositories.RefMachines, req.MachineID),
+		optRef(repositories.RefUsers, req.InspectorID)) {
+		return
+	}
 
 	inspection := &types.Inspection{
 		TenantID:         tenantUUID,
@@ -691,7 +721,7 @@ func (h *QualityHandler) CreateInspection(c *gin.Context) {
 // @Param body body UpdateInspectionRequest true "Updated inspection data"
 // @Success 200 {object} types.Inspection "Updated inspection"
 // @Failure 400 {object} map[string]string "Invalid ID or validation error"
-// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 404 {object} map[string]string "Inspection, inspector or certificate not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/inspections/{id} [put]
@@ -729,6 +759,12 @@ func (h *QualityHandler) UpdateInspection(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log,
+		optRef(repositories.RefUsers, req.InspectorID),
+		optRef(repositories.RefCertificates, req.CertificateID)) {
 		return
 	}
 
@@ -825,7 +861,7 @@ func (h *QualityHandler) DeleteInspection(c *gin.Context) {
 // @Param body body CompleteInspectionRequest true "Completion data with result"
 // @Success 200 {object} types.Inspection "Completed inspection"
 // @Failure 400 {object} map[string]string "Invalid ID or validation error"
-// @Failure 404 {object} map[string]string "Inspection not found"
+// @Failure 404 {object} map[string]string "Inspection or certificate not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/inspections/{id}/complete [post]
@@ -863,6 +899,10 @@ func (h *QualityHandler) CompleteInspection(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefCertificates, req.CertificateID)) {
 		return
 	}
 
@@ -1103,6 +1143,7 @@ func (h *QualityHandler) LookupBatchLot(c *gin.Context) {
 // @Success 201 {object} types.BatchLot "Created batch lot"
 // @Failure 400 {object} map[string]string "Validation error"
 // @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Referenced order not found"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Security BearerAuth
 // @Router /quality/batch-lots [post]
@@ -1126,6 +1167,10 @@ func (h *QualityHandler) CreateBatchLot(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefOrders, req.OrderID)) {
+		return
+	}
 
 	batchLot := &types.BatchLot{
 		TenantID:          tenantUUID,

@@ -20,13 +20,17 @@ type WorkInstructionHandler struct {
 	wiRepo    *repositories.WorkInstructionRepository
 	wiService *services.WorkInstructionService
 	publisher *pubsub.Publisher
+	refs      repositories.DBTX
 	log       *logrus.Logger
 }
 
-// NewWorkInstructionHandler creates a new work instruction handler.
-func NewWorkInstructionHandler(wiRepo *repositories.WorkInstructionRepository, log *logrus.Logger) *WorkInstructionHandler {
+// NewWorkInstructionHandler creates a new work instruction handler. refs is
+// used to check that a referenced product definition or task belongs to the
+// caller's tenant.
+func NewWorkInstructionHandler(wiRepo *repositories.WorkInstructionRepository, refs repositories.DBTX, log *logrus.Logger) *WorkInstructionHandler {
 	return &WorkInstructionHandler{
 		wiRepo: wiRepo,
+		refs:   refs,
 		log:    log,
 	}
 }
@@ -198,6 +202,10 @@ func (h *WorkInstructionHandler) CreateWorkInstruction(c *gin.Context) {
 
 	tenantUUID, _ := uuid.Parse(tenantID)
 
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefProductDefinitions, req.ProductDefinitionID)) {
+		return
+	}
+
 	wi := &repositories.WorkInstruction{
 		TenantID:            tenantUUID,
 		Title:               req.Title,
@@ -265,6 +273,10 @@ func (h *WorkInstructionHandler) UpdateWorkInstruction(c *gin.Context) {
 			"error":   "validation_error",
 			"message": err.Error(),
 		})
+		return
+	}
+
+	if !requireTenantRefs(c, h.refs, h.log, optRef(repositories.RefProductDefinitions, req.ProductDefinitionID)) {
 		return
 	}
 
@@ -389,6 +401,10 @@ func (h *WorkInstructionHandler) AttachToTask(c *gin.Context) {
 	}
 
 	tenantUUID, _ := uuid.Parse(tenantID)
+
+	if !requireTenantRefs(c, h.refs, h.log, ref(repositories.RefTasks, taskID)) {
+		return
+	}
 
 	// Verify work instruction exists
 	wi, err := h.wiRepo.GetByID(c.Request.Context(), req.WorkInstructionID)

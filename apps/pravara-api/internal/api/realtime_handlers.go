@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/config"
+	"github.com/madfam-org/pravara-mes/apps/pravara-api/internal/middleware"
 )
 
 // ErrorResponse represents an API error response.
@@ -69,9 +70,9 @@ type TokenResponse struct {
 // @Security BearerAuth
 // @Router /v1/realtime/token [get]
 func (h *RealtimeHandler) GetToken(c *gin.Context) {
-	// Get user info from context (set by auth middleware)
-	userID, exists := c.Get("user_id")
-	if !exists {
+	// The auth middleware stores the tenant and user as strings.
+	userID, ok := middleware.GetUserID(c)
+	if !ok || userID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
 			Message: "User not authenticated",
@@ -79,11 +80,11 @@ func (h *RealtimeHandler) GetToken(c *gin.Context) {
 		return
 	}
 
-	tenantID, exists := c.Get("tenant_id")
-	if !exists {
+	tenantID, ok := middleware.GetTenantID(c)
+	if !ok || tenantID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
-			Message: "Tenant not found",
+			Message: "Tenant context not found",
 		})
 		return
 	}
@@ -94,7 +95,7 @@ func (h *RealtimeHandler) GetToken(c *gin.Context) {
 
 	// Build user info for connection
 	userInfo := map[string]interface{}{
-		"tenant_id": tenantID.(uuid.UUID).String(),
+		"tenant_id": tenantID,
 	}
 	if email != nil {
 		userInfo["email"] = email
@@ -106,14 +107,16 @@ func (h *RealtimeHandler) GetToken(c *gin.Context) {
 	// Calculate expiry
 	expiresAt := time.Now().Add(time.Duration(h.cfg.TokenTTL) * time.Second)
 
-	// Create JWT claims
+	// The connection's user is "<tenant>:<user>", so the subscribe proxy can
+	// match it against the tenant segment of a channel.
+	subject := connectionUser(tenantID, userID)
 	claims := CentrifugoClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.(uuid.UUID).String(),
+			Subject:   subject,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		Sub:  userID.(uuid.UUID).String(),
+		Sub:  subject,
 		Info: userInfo,
 	}
 
@@ -258,32 +261,24 @@ func (h *RealtimeHandler) AuthSubscribe(c *gin.Context) {
 		return
 	}
 
-	// Parse channel to extract namespace and tenant
-	// Format: namespace:tenant_id or namespace:tenant_id:entity_id
-	parts := strings.Split(req.Channel, ":")
-	if len(parts) < 2 {
+	// Channels are namespace:tenant_id or namespace:tenant_id:entity_id
+	// (pubsub.buildChannel).
+	channelTenantID, ok := channelTenant(req.Channel)
+	if !ok {
 		h.log.WithField("channel", req.Channel).Warn("Invalid channel format")
 		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": 103, "message": "forbidden"}})
 		return
 	}
 
-	channelTenantID := parts[1]
-
-	// Get user's tenant from the connection info
-	// The user info is passed from AuthConnect via the connection
-	// For now, we validate the user ID exists and the channel tenant matches
-	if req.User == "" {
-		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": 103, "message": "user not authenticated"}})
+	// The connection's user is "<tenant>:<user>" (GetToken). A user without
+	// a tenant, or of another tenant, may not subscribe.
+	userTenantID, ok := connectionTenant(req.User)
+	if !ok || userTenantID != channelTenantID {
+		h.log.WithField("channel", req.Channel).Warn("Subscription refused: channel tenant does not match the connection")
+		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": 103, "message": "forbidden"}})
 		return
 	}
 
-	// In a production system, we would:
-	// 1. Look up the user's tenant from the database or token info
-	// 2. Validate the channel tenant matches the user's tenant
-	// 3. Check any additional permissions for the channel
-
-	// For now, we'll allow subscription if the channel format is valid
-	// The real multi-tenant isolation happens via tenant-scoped channel names
 	h.log.WithFields(logrus.Fields{
 		"user":    req.User,
 		"channel": req.Channel,
@@ -297,6 +292,40 @@ func (h *RealtimeHandler) AuthSubscribe(c *gin.Context) {
 			},
 		},
 	})
+}
+
+// connectionUser is the Centrifugo user of a connection: "<tenant>:<user>".
+func connectionUser(tenantID, userID string) string {
+	return tenantID + ":" + userID
+}
+
+// connectionTenant returns the tenant of a Centrifugo user made by
+// connectionUser: the part before the first ":". A user without a tenant
+// segment, or whose segment is not a UUID, has none.
+func connectionTenant(user string) (uuid.UUID, bool) {
+	tenant, _, found := strings.Cut(user, ":")
+	if !found {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(tenant)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// channelTenant returns the tenant segment of a channel named
+// namespace:tenant_id[:entity_id], or false when the channel is malformed.
+func channelTenant(channel string) (uuid.UUID, bool) {
+	parts := strings.Split(channel, ":")
+	if len(parts) < 2 || len(parts) > 3 || parts[0] == "" {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(parts[1])
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 // generateChannelToken creates a subscription token for a specific channel.

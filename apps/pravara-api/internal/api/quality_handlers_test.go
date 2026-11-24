@@ -76,7 +76,7 @@ func TestCreateCertificateRequest_Validation(t *testing.T) {
 
 			log := logrus.New()
 			log.SetLevel(logrus.PanicLevel)
-			handler := NewQualityHandler(nil, nil, nil, log)
+			handler := NewQualityHandler(nil, nil, nil, nil, log)
 
 			router := gin.New()
 			router.POST("/certificates", func(c *gin.Context) {
@@ -331,7 +331,7 @@ func TestCreateInspectionRequest_Validation(t *testing.T) {
 
 			log := logrus.New()
 			log.SetLevel(logrus.PanicLevel)
-			handler := NewQualityHandler(nil, nil, nil, log)
+			handler := NewQualityHandler(nil, nil, nil, nil, log)
 
 			router := gin.New()
 			router.POST("/inspections", func(c *gin.Context) {
@@ -460,7 +460,7 @@ func TestCompleteInspectionRequest_Validation(t *testing.T) {
 
 			log := logrus.New()
 			log.SetLevel(logrus.PanicLevel)
-			handler := NewQualityHandler(nil, nil, nil, log)
+			handler := NewQualityHandler(nil, nil, nil, nil, log)
 
 			router := gin.New()
 			router.POST("/complete", func(c *gin.Context) {
@@ -655,7 +655,7 @@ func TestCreateBatchLotRequest_Validation(t *testing.T) {
 
 			log := logrus.New()
 			log.SetLevel(logrus.PanicLevel)
-			handler := NewQualityHandler(nil, nil, nil, log)
+			handler := NewQualityHandler(nil, nil, nil, nil, log)
 
 			router := gin.New()
 			router.POST("/batch-lots", func(c *gin.Context) {
