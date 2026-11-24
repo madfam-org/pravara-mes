@@ -228,11 +228,16 @@ arriving, and command delivery keeps moving.
 ### Longer-term option: platform-managed Postgres
 
 Moving pravara onto the shared, platform-managed Postgres would let
-`enclii onboard ensure --db-name <db> --app-role <db>_app --app-role-connection-limit <n>`
-create the role, generate its password, add the pooler entry and write the URL
-into the Secret in one step, with no break-glass shell. That move is a data
-migration with its own downtime and pool resizing (the shared instance caps a
-role at 20 connections), so it is not part of this rollout.
+`enclii onboard ensure` (with `--project pravara-mes`,
+`--secret-name pravara-secrets`, `--db-name` set to the database it moves to,
+today `pravara_mes`, `--app-role pravara_app`, and
+`--app-role-connection-limit` sized to the worker pool, 1 to 20) create the
+role, generate its password, add the pooler entry and write the URL into the
+Secret in one step, with no break-glass shell. It is not written as one
+command because the database name and the limit are decided by that move.
+That move is a data migration with its own downtime and pool resizing (the
+shared instance caps a role at 20 connections), so it is not part of this
+rollout.
 
 **Recommendation:** do the in-pod rollout above now, because the data lives in
 `postgres-pravara`. Plan the move to the platform-managed Postgres as a
