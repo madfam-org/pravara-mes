@@ -44,6 +44,15 @@ physical jobs (orders, tasks, machines, telemetry, quality).
   and `mes_inventory_levels`, Janua machine tokens with `pravara-cogs:read`,
   quantities only.
 
+## Commercial pipeline state (2026-11-26)
+
+Starter, Growth and Enterprise are purchasable in Dhanam's catalogue, but
+self-serve payment is not yet enabled (checkout opens the booking page).
+Forj orders reach `POST /v1/orders`; Cotiza quotes do not (contract drift,
+ROADMAP item 1). Detail: `AGENTS.md` «Commercial pipeline state»; cross-repo
+source: `internal-devops/audits/2026-11-26-business-pipeline/README.md`
+(private).
+
 ## Deployed vs not deployed
 
 Deployed by GitOps: pravara-api, telemetry-worker, pravara-ui,

@@ -135,6 +135,27 @@ Regenerate or repair these files with
 - **ECOSYSTEM.md is generated** by enclii's
   `docs/templates/ecosystem/generator.py`. Do not hand-edit it.
 
+## Commercial pipeline state (2026-11-26)
+
+What is true for Pravara MES at the stages of MADFAM's commercial pipeline
+that reach it, read on `main` and against the public hosts on 2026-11-26:
+
+- **Conversion.** Dhanam's public catalogue marks the Starter, Growth and
+  Enterprise tiers purchasable. Self-serve payment is not yet enabled: every
+  Dhanam checkout link opens the MADFAM booking page.
+- **Fulfillment.** Forj's paid storefront orders reach Pravara through
+  `POST /v1/orders` with an API key (README.md
+  [«Related repositories / contracts»](./README.md#related-repositories--contracts));
+  this path is in code and was not checked live. Accepted Cotiza quotes do not
+  become Pravara orders: Cotiza calls a route Pravara does not serve (ROADMAP
+  item 1 in [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead)).
+  The Cotiza line in `ECOSYSTEM.md` still says no call exists; it is fixed in
+  enclii's generator, not here (ROADMAP item 19).
+
+Cross-repo source: the
+[2026-11-26 business pipeline audit](https://github.com/madfam-org/internal-devops/blob/main/audits/2026-11-26-business-pipeline/README.md)
+in `internal-devops` (private).
+
 ---
 
 ## Legacy CLAUDE.md guidance imported on 2026-05-13
