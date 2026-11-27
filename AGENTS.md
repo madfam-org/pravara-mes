@@ -88,10 +88,13 @@ Regenerate or repair these files with
 - **Not in `go.work`.** apps/video-streaming does not build (pion API
   drift). Do not add it to `go.work` until it does.
 - **Cross-repo contracts.** README.md «Related repositories / contracts»
-  lists each contract with the doc on the other side. Two contracts are known
-  to have drifted: Cotiza → Pravara dispatch and the Pravara → PhyndCRM
-  signature header. Do not "fix" one side without the owner's decision on
-  which side is canonical.
+  lists each contract with the doc on the other side. Cotiza → Pravara order
+  intake is held by a shared file,
+  `docs/contracts/cotiza-order-intake.v1.json` (owner ruling: Cotiza adopts
+  this webhook with its Janua machine client); Cotiza keeps a verbatim copy,
+  so change both copies together. The Pravara → PhyndCRM signature header has
+  drifted: do not "fix" one side without the owner's decision on which side
+  is canonical.
 - **Native MCP.** `POST /mcp` on the API host (RFC 0051), for agents
   reading the cost ledger's inputs: read tools `mes_job_consumption` and
   `mes_inventory_levels`, quantities only, no write tools. Janua machine
@@ -146,9 +149,12 @@ that reach it, read on `main` and against the public hosts on 2026-11-26:
 - **Fulfillment.** Forj's paid storefront orders reach Pravara through
   `POST /v1/orders` with an API key (README.md
   [«Related repositories / contracts»](./README.md#related-repositories--contracts));
-  this path is in code and was not checked live. Accepted Cotiza quotes do not
-  become Pravara orders: Cotiza calls a route Pravara does not serve (ROADMAP
-  item 1 in [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead)).
+  this path is in code and was not checked live. Accepted Cotiza quotes reach
+  Pravara through `POST /v1/webhooks/cotiza` once Cotiza's sender follows
+  [`docs/contracts/cotiza-order-intake.v1.json`](./docs/contracts/cotiza-order-intake.v1.json)
+  and its machine client is provisioned; until then they do not become
+  Pravara orders (2026-11-27; ROADMAP item 1 in
+  [«Pending work and roadmap ahead»](./ROADMAP.md#pending-work-and-roadmap-ahead)).
   The Cotiza line in `ECOSYSTEM.md` still says no call exists; it is fixed in
   enclii's generator, not here (ROADMAP item 19).
 

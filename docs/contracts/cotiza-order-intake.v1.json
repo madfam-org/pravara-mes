@@ -1,0 +1,146 @@
+{
+  "contract": "pravara-mes.cotiza-order-intake",
+  "version": 1,
+  "about": "How an accepted Cotiza quote becomes a Pravara MES order. Cotiza's sender is written against this file and Pravara's tests hold the API to it (apps/pravara-api/internal/api/cotiza_intake_contract_test.go). Cotiza keeps a verbatim copy and tests its payload against that copy: change both copies in the same pair of pull requests, never one. A request field is '<presence> <type>': presence 'required' or 'optional'; type is the JSON type (string, integer, number, boolean, object, array). A UUID or a time is a string; a time is RFC 3339. A response field is '<presence> <type>' with presence 'always'.",
+  "route": {
+    "method": "POST",
+    "path": "/v1/webhooks/cotiza"
+  },
+  "audience": "pravara-api",
+  "scope": "pravara-mes:jobs",
+  "auth": {
+    "bearer": "Authorization: Bearer <token>. A Janua client_credentials token of Cotiza's machine client: audience pravara-api, scope pravara-mes:jobs, bound to an organization. The token's tenant_id is the Pravara tenant the order lands in; the body never chooses it.",
+    "signature_header": "X-Cotiza-Signature",
+    "signature": "Lowercase hex HMAC-SHA256 of the exact request body bytes, keyed with a secret shared by both sides. Pravara checks it when its COTIZA_WEBHOOK_SECRET is set and then refuses a request without it (401). Cotiza signs whenever its PRAVARA_DISPATCH_SECRET is set. The two values must be equal."
+  },
+  "idempotency": "order.id is the order's external id, and Pravara keeps at most one order per tenant and external id: an order.created or order.confirmed for an id the tenant already has answers 200 and changes nothing. A sender may therefore retry or replay the same body freely. Cotiza sends the accepted quote's id, so one accepted quote is one Pravara order.",
+  "events": {
+    "order.created": "Create the order and one order item per entry of order.items; production tasks follow when auto-decomposition is on.",
+    "order.confirmed": "Same as order.created. Cotiza sends this one, once the quote is paid and ordered.",
+    "order.updated": "Overwrite customer_name, customer_email, total_amount, currency and due_date of the existing order; priority and metadata only when sent. Items are not changed. Unknown id: 200, nothing changes.",
+    "order.cancelled": "Set the existing order to cancelled. Unknown id: 200, nothing changes."
+  },
+  "requests": {
+    "envelope": {
+      "fields": {
+        "event": "required string",
+        "timestamp": "optional string",
+        "order": "required object"
+      },
+      "of": {
+        "order": "order"
+      }
+    },
+    "order": {
+      "fields": {
+        "id": "required string",
+        "customer_name": "required string",
+        "customer_email": "optional string",
+        "total_amount": "optional number",
+        "currency": "optional string",
+        "due_date": "optional string",
+        "priority": "optional integer",
+        "items": "optional array",
+        "metadata": "optional object"
+      },
+      "of": {
+        "items": "item"
+      }
+    },
+    "item": {
+      "fields": {
+        "id": "optional string",
+        "product_name": "required string",
+        "product_sku": "optional string",
+        "quantity": "required integer",
+        "unit_price": "optional number",
+        "specifications": "optional object",
+        "cad_file_url": "optional string"
+      }
+    }
+  },
+  "responses": {
+    "200": {
+      "when": "The event was processed, or the order already existed (replay).",
+      "fields": {
+        "message": "always string",
+        "order_id": "always string"
+      },
+      "notes": "order_id echoes the request's order.id (the external id), not Pravara's own order id."
+    },
+    "200_unhandled": {
+      "when": "The event is not one of the four above. Nothing changes.",
+      "fields": {
+        "message": "always string",
+        "event": "always string"
+      }
+    },
+    "400": {
+      "when": "The body is not JSON or a required envelope or order field is missing. Do not retry.",
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
+    },
+    "401": {
+      "when": "The token is missing, expired or not for this audience, or the signature is missing or wrong. Fetch a new token and retry once; a signature mismatch is a configuration error.",
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
+    },
+    "403": {
+      "when": "The token lacks pravara-mes:jobs or carries no tenant. Do not retry.",
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
+    },
+    "500": {
+      "when": "Pravara could not read or write the order. Retry with the same body.",
+      "fields": {
+        "error": "always string",
+        "message": "always string"
+      }
+    }
+  },
+  "retry": "Retry the same body on a network error, a timeout, 429 or any 5xx; it is safe because of the idempotency rule. Never retry another 4xx except a 401 after fetching a new token.",
+  "sender": "Cotiza fills the envelope as follows. event: order.confirmed. order.id: the accepted quote's id. customer_name: the customer's name, else their email, else the quote number. total_amount and currency: the quote's total and currency. items: the quote's fabrication items only (items without a services block); id is the quote item id, product_name the item name, product_sku the process code, quantity and unit_price the quoted ones, specifications holds process, material, quote_item_id, lead_time_days and selections (process and material are what Pravara's machine matching reads). metadata: source 'cotiza', quote_id, quote_number, cotiza_tenant_id, and cotiza_order_id, cotiza_order_number and engagement_id when known.",
+  "example": {
+    "event": "order.confirmed",
+    "timestamp": "2026-11-27T18:00:00.000Z",
+    "order": {
+      "id": "cq_example_0001",
+      "customer_name": "Example Customer",
+      "customer_email": "customer@example.com",
+      "total_amount": 1160,
+      "currency": "MXN",
+      "items": [
+        {
+          "id": "cqi_example_0001",
+          "product_name": "Bracket",
+          "product_sku": "CNC_3AXIS",
+          "quantity": 10,
+          "unit_price": 100,
+          "specifications": {
+            "process": "cnc-milling",
+            "material": "AL-6061",
+            "quote_item_id": "cqi_example_0001",
+            "lead_time_days": 7,
+            "selections": {
+              "tolerance": "iso-2768-m"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "source": "cotiza",
+        "quote_id": "cq_example_0001",
+        "quote_number": "Q-2026-11-0001",
+        "cotiza_tenant_id": "tenant_example",
+        "cotiza_order_id": "co_example_0001",
+        "cotiza_order_number": "ORD-EXAMPLE01"
+      }
+    }
+  }
+}
