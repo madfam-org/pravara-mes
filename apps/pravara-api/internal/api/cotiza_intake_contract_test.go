@@ -41,6 +41,11 @@ import (
 
 const cotizaIntakeContractPath = "../../../../docs/contracts/cotiza-order-intake.v1.json"
 
+// cotizaIntakeContractSHA256 is the sha256 of the contract file. Cotiza's
+// copy pins the same value: change the file only together with Cotiza's
+// copy, and update both pins in the same pair of pull requests.
+const cotizaIntakeContractSHA256 = "e546c9bfef2bdff3f64946daec75d89f70188e444a16349c1f69cff00e4eb0f6"
+
 type cotizaIntakeContract struct {
 	Contract string `json:"contract"`
 	Version  int    `json:"version"`
@@ -90,6 +95,14 @@ func cotizaIntakeRequestTypes() map[string]any {
 		"order":    CotizaOrderData{},
 		"item":     CotizaItemData{},
 	}
+}
+
+func TestCotizaIntakeContractIsThePinnedSharedFile(t *testing.T) {
+	raw, err := os.ReadFile(cotizaIntakeContractPath)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	assert.Equal(t, cotizaIntakeContractSHA256, hex.EncodeToString(sum[:]),
+		"the contract changed: change Cotiza's verbatim copy too and update both pins")
 }
 
 func TestCotizaIntakeContractNamesThisRoute(t *testing.T) {
