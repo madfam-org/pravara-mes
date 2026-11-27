@@ -88,8 +88,9 @@ known failures are tracked in the pending-work list below.
 
 README.md «Related repositories / contracts» is the table. It links the doc
 that defines each contract on the other side (Janua, digifab-quoting/Cotiza,
-phynd-crm, tezca, enclii). Two contracts have known drift: Cotiza → Pravara
-dispatch, and the Pravara → PhyndCRM signature header.
+phynd-crm, tezca, enclii). Cotiza → Pravara order intake has a shared wire
+contract, docs/contracts/cotiza-order-intake.v1.json, whose Cotiza side is not
+yet switched. The Pravara → PhyndCRM signature header has known drift.
 
 ## Pending work and roadmap
 

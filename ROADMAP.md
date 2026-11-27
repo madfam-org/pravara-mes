@@ -82,26 +82,23 @@ is not built.
 
 ### P1
 
-1. **Cotiza → Pravara fabrication-dispatch contract drift.** *Owner decision,
-   then engineering.* Why it matters: accepted Cotiza fabrication quotes do not
-   become Pravara orders. Cotiza's dispatch is fire-and-forget, so the failure
-   is only a log line on the Cotiza side. Both sides on `main` as of
-   2026-10-02:
-
-   | | Cotiza sends ([`pravara-dispatch.service.ts`](https://github.com/madfam-org/digifab-quoting/blob/main/apps/api/src/integrations/pravara/pravara-dispatch.service.ts)) | Pravara accepts ([`webhook_handlers.go`](apps/pravara-api/internal/api/webhook_handlers.go)) |
-   |---|---|---|
-   | Route | `POST {PRAVARA_API_URL}/api/v1/mes/jobs` | `POST /v1/webhooks/cotiza`; no `mes/jobs` route exists |
-   | Signature header | `x-webhook-signature`, plus `x-webhook-timestamp` | `X-Cotiza-Signature` |
-   | Signature value | hex HMAC-SHA256 of the raw body | hex HMAC-SHA256 of the raw body (matches) |
-   | Shared secret env | `PRAVARA_DISPATCH_SECRET` | `COTIZA_WEBHOOK_SECRET` |
-   | Caller auth | the HMAC only | the `/v1` group also requires a Janua JWT or a Pravara API key |
-   | Payload | flat job: `orderId`, `externalId`, `engagement_id`, `currency`, `dueBy`, `items[]` (`quoteItemId`, `process`, `material`, `quantity`, `selections`, `files`, prices), `metadata` | envelope: `event` (`order.created`, `order.confirmed`, `order.updated`, `order.cancelled`), `timestamp`, `order` (`id` and `customer_name` required; `items[]` with `product_name` and `quantity` required) |
-
-   Decide which side is canonical: a Pravara intake route for Cotiza's job
-   shape, or Cotiza adopting Pravara's order envelope. Then change one side
-   and add a contract test on both. The Cotiza-side record is the drift note in
-   [digifab-quoting `AGENTS.md`, «Related repositories / contracts»](https://github.com/madfam-org/digifab-quoting/blob/main/AGENTS.md#related-repositories--contracts).
-   Nothing has been changed in code on either side.
+1. **Cotiza → Pravara order intake: contract settled, Cotiza side pending.**
+   *Engineering, then owner provisioning.* Why it matters: accepted Cotiza
+   fabrication quotes do not become Pravara orders until Cotiza's sender
+   follows the contract. The owner ruled on 2026-11-14 that Cotiza adopts
+   Pravara's existing webhook, with one shared contract file and Cotiza's
+   Janua machine client (tracked privately). The contract is
+   [`docs/contracts/cotiza-order-intake.v1.json`](docs/contracts/cotiza-order-intake.v1.json):
+   `POST /v1/webhooks/cotiza`, a Janua `client_credentials` token (audience
+   `pravara-api`, scope `pravara-mes:jobs`, organization-bound), the
+   `X-Cotiza-Signature` HMAC when `COTIZA_WEBHOOK_SECRET` is set, the
+   `event`/`timestamp`/`order` envelope, and `order.id` as the idempotency
+   key. [`cotiza_intake_contract_test.go`](apps/pravara-api/internal/api/cotiza_intake_contract_test.go)
+   holds Pravara to it; Cotiza keeps a verbatim copy and tests its sender
+   against it. Pravara's code did not change. What is left: Cotiza's sender
+   change in its own repository, then the owner provisions Cotiza's
+   machine-client pair and sets the shared signature secret on both sides
+   (tracked privately). Nothing arrives before both.
 2. **Pravara → PhyndCRM status-webhook header drift.** *Engineering.* Why it
    matters: fabrication status changes may not reach the PhyndCRM client
    portal. The outbound dispatcher
@@ -754,7 +751,7 @@ Advanced intelligent manufacturing operations building on the ml-orchestrator fo
 | **Tezca Labs** | 3.0 | Law-change webhook implemented (`/v1/webhooks/tezca`); compliance-engine planned |
 | **Yantra4D** | — | ✅ Hyperobject import (`/v1/import/yantra4d`) |
 | **Forj** | — | ✅ Orders in via API key; `order.status_changed` out via webhook subscriptions |
-| **Cotiza** | — | ⚠️ Inbound webhook implemented; contract drift with Cotiza's dispatcher (Pending work, item 1) |
+| **Cotiza** | — | ⚠️ Inbound webhook implemented; shared contract [`cotiza-order-intake.v1.json`](docs/contracts/cotiza-order-intake.v1.json); Cotiza's sender not yet switched (Pending work, item 1) |
 | **PhyndCRM** | — | ⚠️ Outbound status webhook; signature-header drift (Pending work, item 2) |
 
 ---

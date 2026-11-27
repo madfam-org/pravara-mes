@@ -42,7 +42,7 @@ Central documentation index for the PravaraMES manufacturing execution system.
 | Quality | `/v1/quality/*` | Certificates, inspections, batch lots |
 | Billing | `/v1/billing` | Usage tracking |
 | Realtime | `/v1/realtime` | WebSocket authentication |
-| Webhooks (inbound) | `/v1/webhooks/{cotiza,dhanam,forgesight,tezca}` | Signed inbound events; the Cotiza contract has drifted (see README «Related repositories / contracts») |
+| Webhooks (inbound) | `/v1/webhooks/{cotiza,dhanam,forgesight,tezca}` | Signed inbound events; Cotiza's wire contract is [contracts/cotiza-order-intake.v1.json](contracts/cotiza-order-intake.v1.json) |
 | Webhook subscriptions | `/v1/webhooks/subscriptions` | Outbound webhooks, signed `X-Pravara-Signature` |
 | Yantra4D Import | `/v1/import/yantra4d` | Hyperobject import from Yantra4D |
 | Fabrication dispatch | `/v1/match`, `/v1/dispatches`, `/v1/dispatches/:id/artifacts/:kind` | Machine matchmaking (dry run), dispatch with passport recording, and the manufacturing bytes Pravara kept |
